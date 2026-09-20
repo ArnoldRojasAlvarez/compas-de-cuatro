@@ -1,0 +1,17 @@
+{
+  "files": [],
+  "references": [
+    {
+      "path": "packages/core"
+    },
+    {
+      "path": "packages/audio"
+    },
+    {
+      "path": "packages/engine"
+    },
+    {
+      "path": "apps/web"
+    }
+  ]
+}

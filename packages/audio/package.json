@@ -1,0 +1,14 @@
+{
+  "name": "@tetra/audio",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "dependencies": {
+    "@tetra/core": "*"
+  },
+  "scripts": {
+    "build": "tsc --build"
+  }
+}

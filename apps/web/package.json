@@ -1,0 +1,14 @@
+{
+  "name": "@tetra/web",
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build"
+  },
+  "dependencies": {
+    "@tetra/audio": "*",
+    "@tetra/core": "*",
+    "@tetra/engine": "*"
+  }
+}
