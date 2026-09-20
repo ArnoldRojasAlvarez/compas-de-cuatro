@@ -45,7 +45,13 @@ export interface AudioClock {
 
   stop(): void;
 
-  /** Salta a una posicion. Usado por el editor y por el modo practica. */
+  /**
+   * Salta a una posicion. Usado por el editor y por el modo practica.
+   *
+   * Justo despues de `seek(time)`, `now()` vale `time - offset`, no `time`:
+   * lo que se oye en ese instante todavia se programo hace `outputLatency`,
+   * entonces el tiempo de juego tiene que ir atrasado respecto al buffer.
+   */
   seek(time: Ms): void;
 
   readonly isRunning: boolean;
@@ -53,12 +59,19 @@ export interface AudioClock {
   /** Duracion total de la pista en ms. */
   readonly duration: Ms;
 
+  /** Offset manual del usuario, en ms. Se puede cambiar en caliente. */
+  userOffset: Ms;
+
+  /** Latencia de salida detectada, en ms. Solo lectura. */
+  readonly outputLatency: Ms;
+
   /**
    * Compensacion total aplicada a `now()`, en ms.
-   * Suma de la latencia de salida reportada por el navegador y del offset
-   * que el usuario calibro a mano.
+   * Derivada: `userOffset + outputLatency`. De solo lectura para que no se
+   * pueda pisar por accidente y perder la latencia calculada: para cambiar
+   * la parte que corresponde al usuario se escribe `userOffset`.
    */
-  offset: Ms;
+  readonly offset: Ms;
 }
 
 export interface ClockOptions {
@@ -86,9 +99,11 @@ export function createAudioClock(
 3. `now()` devuelve `(ctx.currentTime - startedAt) * 1000 - offset`.
 4. `seek(t)` para el source actual, crea uno nuevo con
    `source.start(0, t / 1000)` y recalcula `startedAt`.
-5. `offset` se recalcula cuando cambia `userOffset` o cuando el navegador
-   reporta `outputLatency`. Si `outputLatency` viene `undefined` o `0`, se
-   ignora y solo cuenta el offset del usuario.
+5. `offset` es derivado, de solo lectura: se recalcula solo con leer
+   `userOffset + outputLatency`. `outputLatency` se calcula una vez, al
+   construir el reloj, a partir de `ctx.outputLatency`. Si viene
+   `undefined` o `0`, se ignora y `outputLatency` queda en `0`. `userOffset`
+   si se puede cambiar en caliente despues de construido el reloj.
 
 ## Criterios de aceptacion
 
@@ -96,22 +111,39 @@ export function createAudioClock(
 - [ ] Antes de `start()`, `now()` devuelve `0`
 - [ ] Con `leadIn = 2000`, justo despues de `start()` el valor es cercano a `-2000`
       y crece hacia `0`
-- [ ] `seek(30000)` deja `now()` en un valor cercano a `30000` dentro de 5 ms
-- [ ] Cambiar `offset` mueve `now()` en esa misma cantidad, de inmediato
+- [ ] `seek(30000)` deja `now()` en `30000 - offset`, dentro de 5 ms (con un
+      offset distinto de cero: justo despues del seek todavia se esta
+      oyendo el audio anterior, asi que el tiempo de juego va atrasado
+      respecto al buffer, ver H3 de T-001-F1)
+- [ ] Cambiar `userOffset` mueve `now()` en esa misma cantidad, de inmediato,
+      y `offset` siempre refleja `userOffset + outputLatency`
 - [ ] `stop()` congela el valor; llamar `now()` despues no sigue avanzando
 - [ ] Llamar `start()` dos veces seguidas no deja dos sources sonando a la vez
 - [ ] `seek()` con el reloj detenido cambia la posicion sin arrancar el audio
 
-## Prueba de deriva (la que importa)
+## Prueba de deriva
 
-Test automatizado con un tono de 3 minutos que lleva un click cada 500 ms:
+**Corregido despues de la revision. La version original de esta seccion pedia
+un test que no podia fallar:** comparaba `clock.now()` contra
+`ctx.currentTime * 1000` con `startedAt` y `offset` en cero, o sea la misma
+expresion de los dos lados. Daba 0 ms siempre, incluso con la implementacion
+rota. Ver H1 de `T-001-F1-correcciones.md`.
 
-1. Se arranca el reloj.
-2. Cada 10 segundos se compara `clock.now()` contra la posicion real del
-   audio, calculada desde el buffer.
-3. **La deriva acumulada a los 3 minutos debe ser menor a 5 ms.**
+La deriva real es la del renderizador contra el hardware de audio, y esa solo
+se puede medir en un navegador de verdad. **Queda para el ticket de e2e de la
+fase 1**, no para vitest.
 
-Si esta prueba no pasa, el ticket no se cierra. No se negocia el umbral.
+Lo que si se prueba en vitest es la razon de fondo por la que `now()` no se
+desincroniza. El doble de prueba avanza con pasos irregulares (jitter) durante
+3 minutos simulados, y el test verifica dos cosas a la vez:
+
+1. `clock.now()` se mantiene a menos de 5 ms de la posicion real del audio.
+2. Un contador ingenuo que suma un delta nominal fijo por frame **si** se
+   despega, por mas de 5 ms.
+
+La segunda asercion es la que le da valor a la primera: si el contador ingenuo
+no se despegara, el escenario no seria representativo y habria que subir el
+jitter. Con el patron actual el contador ingenuo se va unos 7.5 segundos.
 
 ## Prueba de feel (Arnold)
 
