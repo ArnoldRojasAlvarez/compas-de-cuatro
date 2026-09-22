@@ -37,15 +37,23 @@ anticipacion de metronomo, algo humano. A raiz de eso se adelantaron T-007
 (poder calibrar y medir el offset) y T-008 (la velocidad, que era critica para
 un jugador de su nivel).
 
-## Lo que sigue
+| T-009 | Skins: cargar una `.osk` y usar sus imagenes de notas y receptores | Sonnet |
 
-- **T-009, skins:** cargar una `.osk` de osu! que el usuario suelte, igual que
-  un mapa, y usar sus imagenes para las notas y los receptores. Arnold lo pidio.
-  Es el proximo ticket. Enfoque: cargar, no empaquetar (mismo tema de derechos
-  que los mapas).
+234 tests pasando en `main`, mas el e2e de Playwright.
+
+## Lo que sigue (decision de Arnold)
+
+Todo lo que Arnold pidio hasta ahora esta hecho y jugable: importar mapas,
+velocidad, salir, calibracion de offset y skins. El proyecto llego a un punto
+donde lo que sigue necesita su direccion:
+
 - **Fase 3, song select:** la lista de canciones con animacion, el header, el
-  logo que respira. Es la parte donde el gusto de Arnold manda (dio capturas de
-  osu!). Conviene su input antes de construirla.
+  logo que respira. Es la parte donde su gusto manda (dio capturas de osu!).
+  Conviene saber cuanto quiere calcar el look de osu! contra tener algo propio
+  antes de construirla.
+- **La cancion y el video del avance II (28 de octubre):** es el camino critico
+  del curso y no depende del codigo. El plan del video esta en la conversacion.
+  Puede arrancar cuando quiera.
 
 ## Como jugarlo ahora mismo
 
