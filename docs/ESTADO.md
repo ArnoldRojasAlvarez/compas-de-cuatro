@@ -24,8 +24,28 @@ empezando una sesion nueva, lee esto y despues `CLAUDE.md`.
 | T-004 | Pista en Pixi, entrada de teclado, bucle y pantalla de resultados | Sonnet |
 | T-005 | Importador de mapas `.osu` mania 4K, y `@tetra/storage` (IndexedDB) | Sonnet |
 | T-006 | Cargador de desarrollo: soltar un `.osz` y jugarlo | Sonnet |
+| T-007 | Calibracion de offset y resultados cuantificados (media, dispersion) | Sonnet |
+| T-008 | Velocidad de caida ajustable y salir de la cancion con Escape | Sonnet |
 
-156 tests pasando en `main`, mas un e2e de Playwright.
+198 tests pasando en `main`, mas un e2e de Playwright estable.
+
+## La prueba de feel ya se hizo, y salio bien
+
+Arnold jugo. En una cancion real los golpes salieron centrados en cero: el motor
+esta bien sincronizado, no hay offset sistematico. El sesgo del click track era
+anticipacion de metronomo, algo humano. A raiz de eso se adelantaron T-007
+(poder calibrar y medir el offset) y T-008 (la velocidad, que era critica para
+un jugador de su nivel).
+
+## Lo que sigue
+
+- **T-009, skins:** cargar una `.osk` de osu! que el usuario suelte, igual que
+  un mapa, y usar sus imagenes para las notas y los receptores. Arnold lo pidio.
+  Es el proximo ticket. Enfoque: cargar, no empaquetar (mismo tema de derechos
+  que los mapas).
+- **Fase 3, song select:** la lista de canciones con animacion, el header, el
+  logo que respira. Es la parte donde el gusto de Arnold manda (dio capturas de
+  osu!). Conviene su input antes de construirla.
 
 ## Como jugarlo ahora mismo
 
