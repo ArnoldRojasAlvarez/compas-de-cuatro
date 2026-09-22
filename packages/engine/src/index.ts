@@ -6,6 +6,9 @@ export { createKeyboardInput } from './input.js';
 export type { Playfield, PlayfieldOptions } from './playfield.js';
 export { createPlayfield } from './playfield.js';
 
+export type { ClaveImagenSkin, ParteDeSkin, TexturasDeSkin } from './skin.js';
+export { imagenDeSkin, cargarTexturasDeSkin } from './skin.js';
+
 export type { GeometriaPista, PosicionNota, VentanaNotas } from './position.js';
 export {
   PROGRESO_MAX_VISIBLE,

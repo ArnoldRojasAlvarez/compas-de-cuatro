@@ -26,6 +26,7 @@ import {
   ventanaVacia,
   type VentanaNotas,
 } from './position.js';
+import { imagenDeSkin, type TexturasDeSkin } from './skin.js';
 
 export interface PlayfieldOptions {
   /** Cuantos ms de pista se ven de golpe. Menor valor, notas mas rapidas. */
@@ -139,10 +140,65 @@ interface PopupJuicio {
   spawnTime: Ms;
 }
 
+/**
+ * Texturas de skin ya repartidas por columna (ver skin.ts, `imagenDeSkin`),
+ * para no tener que volver a resolver "es columna exterior o interior" en
+ * cada frame dentro de render(). Se calcula una sola vez al crear el
+ * Playfield (ver mas abajo, dentro de createPlayfield): con esto la unica
+ * llamada a `imagenDeSkin` de todo el archivo queda ahi, no repartida por
+ * el render (ver el ticket, "Cuidado con la convencion de columnas").
+ */
+interface TexturasDeColumna {
+  nota: Texture | undefined;
+  cuerpoLn: Texture | undefined;
+  colaLn: Texture | undefined;
+  receptor: Texture | undefined;
+  receptorPulsado: Texture | undefined;
+}
+
+function texturasDeColumna(columna: Column, skin: TexturasDeSkin | undefined): TexturasDeColumna {
+  if (skin === undefined) {
+    return {
+      nota: undefined,
+      cuerpoLn: undefined,
+      colaLn: undefined,
+      receptor: undefined,
+      receptorPulsado: undefined,
+    };
+  }
+  return {
+    nota: skin[imagenDeSkin(columna, 'nota')],
+    cuerpoLn: skin[imagenDeSkin(columna, 'cuerpoLn')],
+    colaLn: skin[imagenDeSkin(columna, 'colaLn')],
+    receptor: skin[imagenDeSkin(columna, 'receptor')],
+    receptorPulsado: skin[imagenDeSkin(columna, 'receptorPulsado')],
+  };
+}
+
+/**
+ * Aplica a `sprite` la textura de skin si vino (`textura` no es
+ * `undefined`), sin tintar (la imagen se ve tal cual la trae el skin); si
+ * no vino, cae al rectangulo blanco tintado de siempre (ver el ticket,
+ * "Fallback": sin skin, o con una skin a la que le falte esa imagen
+ * puntual, se sigue viendo lo de hoy). Se llama en cada frame, sobre
+ * sprites que ya existen (vienen del Pool): nunca crea una textura nueva,
+ * solo reasigna cual usa el sprite (T-004, "Rendimiento" sigue intacto).
+ */
+function aplicarTextura(sprite: Sprite, textura: Texture | undefined, colorFallback: number): void {
+  if (textura !== undefined) {
+    sprite.texture = textura;
+    sprite.tint = 0xffffff;
+  } else {
+    sprite.texture = Texture.WHITE;
+    sprite.tint = colorFallback;
+  }
+}
+
 export function createPlayfield(
   app: Application,
   chart: Chart,
   options: PlayfieldOptions,
+  skin?: TexturasDeSkin,
 ): Playfield {
   // Se guarda la referencia a `options`, no una copia: si quien nos creo
   // muta `options.scrollDuration` en caliente, el proximo render() ya lo ve,
@@ -176,6 +232,15 @@ export function createPlayfield(
     ventanaVacia(),
   ];
 
+  // Texturas de skin resueltas por columna, calculadas una sola vez aca (ver
+  // el comentario de `texturasDeColumna` mas arriba): el resto de
+  // createPlayfield y render() solo lee este array, nunca vuelve a llamar
+  // `imagenDeSkin`.
+  const texturasPorColumna: TexturasDeColumna[] = [];
+  for (let columna = 0; columna < COLUMN_COUNT; columna++) {
+    texturasPorColumna.push(texturasDeColumna(columna as Column, skin));
+  }
+
   const poolMarcadores: Pool[] = [];
   const poolCuerpos: Pool[] = [];
   const receptores: Sprite[] = [];
@@ -184,7 +249,6 @@ export function createPlayfield(
     poolMarcadores.push(
       new Pool(capaMarcadores, () => {
         const sprite = new Sprite(Texture.WHITE);
-        sprite.tint = COLOR_COLUMNA[columna]!;
         sprite.anchor.set(0.5, 0.5);
         return sprite;
       }),
@@ -192,7 +256,6 @@ export function createPlayfield(
     poolCuerpos.push(
       new Pool(capaCuerpos, () => {
         const sprite = new Sprite(Texture.WHITE);
-        sprite.tint = COLOR_CUERPO_LN;
         sprite.alpha = 0.55;
         sprite.anchor.set(0.5, 0);
         return sprite;
@@ -200,9 +263,9 @@ export function createPlayfield(
     );
 
     const receptor = new Sprite(Texture.WHITE);
-    receptor.tint = COLOR_RECEPTOR_APAGADO;
     receptor.anchor.set(0.5, 0.5);
     receptor.height = ALTO_RECEPTOR;
+    aplicarTextura(receptor, texturasPorColumna[columna]!.receptor, COLOR_RECEPTOR_APAGADO);
     capaReceptores.addChild(receptor);
     receptores.push(receptor);
   }
@@ -272,6 +335,7 @@ export function createPlayfield(
 
       const poolMarcador = poolMarcadores[columna]!;
       const poolCuerpo = poolCuerpos[columna]!;
+      const texturas = texturasPorColumna[columna]!;
       poolMarcador.reiniciar();
       poolCuerpo.reiniciar();
 
@@ -290,18 +354,22 @@ export function createPlayfield(
             cuerpo.y = cola.y;
             cuerpo.width = options.columnWidth * ANCHO_CUERPO_FACTOR;
             cuerpo.height = Math.max(0, yCabezaClipeada - cola.y);
+            aplicarTextura(cuerpo, texturas.cuerpoLn, COLOR_CUERPO_LN);
           }
 
           // La cabeza deja de dibujarse como marcador aparte una vez que ya
           // paso el receptor: a partir de ahi el cuerpo recortado hace de
           // cabeza visual (ver T-004, "Las LN se dibujan... con el cuerpo
-          // recortado al receptor mientras se sostiene").
+          // recortado al receptor mientras se sostiene"). La cabeza usa la
+          // misma imagen que una nota suelta (`texturas.nota`): en
+          // osu!mania no hay una imagen aparte para la cabeza de una LN.
           if (cabeza.visible && cabeza.y <= yReceptorActual) {
             const marcador = poolMarcador.obtener();
             marcador.x = columnaX(columna);
             marcador.y = cabeza.y;
             marcador.width = options.columnWidth * ANCHO_MARCADOR_FACTOR;
             marcador.height = ALTO_MARCADOR;
+            aplicarTextura(marcador, texturas.nota, COLOR_COLUMNA[columna]!);
           }
           if (cola.visible) {
             const marcadorCola = poolMarcador.obtener();
@@ -309,6 +377,7 @@ export function createPlayfield(
             marcadorCola.y = cola.y;
             marcadorCola.width = options.columnWidth * ANCHO_MARCADOR_FACTOR;
             marcadorCola.height = ALTO_MARCADOR;
+            aplicarTextura(marcadorCola, texturas.colaLn, COLOR_COLUMNA[columna]!);
           }
         } else {
           const posicion = calcularPosicionNota(nota.time, time, options.scrollDuration, geo);
@@ -318,6 +387,7 @@ export function createPlayfield(
             marcador.y = posicion.y;
             marcador.width = options.columnWidth * ANCHO_MARCADOR_FACTOR;
             marcador.height = ALTO_MARCADOR;
+            aplicarTextura(marcador, texturas.nota, COLOR_COLUMNA[columna]!);
           }
         }
       }
@@ -333,7 +403,10 @@ export function createPlayfield(
 
   function setPressed(column: Column, pressed: boolean): void {
     const receptor = receptores[column]!;
-    receptor.tint = pressed ? COLOR_RECEPTOR_ENCENDIDO : COLOR_RECEPTOR_APAGADO;
+    const texturas = texturasPorColumna[column]!;
+    const texturaActiva = pressed ? texturas.receptorPulsado : texturas.receptor;
+    const colorFallback = pressed ? COLOR_RECEPTOR_ENCENDIDO : COLOR_RECEPTOR_APAGADO;
+    aplicarTextura(receptor, texturaActiva, colorFallback);
   }
 
   function resize(width: number, height: number): void {

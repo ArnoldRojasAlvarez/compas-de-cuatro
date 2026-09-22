@@ -9,7 +9,12 @@ import { Application } from 'pixi.js';
 import type { Chart, HitResult, Ms, ScoreState } from '@tetra/core';
 import { createJudgeEngine } from '@tetra/core';
 import { createAudioClock } from '@tetra/audio';
-import { createKeyboardInput, createPlayfield, type PlayfieldOptions } from '@tetra/engine';
+import {
+  createKeyboardInput,
+  createPlayfield,
+  type PlayfieldOptions,
+  type TexturasDeSkin,
+} from '@tetra/engine';
 import { mostrarResultados, type Desviacion } from './results.js';
 import { leerOffset } from './offset.js';
 import { leerVelocidad, velocidadAScrollDuration } from './velocidad.js';
@@ -104,7 +109,20 @@ function actualizarHud(
   hud.fpsMs.textContent = `${fps.toFixed(0)} fps / ${msPorFrame.toFixed(1)} ms`;
 }
 
-export function runGame(chart: Chart, audio: AudioBuffer): Promise<ResultadoPartida> {
+/**
+ * T-009: `skin` son texturas ya resueltas (ver @tetra/engine,
+ * `cargarTexturasDeSkin`), no el .osk crudo ni los Blob que guarda
+ * @tetra/storage: quien llama (cargador.ts) es responsable de resolver la
+ * skin activa antes de arrancar la partida, una sola vez (ver el ticket,
+ * "Rendimiento"). Si no hay skin activa, `skin` queda `undefined` y
+ * createPlayfield cae al fallback de rectangulos (ver
+ * packages/engine/src/playfield.ts).
+ */
+export function runGame(
+  chart: Chart,
+  audio: AudioBuffer,
+  skin?: TexturasDeSkin,
+): Promise<ResultadoPartida> {
   return new Promise((resolve, reject) => {
     const elementoApp = document.getElementById('app');
     if (!elementoApp) {
@@ -266,7 +284,7 @@ export function runGame(chart: Chart, audio: AudioBuffer): Promise<ResultadoPart
         }
 
         lienzo.appendChild(app.canvas);
-        const playfield = createPlayfield(app, chart, opcionesPista);
+        const playfield = createPlayfield(app, chart, opcionesPista, skin);
         playfieldParaLimpieza = playfield;
         input = createKeyboardInput(window, toGameTime);
 

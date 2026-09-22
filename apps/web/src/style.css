@@ -141,6 +141,26 @@ body {
   color: #888;
 }
 
+/* T-009: control de skin (ver src/cargador.ts). Mismo estilo que los
+   controles de offset y velocidad de arriba. */
+
+.tetra-cargador-skin {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+}
+
+.tetra-cargador-skin select {
+  max-width: 220px;
+}
+
+.tetra-cargador-skin-ayuda {
+  margin: 0;
+  font-size: 12px;
+  color: #888;
+}
+
 /* T-007: estadisticas cuantificadas y boton de correccion de offset en la
    pantalla de resultados (ver src/results.ts). */
 

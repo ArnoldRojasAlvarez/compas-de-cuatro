@@ -18,7 +18,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { zipSync } from 'fflate';
-import { importarOsz, listarMapas } from './index.js';
+import { importarOsz, listarMapas, importarOsk, listarSkins } from './index.js';
 
 const OSU_DE_PRUEBA = `osu file format v14
 
@@ -48,6 +48,12 @@ OverallDifficulty:6
 function armarOsz(entradas: Record<string, Uint8Array>): Blob {
   return new Blob([zipSync(entradas)], { type: 'application/zip' });
 }
+
+function armarOsk(entradas: Record<string, Uint8Array>): Blob {
+  return new Blob([zipSync(entradas)], { type: 'application/zip' });
+}
+
+const PNG_1X1 = new Uint8Array([1, 2, 3]); // el contenido no importa: storage no decodifica imagenes (ver osk.test.ts)
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -136,5 +142,111 @@ describe('con el .osz real del fixture de T-005', () => {
     // quedado guardado como Blob, no como texto ni vacio.
     expect(guardado.audio.type).toBe('audio/wav');
     expect(guardado.audio.size).toBeGreaterThan(44); // mas que solo el header WAV
+  });
+});
+
+// T-009: mismo patron que arriba, para importarOsk/listarSkins.
+describe('importarOsk + listarSkins', () => {
+  it('guarda la skin y devuelve un id que despues aparece en listarSkins', async () => {
+    const osk = armarOsk({
+      'mania-note1.png': PNG_1X1,
+      'mania-note2.png': PNG_1X1,
+      'mania-key1.png': PNG_1X1,
+      'mania-key2.png': PNG_1X1,
+    });
+
+    const id = await importarOsk(osk);
+    expect(typeof id).toBe('string');
+    expect(id.length).toBeGreaterThan(0);
+
+    const skins = await listarSkins();
+    expect(skins).toHaveLength(1);
+    expect(skins[0]!.id).toBe(id);
+    expect(skins[0]!.imagenes.note1).toBeInstanceOf(Blob);
+    expect(skins[0]!.imagenes.note2).toBeInstanceOf(Blob);
+    // No se pidieron los cuerpos/colas de LN en este .osk de prueba:
+    // tienen que quedar ausentes, no inventados (ver el ticket, "Fallback").
+    expect(skins[0]!.imagenes.note1H).toBeUndefined();
+  });
+
+  it('el nombre guardado sale de File.name cuando el archivo es un File de verdad', async () => {
+    const osk = armarOsk({ 'mania-note1.png': PNG_1X1 });
+    const archivo = new File([await osk.arrayBuffer()], 'Sad Cookie.osk', {
+      type: 'application/zip',
+    });
+
+    await importarOsk(archivo);
+    const skins = await listarSkins();
+    expect(skins[0]!.nombre).toBe('Sad Cookie.osk');
+  });
+
+  it('dos importaciones seguidas quedan como dos skins con ids distintos', async () => {
+    const osk = armarOsk({ 'mania-note1.png': PNG_1X1 });
+
+    const id1 = await importarOsk(osk);
+    const id2 = await importarOsk(osk);
+    expect(id1).not.toBe(id2);
+
+    const skins = await listarSkins();
+    expect(skins).toHaveLength(2);
+  });
+
+  it('listarSkins con la base vacia devuelve un array vacio', async () => {
+    expect(await listarSkins()).toEqual([]);
+  });
+
+  it('importar una skin no toca los mapas guardados, y viceversa (tiendas separadas)', async () => {
+    const osz = armarOsz({
+      'mapa.osu': new TextEncoder().encode(OSU_DE_PRUEBA),
+      'audio.wav': new Uint8Array([1]),
+    });
+    const osk = armarOsk({ 'mania-note1.png': PNG_1X1 });
+
+    await importarOsz(osz);
+    await importarOsk(osk);
+
+    expect(await listarMapas()).toHaveLength(1);
+    expect(await listarSkins()).toHaveLength(1);
+  });
+
+  it('un .osk invalido (sin ninguna imagen conocida) rechaza la promesa y no guarda nada', async () => {
+    const osk = armarOsk({ 'skin.ini': new TextEncoder().encode('[General]\n') });
+    await expect(importarOsk(osk)).rejects.toThrow();
+    expect(await listarSkins()).toEqual([]);
+  });
+});
+
+describe('con el .osk real del fixture de T-009', () => {
+  it('importa fixtures/skin-test/skin-de-prueba.osk de punta a punta', async () => {
+    const ruta = join(__dirname, '..', '..', '..', 'fixtures', 'skin-test', 'skin-de-prueba.osk');
+    const bytes = readFileSync(ruta);
+    const osk = new Blob([bytes], { type: 'application/zip' });
+
+    const id = await importarOsk(osk);
+    const skins = await listarSkins();
+    expect(skins).toHaveLength(1);
+
+    const guardado = skins[0]!;
+    expect(guardado.id).toBe(id);
+    // Generado por tools/generar-fixture-skin-test.mjs: las 10 imagenes
+    // presentes, todas PNG de 1x1 (ver ese script).
+    const claves = [
+      'note1',
+      'note2',
+      'note1H',
+      'note2H',
+      'note1L',
+      'note2L',
+      'key1',
+      'key2',
+      'key1D',
+      'key2D',
+    ] as const;
+    for (const clave of claves) {
+      const blob = guardado.imagenes[clave];
+      expect(blob).toBeInstanceOf(Blob);
+      expect(blob?.type).toBe('image/png');
+      expect(blob?.size).toBeGreaterThan(0);
+    }
   });
 });

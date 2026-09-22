@@ -6,10 +6,12 @@
 // pantalla ni multiples dificultades (ver el ticket, "Fuera de alcance").
 
 import type { Chart } from '@tetra/core';
-import { importarOsz, listarMapas } from '@tetra/storage';
+import { importarOsz, importarOsk, listarMapas, listarSkins, type SkinGuardada } from '@tetra/storage';
+import { cargarTexturasDeSkin, type TexturasDeSkin } from '@tetra/engine';
 import { runGame } from './game.js';
 import { decodificarBlobDeAudio, mensajeDeErrorDeCarga } from './cargador-logica.js';
 import { guardarOffset, leerOffset } from './offset.js';
+import { guardarSkinActiva, leerSkinActiva } from './skin.js';
 import {
   VELOCIDAD_MAX,
   VELOCIDAD_MIN,
@@ -193,6 +195,117 @@ function crearControlDeVelocidad(): HTMLElement {
   return envoltorio;
 }
 
+/** Valor de `<option>` para "sin skin, rectangulos" (el default): no puede ser un SkinId real (crypto.randomUUID() nunca da string vacio). */
+const OPCION_SIN_SKIN = '';
+
+/**
+ * Control de skins (T-009): soltar/elegir un `.osk` y un `<select>` para
+ * elegir entre "sin skin (rectangulos)" y las skins ya importadas. La skin
+ * elegida se persiste con apps/web/src/skin.ts (ver ese archivo: "se
+ * recuerda al recargar" es uno de los criterios de aceptacion del
+ * ticket). Reporta errores de importacion con `onError`, igual que
+ * manejarOsz hace con el .osz mas abajo.
+ */
+function crearControlDeSkin(onError: (mensaje: string) => void): HTMLElement {
+  const seccion = document.createElement('div');
+  seccion.className = 'tetra-cargador-skin';
+
+  const etiqueta = document.createElement('label');
+  etiqueta.textContent = 'Skin:';
+  etiqueta.htmlFor = 'tetra-skin-select';
+  seccion.appendChild(etiqueta);
+
+  const select = document.createElement('select');
+  select.id = 'tetra-skin-select';
+  seccion.appendChild(select);
+
+  const entradaArchivo = document.createElement('input');
+  entradaArchivo.type = 'file';
+  entradaArchivo.accept = '.osk';
+  entradaArchivo.className = 'tetra-cargador-skin-input';
+  seccion.appendChild(entradaArchivo);
+
+  const ayuda = document.createElement('p');
+  ayuda.className = 'tetra-cargador-skin-ayuda';
+  ayuda.textContent =
+    'Opcional: soltar un archivo .osk de skin de osu!mania. Sin skin (o si le ' +
+    'falta alguna imagen), se ven los rectangulos de siempre.';
+
+  // Repuebla el <select> con "sin skin" + las skins guardadas, y deja
+  // seleccionada la que esta activa (ver skin.ts). Se llama al armar el
+  // control y de nuevo cada vez que se importa una skin nueva: es la unica
+  // forma de que el <select> refleje lo que hay en IndexedDB, que no tiene
+  // notificaciones de cambio.
+  async function refrescarLista(): Promise<void> {
+    const skins: SkinGuardada[] = await listarSkins();
+    const activa = leerSkinActiva();
+
+    select.innerHTML = '';
+    const opcionSinSkin = document.createElement('option');
+    opcionSinSkin.value = OPCION_SIN_SKIN;
+    opcionSinSkin.textContent = 'Sin skin (rectangulos)';
+    select.appendChild(opcionSinSkin);
+
+    for (const skin of skins) {
+      const opcion = document.createElement('option');
+      opcion.value = skin.id;
+      opcion.textContent = skin.nombre;
+      select.appendChild(opcion);
+    }
+
+    // Si la skin activa guardada ya no aparece entre las opciones (por
+    // ejemplo, se borro la base de IndexedDB a mano entre una carga y la
+    // otra), el <select> cae solo a la primera opcion ("sin skin"): no
+    // hace falta un caso aparte para eso.
+    select.value = activa ?? OPCION_SIN_SKIN;
+  }
+  void refrescarLista();
+
+  select.addEventListener('change', () => {
+    guardarSkinActiva(select.value === OPCION_SIN_SKIN ? null : select.value);
+  });
+
+  entradaArchivo.addEventListener('change', () => {
+    const archivo = entradaArchivo.files?.[0];
+    entradaArchivo.value = '';
+    if (!archivo) return;
+    void (async () => {
+      try {
+        const id = await importarOsk(archivo);
+        await refrescarLista();
+        select.value = id;
+        guardarSkinActiva(id);
+      } catch (error) {
+        onError(mensajeDeErrorDeCarga(error));
+      }
+    })();
+  });
+
+  const envoltorio = document.createElement('div');
+  envoltorio.appendChild(seccion);
+  envoltorio.appendChild(ayuda);
+  return envoltorio;
+}
+
+/**
+ * Resuelve la skin activa (ver skin.ts) a las Texture que pide
+ * `createPlayfield` (ver @tetra/engine, `cargarTexturasDeSkin`). Se llama
+ * una vez por partida, justo antes de `runGame` (ver `jugar` mas abajo):
+ * ni una vez por nota ni una vez por frame (ver T-009, "Rendimiento").
+ * Devuelve `undefined` sin lanzar cuando no hay skin activa, o cuando la
+ * guardada ya no existe en la base (mismo criterio que `refrescarLista`
+ * arriba): la skin es aditiva, nunca un requisito, asi que esto nunca debe
+ * ser motivo para no poder jugar.
+ */
+async function resolverTexturasDeSkinActiva(): Promise<TexturasDeSkin | undefined> {
+  const id = leerSkinActiva();
+  if (id === null) return undefined;
+  const skins = await listarSkins();
+  const skin = skins.find((candidata) => candidata.id === id);
+  if (!skin) return undefined;
+  return cargarTexturasDeSkin(skin.imagenes);
+}
+
 /**
  * Muestra la pantalla del cargador dentro de `contenedor`, reemplazando lo
  * que hubiera. Se puede volver a llamar despues de una partida para volver
@@ -237,9 +350,6 @@ export function mostrarCargador(contenedor: HTMLElement): void {
 
   const mensajeError = document.createElement('p');
   mensajeError.className = 'tetra-cargador-error';
-  panel.appendChild(mensajeError);
-
-  contenedor.appendChild(panel);
 
   function mostrarError(mensaje: string): void {
     mensajeError.textContent = mensaje;
@@ -248,6 +358,15 @@ export function mostrarCargador(contenedor: HTMLElement): void {
   function limpiarError(): void {
     mensajeError.textContent = '';
   }
+
+  // T-009: control de skin. Va despues de offset/velocidad y antes del
+  // mensaje de error (mismo lugar que ocuparia si se agregara a mano):
+  // usa mostrarError ya declarado arriba para reportar un .osk invalido.
+  panel.appendChild(crearControlDeSkin(mostrarError));
+
+  panel.appendChild(mensajeError);
+
+  contenedor.appendChild(panel);
 
   // Deja los resultados de la partida en pantalla (los pinta runGame al
   // terminar, ver game.ts) y agrega un boton para volver al cargador, en
@@ -268,8 +387,13 @@ export function mostrarCargador(contenedor: HTMLElement): void {
   // mostrar): esta pantalla es la que decide que mostrar entonces, y vuelve
   // directo al cargador en vez de agregar el boton de "volver" sobre unos
   // resultados que no existen.
+  //
+  // T-009: se resuelve la skin activa aca, un solo lugar para los dos
+  // caminos que llegan a jugar() (el .osz importado y el click track): asi
+  // la skin se aplica igual sin importar de donde salio el Chart.
   async function jugar(chart: Chart, audio: AudioBuffer): Promise<void> {
-    const resultado = await runGame(chart, audio);
+    const skin = await resolverTexturasDeSkinActiva();
+    const resultado = await runGame(chart, audio, skin);
     if (resultado.estado === 'completado') {
       mostrarBotonVolver();
     } else {
