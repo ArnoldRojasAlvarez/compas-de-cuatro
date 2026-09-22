@@ -1,12 +1,16 @@
-/* T-004: estilos minimos para el HUD y la pantalla de resultados. Sin
-   menus todavia (fase 3): esto es lo justo para que el bucle de juego y los
-   resultados se puedan leer. */
+/* T-004: estilos del HUD y la pantalla de resultados. T-010 suma el
+   sistema de tokens (tokens.css) y el menu principal: el resto de las
+   reglas de aca abajo se migraron a los tokens de a poco (bienvenido pero
+   no obligatorio segun el ticket, ver docs/tickets/T-010-menu-y-logo.md,
+   "Parte A"), asi que todo lo que se ve en pantalla sale de un solo lugar. */
+
+@import './tokens.css';
 
 body {
   margin: 0;
-  background: #0a0a12;
-  color: #eee;
-  font-family: system-ui, sans-serif;
+  background: var(--fondo);
+  color: var(--tinta);
+  font-family: var(--fuente-cuerpo);
 }
 
 #app {
@@ -15,19 +19,20 @@ body {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 8px;
+  gap: var(--espacio-2);
 }
 
 .tetra-lienzo canvas {
   display: block;
-  background: #111118;
-  border: 1px solid #2a2a3a;
+  background: var(--superficie);
+  border: 1px solid var(--linea);
 }
 
 .tetra-hud {
   display: flex;
-  gap: 24px;
-  font-size: 14px;
+  gap: var(--espacio-6);
+  font-family: var(--fuente-datos);
+  font-size: var(--tipo-sm);
   font-variant-numeric: tabular-nums;
 }
 
@@ -35,67 +40,137 @@ body {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 8px;
-  padding: 24px;
+  gap: var(--espacio-2);
+  padding: var(--espacio-6);
 }
 
 .tetra-resultados-resumen {
   display: flex;
-  gap: 24px;
-  font-size: 18px;
+  gap: var(--espacio-6);
+  font-family: var(--fuente-datos);
+  font-size: var(--tipo-lg);
 }
 
 .tetra-resultados-conteos {
   display: grid;
   grid-template-columns: repeat(3, auto);
-  gap: 4px 24px;
-  font-size: 14px;
+  gap: var(--espacio-1) var(--espacio-6);
+  font-family: var(--fuente-datos);
+  font-size: var(--tipo-sm);
 }
 
 .tetra-resultados-grafico {
-  border: 1px solid #2a2a3a;
+  border: 1px solid var(--linea);
 }
 
-/* T-006: cargador de desarrollo, provisional (ver src/cargador.ts). */
+/* ---------------------------------------------------------------------- */
+/* T-010: el menu principal (ver src/menu.ts). Oscuro, espacioso, alineado */
+/* a una grilla (docs/DISENO.md, "Layout y principios"): sin scroll, todo  */
+/* visible apenas carga.                                                  */
+/* ---------------------------------------------------------------------- */
+
+.tetra-menu {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--espacio-4);
+  width: min(92vw, 560px);
+  /* Vertical mas ajustado que horizontal a proposito: lo que limita "sin
+     scroll" (ticket, criterios de aceptacion) es la altura de la ventana,
+     no el ancho. */
+  padding: var(--espacio-4) 0;
+}
+
+.tetra-menu-encabezado {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--espacio-2);
+  text-align: center;
+}
+
+.tetra-menu-logo {
+  display: flex;
+  justify-content: center;
+}
+
+.tetra-logo {
+  display: block;
+}
+
+.tetra-menu-titulo {
+  margin: 0;
+  font-family: var(--fuente-display);
+  font-weight: 600;
+  font-size: var(--tipo-2xl);
+  letter-spacing: 0.02em;
+  color: var(--tinta);
+  text-wrap: balance;
+}
+
+.tetra-menu-lema {
+  margin: 0;
+  max-width: 40ch;
+  font-size: var(--tipo-sm);
+  color: var(--tinta-2);
+  text-wrap: balance;
+}
+
+.tetra-menu-cargador {
+  width: 100%;
+}
+
+/* T-006: cargador de desarrollo, provisional (ver src/cargador.ts). Migrado
+   a los tokens en T-010: ahora vive dentro de un panel del menu, no suelto
+   en la pantalla. */
 
 .tetra-cargador {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 12px;
-  padding: 24px;
-  max-width: 480px;
+  gap: var(--espacio-2);
+  width: 100%;
+  box-sizing: border-box;
+  padding: var(--espacio-4) var(--espacio-6);
+  background: var(--superficie);
+  border: 1px solid var(--linea);
+  border-radius: var(--radio-panel);
   text-align: center;
+}
+
+.tetra-cargador h1 {
+  display: none; /* T-010: el titulo ya lo muestra el encabezado del menu (tetra-menu-titulo); el <h1> del cargador standalone queda oculto para no duplicarlo. */
 }
 
 .tetra-cargador-aviso {
   margin: 0;
-  font-size: 13px;
-  color: #888;
+  font-size: var(--tipo-xs);
+  color: var(--tinta-3);
 }
 
 .tetra-cargador-zona {
   width: 100%;
-  padding: 48px 16px;
-  border: 2px dashed #444;
-  border-radius: 8px;
-  color: #aaa;
+  box-sizing: border-box;
+  padding: var(--espacio-5) var(--espacio-4);
+  border: 2px dashed var(--linea);
+  border-radius: var(--radio-control);
+  color: var(--tinta-2);
   cursor: default;
 }
 
 .tetra-cargador-zona-activa {
-  border-color: #6ee7b7;
-  color: #eee;
+  border-color: var(--acento);
+  color: var(--tinta);
 }
 
 .tetra-cargador-error {
   min-height: 1.2em;
-  color: #f87171;
-  font-size: 14px;
+  color: var(--j-miss);
+  font-size: var(--tipo-sm);
 }
 
 .tetra-cargador-volver {
-  margin: 16px;
+  margin: var(--espacio-4);
 }
 
 /* T-007: control de calibracion de offset (ver src/cargador.ts). */
@@ -103,20 +178,21 @@ body {
 .tetra-cargador-offset {
   display: flex;
   align-items: center;
-  gap: 8px;
-  font-size: 14px;
+  gap: var(--espacio-2);
+  font-size: var(--tipo-sm);
 }
 
 .tetra-cargador-offset input {
   width: 64px;
   text-align: right;
+  font-family: var(--fuente-datos);
   font-variant-numeric: tabular-nums;
 }
 
 .tetra-cargador-offset-ayuda {
   margin: 0;
-  font-size: 12px;
-  color: #888;
+  font-size: var(--tipo-xs);
+  color: var(--tinta-3);
 }
 
 /* T-008: control de velocidad de caida (ver src/cargador.ts). Mismo estilo
@@ -125,20 +201,21 @@ body {
 .tetra-cargador-velocidad {
   display: flex;
   align-items: center;
-  gap: 8px;
-  font-size: 14px;
+  gap: var(--espacio-2);
+  font-size: var(--tipo-sm);
 }
 
 .tetra-cargador-velocidad input {
   width: 48px;
   text-align: right;
+  font-family: var(--fuente-datos);
   font-variant-numeric: tabular-nums;
 }
 
 .tetra-cargador-velocidad-ayuda {
   margin: 0;
-  font-size: 12px;
-  color: #888;
+  font-size: var(--tipo-xs);
+  color: var(--tinta-3);
 }
 
 /* T-009: control de skin (ver src/cargador.ts). Mismo estilo que los
@@ -147,8 +224,8 @@ body {
 .tetra-cargador-skin {
   display: flex;
   align-items: center;
-  gap: 8px;
-  font-size: 14px;
+  gap: var(--espacio-2);
+  font-size: var(--tipo-sm);
 }
 
 .tetra-cargador-skin select {
@@ -157,8 +234,8 @@ body {
 
 .tetra-cargador-skin-ayuda {
   margin: 0;
-  font-size: 12px;
-  color: #888;
+  font-size: var(--tipo-xs);
+  color: var(--tinta-3);
 }
 
 /* T-007: estadisticas cuantificadas y boton de correccion de offset en la
@@ -166,11 +243,12 @@ body {
 
 .tetra-resultados-estadisticas {
   display: flex;
-  gap: 24px;
-  font-size: 14px;
+  gap: var(--espacio-6);
+  font-family: var(--fuente-datos);
+  font-size: var(--tipo-sm);
   font-variant-numeric: tabular-nums;
 }
 
 .tetra-resultados-corregir {
-  margin-top: 4px;
+  margin-top: var(--espacio-1);
 }

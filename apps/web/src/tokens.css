@@ -1,0 +1,66 @@
+/* T-010: sistema de tokens de diseno. Fuente unica de verdad para color,
+   tipografia y espaciado de toda la UI de apps/web (ver docs/DISENO.md,
+   el contrato de diseno completo con la razon de cada eleccion). Ninguna
+   pantalla define un color o una familia de fuente por su cuenta: todas
+   leen de aca con var(--token).
+
+   Identidad: "instrumento de precision" (metronomo, osciloscopio, afinador),
+   deliberadamente distinta de osu! (nada de rosa, nada de redondeado
+   parejo). El hilo conductor es el numero cuatro: ver docs/DISENO.md,
+   "El concepto: instrumento de precision". */
+
+@import url('https://fonts.googleapis.com/css2?family=Sora:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
+
+:root {
+  /* -- Color: fondo oscuro primero (docs/DISENO.md, "Paleta") -- */
+  --fondo: #0b0e11;
+  --superficie: #131a1f;
+  --superficie-2: #1c252b;
+  --linea: #263139;
+  --tinta: #e7eef0;
+  --tinta-2: #9daab2;
+  --tinta-3: #5f6e77;
+
+  --acento: #3fd8c2;
+  --acento-2: #e8b84a;
+
+  /* El espectro de juicio: es tambien la paleta de datos del juego, no una
+     paleta de UI aparte (docs/DISENO.md, "Paleta"). */
+  --j-max: #3fd8c2;
+  --j-300: #e8b84a;
+  --j-200: #5fc46a;
+  --j-100: #4f93d8;
+  --j-50: #9a78d8;
+  --j-miss: #d8544e;
+
+  /* -- Tipografia: tres roles, tres familias (docs/DISENO.md, "Tipografia") -- */
+  --fuente-display: 'Sora', sans-serif;
+  --fuente-cuerpo: 'IBM Plex Sans', sans-serif;
+  --fuente-datos: 'JetBrains Mono', monospace;
+
+  /* Escala de tipo. rem sobre una base de 16px. */
+  --tipo-xs: 0.75rem;
+  --tipo-sm: 0.875rem;
+  --tipo-base: 1rem;
+  --tipo-lg: 1.25rem;
+  --tipo-xl: 1.75rem;
+  --tipo-2xl: 2.5rem;
+  --tipo-3xl: 3.5rem;
+
+  /* -- Espaciado: escala de 4px, el aire es parte del diseno -- */
+  --espacio-1: 4px;
+  --espacio-2: 8px;
+  --espacio-3: 12px;
+  --espacio-4: 16px;
+  --espacio-5: 24px;
+  --espacio-6: 32px;
+  --espacio-7: 48px;
+  --espacio-8: 64px;
+
+  /* Radio por rol, a proposito distinto entre roles (docs/DISENO.md, "Que
+     evitar": "todo redondeado con la misma esquina" es uno de los sintomas
+     de recaer en lo generico). Controles chicos casi sin redondear, para
+     que lean como instrumento tecnico; paneles con algo mas de aire. */
+  --radio-control: 4px;
+  --radio-panel: 12px;
+}

@@ -22,7 +22,11 @@ import {
 } from './velocidad.js';
 
 const RUTA_MAPA_CLICK = '/fixtures/click-120.json';
-const RUTA_AUDIO_CLICK = '/fixtures/click-120.wav';
+// Exportada: T-010 la reusa en logo.ts para la musica del menu (el mismo
+// click track, en bucle, solo como senal para el visualizador). Es el
+// mismo archivo, una sola constante: evita que las dos rutas se puedan ir
+// desincronizando con el tiempo.
+export const RUTA_AUDIO_CLICK = '/fixtures/click-120.wav';
 
 async function cargarChartDelClickTrack(): Promise<Chart> {
   const respuesta = await fetch(RUTA_MAPA_CLICK);
@@ -307,14 +311,57 @@ async function resolverTexturasDeSkinActiva(): Promise<TexturasDeSkin | undefine
 }
 
 /**
+ * T-010: ganchos opcionales para quien embebe el cargador (el menu, ver
+ * menu.ts) en vez de mostrarlo solo como pantalla de arranque completa
+ * (que era el unico uso hasta T-009). Los dos son opcionales y sin ellos
+ * el comportamiento es identico al de antes de T-010.
+ */
+export interface OpcionesCargador {
+  /**
+   * Se llama justo antes de arrancar `runGame`, es decir, justo antes de
+   * que la partida tome el foco de audio y de pantalla. El menu la usa
+   * para apagar ahi el loop del logo que respira y su audio aparte: sin
+   * este gancho quedarian corriendo un `requestAnimationFrame` colgado y
+   * un segundo audio sonando en paralelo al del juego (ver
+   * docs/tickets/T-010-menu-y-logo.md, "Ojo con el reloj" y
+   * "Rendimiento").
+   */
+  alEmpezarPartida?: () => void;
+  /**
+   * Que mostrar al volver de una partida: por el boton "volver" tras
+   * completarla, o el regreso automatico tras abortarla con Escape. Por
+   * defecto vuelve a mostrar este mismo cargador (el comportamiento de
+   * siempre). El menu la usa para reconstruir el menu entero, logo
+   * incluido, en vez de quedar solo con el panel del cargador.
+   */
+  alVolver?: () => void;
+}
+
+/**
  * Muestra la pantalla del cargador dentro de `contenedor`, reemplazando lo
  * que hubiera. Se puede volver a llamar despues de una partida para volver
  * a esta pantalla (ver mostrarBotonVolver mas abajo), y tambien es a donde
  * vuelve una partida abandonada con Escape (T-008, "Parte B": ver `jugar`
- * mas abajo).
+ * mas abajo). Ver `OpcionesCargador` para como el menu (T-010) se conecta
+ * con esta pantalla sin que este archivo sepa nada de logos ni de Canvas.
  */
-export function mostrarCargador(contenedor: HTMLElement): void {
+export function mostrarCargador(contenedor: HTMLElement, opciones: OpcionesCargador = {}): void {
   contenedor.innerHTML = '';
+
+  // T-010: adonde reaparecer despues de una partida. runGame (game.ts)
+  // siempre pinta los resultados o limpia la pantalla directo sobre #app,
+  // sin importar que `contenedor` se le paso a este mostrarCargador (puede
+  // ser un panel anidado dentro del menu, ver menu.ts): #app es lo unico
+  // que esta garantizado que siga en el documento en ese momento (game.ts
+  // vacia su innerHTML, pero nunca remueve el elemento en si).
+  function raizApp(): HTMLElement {
+    return document.getElementById('app') ?? contenedor;
+  }
+
+  // Sin alVolver explicito, el comportamiento es el de siempre: volver a
+  // mostrar este mismo cargador (ahora sobre raizApp(), no sobre
+  // `contenedor`, por la misma razon de arriba).
+  const volver = opciones.alVolver ?? ((): void => mostrarCargador(raizApp(), opciones));
 
   const panel = document.createElement('div');
   panel.className = 'tetra-cargador';
@@ -377,8 +424,12 @@ export function mostrarCargador(contenedor: HTMLElement): void {
     boton.type = 'button';
     boton.className = 'tetra-cargador-volver';
     boton.textContent = 'Volver al cargador';
-    boton.addEventListener('click', () => mostrarCargador(contenedor));
-    contenedor.appendChild(boton);
+    boton.addEventListener('click', () => volver());
+    // raizApp(), no `contenedor`: para cuando este cargador esta embebido
+    // en el menu (ver OpcionesCargador arriba), `contenedor` es un panel
+    // anidado que runGame ya desconecto del documento al pintar los
+    // resultados sobre #app.
+    raizApp().appendChild(boton);
   }
 
   // T-008: runGame ya no siempre termina en resultados. Si la partida se
@@ -393,11 +444,16 @@ export function mostrarCargador(contenedor: HTMLElement): void {
   // la skin se aplica igual sin importar de donde salio el Chart.
   async function jugar(chart: Chart, audio: AudioBuffer): Promise<void> {
     const skin = await resolverTexturasDeSkinActiva();
+    // T-010: justo antes de que runGame tome el foco (su propio
+    // AudioContext, el canvas de Pixi, el teclado). Es la ultima
+    // oportunidad para que quien embebe el cargador apague lo que tenga
+    // corriendo aparte (ver OpcionesCargador.alEmpezarPartida arriba).
+    opciones.alEmpezarPartida?.();
     const resultado = await runGame(chart, audio, skin);
     if (resultado.estado === 'completado') {
       mostrarBotonVolver();
     } else {
-      mostrarCargador(contenedor);
+      volver();
     }
   }
 
