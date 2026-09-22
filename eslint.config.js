@@ -16,6 +16,25 @@ export default [
   js.configs.recommended,
   ...tseslint.configs.recommended,
 
+  {
+    // Scripts de generacion de fixtures (Node puro, ver
+    // tools/generar-fixture-click.py y su equivalente en JS
+    // tools/generar-fixture-mania-test.mjs de T-005): no forman parte del
+    // build de ningun paquete, corren con `node` directo y usan los
+    // globales del entorno Node, no los del navegador ni los de ningun
+    // paquete de TypeScript del repo.
+    files: ['tools/**/*.mjs'],
+    languageOptions: {
+      globals: {
+        Buffer: 'readonly',
+        TextEncoder: 'readonly',
+        TextDecoder: 'readonly',
+        console: 'readonly',
+        process: 'readonly',
+      },
+    },
+  },
+
   // -------------------------------------------------------------------------
   // Reglas de arquitectura. Ver CLAUDE.md.
   // Estas reglas reemplazan a los tests que verificaban lo mismo leyendo el
@@ -88,8 +107,29 @@ export default [
         'error',
         {
           patterns: [
-            { group: ['@tetra/audio', '@tetra/engine'], message: 'core no importa de nadie.' },
+            {
+              group: ['@tetra/audio', '@tetra/engine', '@tetra/storage'],
+              message: 'core no importa de nadie.',
+            },
             { group: ['pixi.js', 'react', 'react-dom'], message: 'core no importa de nadie.' },
+          ],
+        },
+      ],
+    },
+  },
+
+  {
+    // Regla 3: storage es codigo de navegador (IndexedDB), asi que puede usar
+    // globals del navegador, pero no es la capa de render: no importa Pixi ni
+    // React. Y como toda capa por encima de core, jamas al reves.
+    files: ['packages/storage/**/*.ts'],
+    ignores: ['packages/storage/**/*.test.ts'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            { group: ['pixi.js', 'react', 'react-dom'], message: 'storage no es la capa de render.' },
           ],
         },
       ],
