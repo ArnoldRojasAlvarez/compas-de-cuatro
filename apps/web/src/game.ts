@@ -12,15 +12,34 @@ import { createAudioClock } from '@tetra/audio';
 import { createKeyboardInput, createPlayfield, type PlayfieldOptions } from '@tetra/engine';
 import { mostrarResultados, type Desviacion } from './results.js';
 import { leerOffset } from './offset.js';
+import { leerVelocidad, velocidadAScrollDuration } from './velocidad.js';
 
-const OPCIONES_PISTA: PlayfieldOptions = {
-  scrollDuration: 1200,
+// scrollDuration no es fijo desde T-008: sale de la velocidad guardada por
+// el jugador (ver apps/web/src/velocidad.ts) y se calcula una sola vez al
+// arrancar la partida, igual que el offset. El resto de PlayfieldOptions
+// (tamano de pista, ancho de columna) si sigue fijo: no hay ticket que pida
+// hacerlo configurable.
+const OPCIONES_PISTA_BASE = {
   height: 600,
   columnWidth: 110,
   receptorOffset: 120,
-};
+} as const;
 
 const LEAD_IN_MS: Ms = 1500;
+
+/**
+ * T-008: que devuelve `runGame` cuando la partida termina sola versus cuando
+ * el jugador la abandona con Escape. Antes de este ticket `runGame` siempre
+ * resolvia con un `ScoreState`, pero una partida abandonada no tiene un
+ * resultado que valga la pena mostrar (ver el ticket, "Parte B"): de las dos
+ * opciones que planteaba ("distinguir termino/abandono en la misma promesa"
+ * o "una senal de aborto aparte"), se elige la primera, para no sumar un
+ * segundo canal de comunicacion (callback o EventTarget) a algo que ya es
+ * una promesa. Quien llama (`cargador.ts`) discrimina por `estado`.
+ */
+export type ResultadoPartida =
+  | { readonly estado: 'completado'; readonly score: ScoreState }
+  | { readonly estado: 'abortado' };
 
 /**
  * Gancho de depuracion para el e2e de Playwright (ver
@@ -85,7 +104,7 @@ function actualizarHud(
   hud.fpsMs.textContent = `${fps.toFixed(0)} fps / ${msPorFrame.toFixed(1)} ms`;
 }
 
-export function runGame(chart: Chart, audio: AudioBuffer): Promise<ScoreState> {
+export function runGame(chart: Chart, audio: AudioBuffer): Promise<ResultadoPartida> {
   return new Promise((resolve, reject) => {
     const elementoApp = document.getElementById('app');
     if (!elementoApp) {
@@ -98,6 +117,15 @@ export function runGame(chart: Chart, audio: AudioBuffer): Promise<ScoreState> {
     // callback de app.init()), asi que se fija el tipo una sola vez aca.
     const contenedor: HTMLElement = elementoApp;
     contenedor.innerHTML = '';
+
+    // T-008: la velocidad se lee una sola vez al arrancar, igual que el
+    // offset (ver el comentario de leerOffset() mas abajo): no hay pausa ni
+    // ajuste en caliente en el alcance de este ticket, solo elegirla antes
+    // de jugar.
+    const opcionesPista: PlayfieldOptions = {
+      ...OPCIONES_PISTA_BASE,
+      scrollDuration: velocidadAScrollDuration(leerVelocidad()),
+    };
 
     const lienzo = document.createElement('div');
     lienzo.className = 'tetra-lienzo';
@@ -145,7 +173,17 @@ export function runGame(chart: Chart, audio: AudioBuffer): Promise<ScoreState> {
     let rafId = 0;
 
     let input: ReturnType<typeof createKeyboardInput> | null = null;
+    // Se guarda aparte de la `const playfield` local de mas abajo (dentro de
+    // app.init().then()): esta referencia es la que usan finalizar() y
+    // abortar() para limpiar, declarada afuera porque las dos pueden correr
+    // antes de que el `.then()` termine de armar la pista.
+    let playfieldParaLimpieza: ReturnType<typeof createPlayfield> | null = null;
     let ultimoT = -LEAD_IN_MS;
+    // true desde que app.init() resuelve: distingue, dentro de abortar(), si
+    // ya hay que destruir la Application de Pixi (partida en curso) o si
+    // todavia esta inicializando y el callback de mas abajo se va a
+    // encargar solo (ver el `if (detenido)` dentro de app.init().then()).
+    let appInicializada = false;
 
     function limpiar(): void {
       detenido = true;
@@ -154,6 +192,7 @@ export function runGame(chart: Chart, audio: AudioBuffer): Promise<ScoreState> {
       }
       clock.stop();
       input?.destroy();
+      window.removeEventListener('keydown', manejarEscape);
       delete window.__tetraDebug;
       void ctx.close().catch(() => {
         // cerrar el contexto es best-effort: si el navegador ya lo cerro
@@ -169,24 +208,66 @@ export function runGame(chart: Chart, audio: AudioBuffer): Promise<ScoreState> {
       // de la pantalla de resultados (T-007) para calcular el offset nuevo.
       const offsetDeEstaPartida = clock.userOffset;
       limpiar();
+      playfieldParaLimpieza?.destroy();
       app.destroy(true, { children: true });
       contenedor.innerHTML = '';
       mostrarResultados(contenedor, estadoFinal, desviaciones, offsetDeEstaPartida);
-      resolve(estadoFinal);
+      resolve({ estado: 'completado', score: estadoFinal });
     }
+
+    /**
+     * T-008, "Parte B": Escape a mitad de partida. La limpieza es la misma
+     * que hace finalizar() (reloj, input, contexto de audio), mas
+     * `playfield.destroy()` y `app.destroy()`, pero SIN pintar resultados:
+     * una partida abandonada no tiene un resultado que valga la pena
+     * mostrar (ver el ticket). `cargador.ts` es quien decide volver a la
+     * pantalla del cargador al ver `estado: 'abortado'`, no este archivo:
+     * game.ts no importa cargador.ts (seria una dependencia circular, ver
+     * cargador.ts que ya importa de aca).
+     */
+    function abortar(): void {
+      if (detenido) return;
+      limpiar();
+      if (appInicializada) {
+        playfieldParaLimpieza?.destroy();
+        app.destroy(true, { children: true });
+      }
+      // Si todavia no terminaba app.init(), el `.then()` de mas abajo ve
+      // `detenido` en true apenas resuelve y destruye la app ahi: no hace
+      // falta hacer nada mas con ella desde aca.
+      contenedor.innerHTML = '';
+      resolve({ estado: 'abortado' });
+    }
+
+    function manejarEscape(evento: KeyboardEvent): void {
+      if (evento.key === 'Escape') {
+        abortar();
+      }
+    }
+    // Escuchado desde ya, no solo despues de que arranque la partida: se
+    // puede abortar incluso mientras app.init() todavia esta cargando.
+    window.addEventListener('keydown', manejarEscape);
 
     app
       .init({
-        width: OPCIONES_PISTA.columnWidth * 4,
-        height: OPCIONES_PISTA.height,
+        width: opcionesPista.columnWidth * 4,
+        height: opcionesPista.height,
         backgroundAlpha: 0,
         antialias: true,
       })
       .then(() => {
-        if (detenido) return; // se pidio limpiar mientras se inicializaba
+        appInicializada = true;
+        if (detenido) {
+          // Se pidio abortar mientras se inicializaba: abortar() no pudo
+          // destruir la Application porque todavia no existia del todo (ver
+          // appInicializada arriba), asi que se hace aca apenas esta lista.
+          app.destroy(true, { children: true });
+          return;
+        }
 
         lienzo.appendChild(app.canvas);
-        const playfield = createPlayfield(app, chart, OPCIONES_PISTA);
+        const playfield = createPlayfield(app, chart, opcionesPista);
+        playfieldParaLimpieza = playfield;
         input = createKeyboardInput(window, toGameTime);
 
         clock.start(LEAD_IN_MS);

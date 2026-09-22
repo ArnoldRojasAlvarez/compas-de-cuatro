@@ -10,6 +10,14 @@ import { importarOsz, listarMapas } from '@tetra/storage';
 import { runGame } from './game.js';
 import { decodificarBlobDeAudio, mensajeDeErrorDeCarga } from './cargador-logica.js';
 import { guardarOffset, leerOffset } from './offset.js';
+import {
+  VELOCIDAD_MAX,
+  VELOCIDAD_MIN,
+  clampVelocidad,
+  guardarVelocidad,
+  leerVelocidad,
+  velocidadAScrollDuration,
+} from './velocidad.js';
 
 const RUTA_MAPA_CLICK = '/fixtures/click-120.json';
 const RUTA_AUDIO_CLICK = '/fixtures/click-120.wav';
@@ -110,10 +118,87 @@ function crearControlDeOffset(): HTMLElement {
   return envoltorio;
 }
 
+const PASO_VELOCIDAD = 1;
+
+/**
+ * Control de velocidad de caida (T-008, "Parte A"): numero entero con
+ * botones de mas y menos, igual de forma que el control de offset de arriba.
+ * Muestra el concepto natural del jugador (mas numero = mas rapido = menos
+ * notas en pantalla a la vez), no los ms de `scrollDuration`: ese numero se
+ * guarda tal cual en localStorage (ver apps/web/src/velocidad.ts) y game.ts
+ * lo convierte a ms recien al arrancar la partida, con
+ * `velocidadAScrollDuration`. Aca solo se muestra el ms resultante como dato
+ * informativo, en la ayuda, para quien quiera calibrar con el numero
+ * "real" de la pista.
+ */
+function crearControlDeVelocidad(): HTMLElement {
+  const seccion = document.createElement('div');
+  seccion.className = 'tetra-cargador-velocidad';
+
+  const etiqueta = document.createElement('label');
+  etiqueta.textContent = 'Velocidad:';
+  etiqueta.htmlFor = 'tetra-velocidad-valor';
+  seccion.appendChild(etiqueta);
+
+  const botonMenos = document.createElement('button');
+  botonMenos.type = 'button';
+  botonMenos.textContent = `-${PASO_VELOCIDAD}`;
+  seccion.appendChild(botonMenos);
+
+  const entrada = document.createElement('input');
+  entrada.type = 'number';
+  entrada.id = 'tetra-velocidad-valor';
+  entrada.step = String(PASO_VELOCIDAD);
+  entrada.min = String(VELOCIDAD_MIN);
+  entrada.max = String(VELOCIDAD_MAX);
+  entrada.value = String(leerVelocidad());
+  seccion.appendChild(entrada);
+
+  const botonMas = document.createElement('button');
+  botonMas.type = 'button';
+  botonMas.textContent = `+${PASO_VELOCIDAD}`;
+  seccion.appendChild(botonMas);
+
+  const ayuda = document.createElement('p');
+  ayuda.className = 'tetra-cargador-velocidad-ayuda';
+
+  function actualizarAyuda(velocidad: number): void {
+    ayuda.textContent =
+      `Mas alto, las notas caen mas rapido y hay menos en pantalla a la vez ` +
+      `(rango ${VELOCIDAD_MIN} a ${VELOCIDAD_MAX}; ahora mismo: ${velocidadAScrollDuration(velocidad)}ms por nota).`;
+  }
+  actualizarAyuda(leerVelocidad());
+
+  function fijarVelocidad(valor: number): void {
+    const recortado = clampVelocidad(valor);
+    entrada.value = String(recortado);
+    guardarVelocidad(recortado);
+    actualizarAyuda(recortado);
+  }
+
+  botonMenos.addEventListener('click', () => {
+    fijarVelocidad((Number(entrada.value) || VELOCIDAD_MIN) - PASO_VELOCIDAD);
+  });
+  botonMas.addEventListener('click', () => {
+    fijarVelocidad((Number(entrada.value) || VELOCIDAD_MIN) + PASO_VELOCIDAD);
+  });
+  entrada.addEventListener('change', () => {
+    const valor = Number(entrada.value);
+    fijarVelocidad(Number.isFinite(valor) ? valor : VELOCIDAD_MIN);
+  });
+
+  const envoltorio = document.createElement('div');
+  envoltorio.appendChild(seccion);
+  envoltorio.appendChild(ayuda);
+  return envoltorio;
+}
+
 /**
  * Muestra la pantalla del cargador dentro de `contenedor`, reemplazando lo
  * que hubiera. Se puede volver a llamar despues de una partida para volver
- * a esta pantalla (ver mostrarBotonVolver mas abajo).
+ * a esta pantalla (ver mostrarBotonVolver mas abajo), y tambien es a donde
+ * vuelve una partida abandonada con Escape (T-008, "Parte B": ver `jugar`
+ * mas abajo).
  */
 export function mostrarCargador(contenedor: HTMLElement): void {
   contenedor.innerHTML = '';
@@ -148,6 +233,7 @@ export function mostrarCargador(contenedor: HTMLElement): void {
   panel.appendChild(botonClick);
 
   panel.appendChild(crearControlDeOffset());
+  panel.appendChild(crearControlDeVelocidad());
 
   const mensajeError = document.createElement('p');
   mensajeError.className = 'tetra-cargador-error';
@@ -176,9 +262,19 @@ export function mostrarCargador(contenedor: HTMLElement): void {
     contenedor.appendChild(boton);
   }
 
+  // T-008: runGame ya no siempre termina en resultados. Si la partida se
+  // abandono con Escape (ver game.ts, `abortar()`) game.ts ya limpio la
+  // pantalla del juego pero no dibuja nada mas (no hay resultado que
+  // mostrar): esta pantalla es la que decide que mostrar entonces, y vuelve
+  // directo al cargador en vez de agregar el boton de "volver" sobre unos
+  // resultados que no existen.
   async function jugar(chart: Chart, audio: AudioBuffer): Promise<void> {
-    await runGame(chart, audio);
-    mostrarBotonVolver();
+    const resultado = await runGame(chart, audio);
+    if (resultado.estado === 'completado') {
+      mostrarBotonVolver();
+    } else {
+      mostrarCargador(contenedor);
+    }
   }
 
   async function manejarOsz(archivo: File): Promise<void> {

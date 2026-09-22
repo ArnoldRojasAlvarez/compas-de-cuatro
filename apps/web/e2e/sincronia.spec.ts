@@ -71,7 +71,15 @@ test('el reloj de juego no se desincroniza del audio en 60s de reproduccion real
 
   const derivasPorSegundo: number[] = [];
 
-  for (let segundo = 1; segundo <= 60; segundo++) {
+  // Se muestrea 50 segundos, no 60, a proposito. El click track dura 60s pero
+  // la partida termina antes: la ultima nota (t=59500ms) sale de su ventana de
+  // miss (OD 7.3 -> 166ms) a los ~59.67s, y ahi finalizar() borra
+  // window.__tetraDebug. Muestrear hasta 60 era una carrera contra ese cierre y
+  // volvia el test intermitente. 50s dejan margen de sobra y prueban la
+  // ausencia de deriva igual de bien: la deriva es acumulativa, asi que
+  // cualquier reloj mal hecho (rAF, performance.now) se despegaria de los 5ms
+  // mucho antes de los 50s.
+  for (let segundo = 1; segundo <= 50; segundo++) {
     await page.waitForTimeout(1000);
     const muestra = await tomarMuestra(page);
     const derivaActual = muestra.clockNow - muestra.ctxTime * 1000 - offsetBase;
@@ -81,10 +89,10 @@ test('el reloj de juego no se desincroniza del audio en 60s de reproduccion real
   // Guarda contra un falso positivo: si el AudioContext nunca arranco de
   // verdad (por ejemplo, por politica de autoplay del navegador), las dos
   // muestras se quedan practicamente en 0 y la "deriva" da 0 sin haber
-  // medido nada real. El contexto tiene que haber avanzado cerca de los 60
+  // medido nada real. El contexto tiene que haber avanzado cerca de los 50
   // segundos reales que se dejaron correr.
   const muestraFinal = await tomarMuestra(page);
-  expect(muestraFinal.ctxTime - muestraBase.ctxTime).toBeGreaterThan(50);
+  expect(muestraFinal.ctxTime - muestraBase.ctxTime).toBeGreaterThan(45);
 
   const derivaMaxima = Math.max(...derivasPorSegundo.map((d) => Math.abs(d)));
   expect(derivaMaxima).toBeLessThan(5);
