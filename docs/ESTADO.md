@@ -7,8 +7,9 @@ empezando una sesion nueva, lee esto y despues `CLAUDE.md`.
 
 ## Donde esta todo
 
-- Rama `main`: T-004 fusionado y verificado. Los cuatro checks en verde.
-- **Fase 1 tecnicamente cerrada. Falta solo la prueba de feel de Arnold.**
+- Rama `main`: fases 1 y 2 fusionadas y verificadas. Los cuatro checks en verde.
+- **Ya se puede soltar un `.osz` de osu! y jugarlo.** El proximo paso real es
+  la prueba de feel de Arnold.
 
 ## Lo que ya esta cerrado
 
@@ -21,8 +22,19 @@ empezando una sesion nueva, lee esto y despues `CLAUDE.md`.
 | T-003 | Motor de juicio, score, combo y HP | Sonnet |
 | Fixture | Click track de 120 BPM con su mapa sincronizado | Haiku |
 | T-004 | Pista en Pixi, entrada de teclado, bucle y pantalla de resultados | Sonnet |
+| T-005 | Importador de mapas `.osu` mania 4K, y `@tetra/storage` (IndexedDB) | Sonnet |
+| T-006 | Cargador de desarrollo: soltar un `.osz` y jugarlo | Sonnet |
 
-98 tests pasando en `main`, mas un e2e de Playwright.
+156 tests pasando en `main`, mas un e2e de Playwright.
+
+## Como jugarlo ahora mismo
+
+1. `npm run dev` desde la raiz. Abrir la URL que imprime Vite.
+2. Soltar un `.osz` de mania 4K (bajado de osu!) en la zona de drop, o darle al
+   boton del click track.
+3. Teclas por defecto: D, F, J, K.
+
+El `.osz` es contenido de terceros: sirve para probar, no para publicar.
 
 ## El riesgo critico quedo verificado
 

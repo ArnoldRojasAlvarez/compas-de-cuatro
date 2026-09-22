@@ -12,6 +12,7 @@
     "@tetra/audio": "*",
     "@tetra/core": "*",
     "@tetra/engine": "*",
+    "@tetra/storage": "*",
     "pixi.js": "^8.6.0"
   },
   "devDependencies": {

@@ -55,6 +55,11 @@ test('el reloj de juego no se desincroniza del audio en 60s de reproduccion real
 }) => {
   await page.goto('/');
 
+  // T-006: desde que existe el cargador de desarrollo (ver
+  // apps/web/src/cargador.ts) la pagina ya no arranca el click track sola:
+  // hay que pedirlo con el boton, igual que haria una persona jugando.
+  await page.getByRole('button', { name: 'Jugar click track' }).click();
+
   // Espera a que el bucle de juego haya arrancado el reloj de audio.
   await page.waitForFunction(
     () => window.__tetraDebug !== undefined && window.__tetraDebug.clock.isRunning,

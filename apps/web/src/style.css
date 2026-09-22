@@ -55,3 +55,45 @@ body {
 .tetra-resultados-grafico {
   border: 1px solid #2a2a3a;
 }
+
+/* T-006: cargador de desarrollo, provisional (ver src/cargador.ts). */
+
+.tetra-cargador {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 24px;
+  max-width: 480px;
+  text-align: center;
+}
+
+.tetra-cargador-aviso {
+  margin: 0;
+  font-size: 13px;
+  color: #888;
+}
+
+.tetra-cargador-zona {
+  width: 100%;
+  padding: 48px 16px;
+  border: 2px dashed #444;
+  border-radius: 8px;
+  color: #aaa;
+  cursor: default;
+}
+
+.tetra-cargador-zona-activa {
+  border-color: #6ee7b7;
+  color: #eee;
+}
+
+.tetra-cargador-error {
+  min-height: 1.2em;
+  color: #f87171;
+  font-size: 14px;
+}
+
+.tetra-cargador-volver {
+  margin: 16px;
+}

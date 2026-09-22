@@ -13,3 +13,5 @@ vitest.config.d.ts
 eslint.config.d.ts
 apps/web/test-results/
 apps/web/playwright-report/
+.claude/settings.local.json
+.claude/*.local.json
