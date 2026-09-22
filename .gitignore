@@ -11,3 +11,5 @@ apps/web/vite.config.d.ts
 vitest.config.js
 vitest.config.d.ts
 eslint.config.d.ts
+apps/web/test-results/
+apps/web/playwright-report/

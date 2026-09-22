@@ -24,8 +24,18 @@ export default [
 
   {
     // Regla 1: el reloj es el audio.
-    // Aplica a todo el codigo de gameplay, no solo al reloj.
-    files: ['packages/core/**/*.ts', 'packages/audio/**/*.ts', 'packages/engine/**/*.ts'],
+    // Aplica a todo el codigo de gameplay, no solo al reloj. apps/web/src
+    // entra a partir de T-004: es donde vive el bucle de juego real
+    // (apps/web/src/game.ts) y la unica lectura de performance.now()
+    // permitida en el proyecto (ver docs/tickets/T-004-pista-y-entrada.md,
+    // "El punto critico: el tiempo de la pulsacion"), que necesita su
+    // propio eslint-disable-next-line para poder existir.
+    files: [
+      'packages/core/**/*.ts',
+      'packages/audio/**/*.ts',
+      'packages/engine/**/*.ts',
+      'apps/web/src/**/*.ts',
+    ],
     rules: {
       'no-restricted-globals': [
         'error',

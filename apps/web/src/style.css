@@ -1,0 +1,57 @@
+/* T-004: estilos minimos para el HUD y la pantalla de resultados. Sin
+   menus todavia (fase 3): esto es lo justo para que el bucle de juego y los
+   resultados se puedan leer. */
+
+body {
+  margin: 0;
+  background: #0a0a12;
+  color: #eee;
+  font-family: system-ui, sans-serif;
+}
+
+#app {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.tetra-lienzo canvas {
+  display: block;
+  background: #111118;
+  border: 1px solid #2a2a3a;
+}
+
+.tetra-hud {
+  display: flex;
+  gap: 24px;
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+}
+
+.tetra-resultados {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 24px;
+}
+
+.tetra-resultados-resumen {
+  display: flex;
+  gap: 24px;
+  font-size: 18px;
+}
+
+.tetra-resultados-conteos {
+  display: grid;
+  grid-template-columns: repeat(3, auto);
+  gap: 4px 24px;
+  font-size: 14px;
+}
+
+.tetra-resultados-grafico {
+  border: 1px solid #2a2a3a;
+}

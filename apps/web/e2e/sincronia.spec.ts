@@ -1,0 +1,86 @@
+// T-004: e2e de deriva. Cobra la deuda que dejo T-001 (ver
+// docs/tickets/T-004-pista-y-entrada.md, seccion "Tests" y
+// docs/tickets/T-001-reloj-audio.md, seccion "Prueba de deriva"): la prueba
+// de vitest de packages/audio/src/clock.test.ts demuestra con un doble de
+// prueba por que clock.now() no se desincroniza, pero eso no prueba nada
+// contra audio real, con hardware real, en un navegador real. Esta es esa
+// prueba.
+//
+// Metodo: clock.now() y ctx.currentTime viven en bases de tiempo distintas
+// (una en ms desde 0 con leadIn y offset aplicados, la otra en segundos
+// desde que arranco el AudioContext), asi que no se comparan directo.
+// Se toma una muestra base apenas arranca la reproduccion, que fija la
+// diferencia constante entre las dos (offsetBase = clock.now() -
+// ctx.currentTime*1000, ver el comentario dentro del test). Si esa
+// diferencia se mantiene constante durante los 60 segundos, los dos
+// relojes estan avanzando al mismo ritmo: eso es "no hay deriva". Si un
+// reloj se desincroniza del otro, esa diferencia crece con el tiempo, y ahi
+// si esta comparando de verdad, no una identidad algebraica (el error que
+// T-001-F1 encontro en la primera version de la prueba de deriva de T-001).
+
+import { expect, test } from '@playwright/test';
+
+// Esta carpeta no entra en el proyecto de tsconfig de apps/web (que solo
+// incluye src, ver apps/web/tsconfig.json): Playwright transpila esto con
+// su propio esbuild y no pasa por `tsc --build`. Se declara aca el mismo
+// gancho que expone apps/web/src/game.ts (window.__tetraDebug) en vez de
+// depender de que ese `declare global` se filtre desde otro proyecto de
+// TypeScript, que no es como funcionan las project references.
+declare global {
+  interface Window {
+    __tetraDebug?: {
+      clock: { now(): number; isRunning: boolean };
+      ctx: { currentTime: number };
+    };
+  }
+}
+
+interface Muestra {
+  clockNow: number;
+  ctxTime: number;
+}
+
+async function tomarMuestra(page: import('@playwright/test').Page): Promise<Muestra> {
+  return page.evaluate(() => {
+    const gancho = window.__tetraDebug;
+    if (!gancho) {
+      throw new Error('window.__tetraDebug no esta disponible: el juego ya termino o no arranco.');
+    }
+    return { clockNow: gancho.clock.now(), ctxTime: gancho.ctx.currentTime };
+  });
+}
+
+test('el reloj de juego no se desincroniza del audio en 60s de reproduccion real', async ({
+  page,
+}) => {
+  await page.goto('/');
+
+  // Espera a que el bucle de juego haya arrancado el reloj de audio.
+  await page.waitForFunction(
+    () => window.__tetraDebug !== undefined && window.__tetraDebug.clock.isRunning,
+    { timeout: 30_000 },
+  );
+
+  const muestraBase = await tomarMuestra(page);
+  const offsetBase = muestraBase.clockNow - muestraBase.ctxTime * 1000;
+
+  const derivasPorSegundo: number[] = [];
+
+  for (let segundo = 1; segundo <= 60; segundo++) {
+    await page.waitForTimeout(1000);
+    const muestra = await tomarMuestra(page);
+    const derivaActual = muestra.clockNow - muestra.ctxTime * 1000 - offsetBase;
+    derivasPorSegundo.push(derivaActual);
+  }
+
+  // Guarda contra un falso positivo: si el AudioContext nunca arranco de
+  // verdad (por ejemplo, por politica de autoplay del navegador), las dos
+  // muestras se quedan practicamente en 0 y la "deriva" da 0 sin haber
+  // medido nada real. El contexto tiene que haber avanzado cerca de los 60
+  // segundos reales que se dejaron correr.
+  const muestraFinal = await tomarMuestra(page);
+  expect(muestraFinal.ctxTime - muestraBase.ctxTime).toBeGreaterThan(50);
+
+  const derivaMaxima = Math.max(...derivasPorSegundo.map((d) => Math.abs(d)));
+  expect(derivaMaxima).toBeLessThan(5);
+});

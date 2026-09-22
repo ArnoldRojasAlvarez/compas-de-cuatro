@@ -4,11 +4,17 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build"
+    "build": "vite build",
+    "preview": "vite preview",
+    "e2e": "playwright test"
   },
   "dependencies": {
     "@tetra/audio": "*",
     "@tetra/core": "*",
-    "@tetra/engine": "*"
+    "@tetra/engine": "*",
+    "pixi.js": "^8.6.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.48.0"
   }
 }
