@@ -9,6 +9,7 @@ import type { Chart } from '@tetra/core';
 import { importarOsz, listarMapas } from '@tetra/storage';
 import { runGame } from './game.js';
 import { decodificarBlobDeAudio, mensajeDeErrorDeCarga } from './cargador-logica.js';
+import { guardarOffset, leerOffset } from './offset.js';
 
 const RUTA_MAPA_CLICK = '/fixtures/click-120.json';
 const RUTA_AUDIO_CLICK = '/fixtures/click-120.wav';
@@ -38,6 +39,75 @@ async function cargarAudioDelClickTrack(): Promise<AudioBuffer> {
   } finally {
     await ctxDeDecodificacion.close();
   }
+}
+
+const PASO_OFFSET_MS = 1;
+
+/**
+ * Control de calibracion de offset (T-007, "Parte B"): numero editable en
+ * ms mas botones de +-1ms. Se lee de localStorage al armar el control y se
+ * guarda ahi mismo en cada cambio (ver apps/web/src/offset.ts); game.ts lo
+ * vuelve a leer al arrancar la proxima partida y se lo pasa al reloj como
+ * `ClockOptions.userOffset`.
+ *
+ * El signo lo define el reloj (packages/audio/src/clock.ts) y el motor de
+ * juicio: subir el offset mueve los golpes hacia temprano (puntos mas abajo en
+ * el grafico de resultados), bajarlo hacia tarde. Entonces, para centrarse: si
+ * pegas temprano, baja el offset; si pegas tarde, subilo. Lo mas comodo es el
+ * boton "corregir segun esta partida" de la pantalla de resultados, que hace
+ * justo eso a partir de la media medida.
+ */
+function crearControlDeOffset(): HTMLElement {
+  const seccion = document.createElement('div');
+  seccion.className = 'tetra-cargador-offset';
+
+  const etiqueta = document.createElement('label');
+  etiqueta.textContent = 'Offset (ms):';
+  etiqueta.htmlFor = 'tetra-offset-valor';
+  seccion.appendChild(etiqueta);
+
+  const botonMenos = document.createElement('button');
+  botonMenos.type = 'button';
+  botonMenos.textContent = `-${PASO_OFFSET_MS} ms`;
+  seccion.appendChild(botonMenos);
+
+  const entrada = document.createElement('input');
+  entrada.type = 'number';
+  entrada.id = 'tetra-offset-valor';
+  entrada.step = String(PASO_OFFSET_MS);
+  entrada.value = String(leerOffset());
+  seccion.appendChild(entrada);
+
+  const botonMas = document.createElement('button');
+  botonMas.type = 'button';
+  botonMas.textContent = `+${PASO_OFFSET_MS} ms`;
+  seccion.appendChild(botonMas);
+
+  const ayuda = document.createElement('p');
+  ayuda.className = 'tetra-cargador-offset-ayuda';
+  ayuda.textContent =
+    'Si en los resultados pegas temprano (puntos abajo), baja el offset; si pegas tarde (arriba), subilo.';
+
+  function fijarOffset(valor: number): void {
+    entrada.value = String(valor);
+    guardarOffset(valor);
+  }
+
+  botonMenos.addEventListener('click', () => {
+    fijarOffset((Number(entrada.value) || 0) - PASO_OFFSET_MS);
+  });
+  botonMas.addEventListener('click', () => {
+    fijarOffset((Number(entrada.value) || 0) + PASO_OFFSET_MS);
+  });
+  entrada.addEventListener('change', () => {
+    const valor = Number(entrada.value);
+    fijarOffset(Number.isFinite(valor) ? valor : 0);
+  });
+
+  const envoltorio = document.createElement('div');
+  envoltorio.appendChild(seccion);
+  envoltorio.appendChild(ayuda);
+  return envoltorio;
 }
 
 /**
@@ -76,6 +146,8 @@ export function mostrarCargador(contenedor: HTMLElement): void {
   botonClick.type = 'button';
   botonClick.textContent = 'Jugar click track';
   panel.appendChild(botonClick);
+
+  panel.appendChild(crearControlDeOffset());
 
   const mensajeError = document.createElement('p');
   mensajeError.className = 'tetra-cargador-error';

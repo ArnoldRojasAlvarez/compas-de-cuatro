@@ -97,3 +97,38 @@ body {
 .tetra-cargador-volver {
   margin: 16px;
 }
+
+/* T-007: control de calibracion de offset (ver src/cargador.ts). */
+
+.tetra-cargador-offset {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+}
+
+.tetra-cargador-offset input {
+  width: 64px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.tetra-cargador-offset-ayuda {
+  margin: 0;
+  font-size: 12px;
+  color: #888;
+}
+
+/* T-007: estadisticas cuantificadas y boton de correccion de offset en la
+   pantalla de resultados (ver src/results.ts). */
+
+.tetra-resultados-estadisticas {
+  display: flex;
+  gap: 24px;
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+}
+
+.tetra-resultados-corregir {
+  margin-top: 4px;
+}

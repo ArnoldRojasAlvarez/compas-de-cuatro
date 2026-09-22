@@ -76,7 +76,10 @@ signo invertido.
 - [ ] El offset se guarda en localStorage y sobrevive recargar la pagina
 - [ ] Al empezar una partida, el offset guardado se pasa al reloj
 - [ ] Subir el offset mueve la nube de puntos de la siguiente partida hacia
-      arriba (mas tarde), bajarlo hacia abajo. Verificable a mano por Arnold
+      temprano (abajo), bajarlo hacia tarde (arriba). NOTA: la version original
+      de este criterio decia lo contrario y estaba mal; contradecia la
+      matematica ya probada del reloj (clock.test.ts H4). La direccion correcta
+      es la de aca. Verificable a mano por Arnold
 - [ ] El boton de "corregir segun esta partida" mueve el offset en la direccion
       correcta, cubierto por un test de signo
 - [ ] El e2e de sincronia de T-004 sigue pasando

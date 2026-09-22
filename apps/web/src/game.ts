@@ -11,6 +11,7 @@ import { createJudgeEngine } from '@tetra/core';
 import { createAudioClock } from '@tetra/audio';
 import { createKeyboardInput, createPlayfield, type PlayfieldOptions } from '@tetra/engine';
 import { mostrarResultados, type Desviacion } from './results.js';
+import { leerOffset } from './offset.js';
 
 const OPCIONES_PISTA: PlayfieldOptions = {
   scrollDuration: 1200,
@@ -109,14 +110,22 @@ export function runGame(chart: Chart, audio: AudioBuffer): Promise<ScoreState> {
     // reproduccion (ver el reporte de T-004, "Decisiones no cubiertas por
     // el ticket").
     const ctx = new AudioContext();
-    const clock = createAudioClock(ctx, audio);
+    // T-007: el offset se calibra en el cargador (ver cargador.ts) y se
+    // guarda con apps/web/src/offset.ts; al arrancar una partida se lee y
+    // se pasa como userOffset, para que el reloj arranque ya corregido en
+    // vez de con el offset en 0 de siempre.
+    const clock = createAudioClock(ctx, audio, { userOffset: leerOffset() });
     const engine = createJudgeEngine(chart);
     window.__tetraDebug = { clock, ctx };
 
     const desviaciones: Desviacion[] = [];
     function registrar(resultado: HitResult | null): void {
       if (resultado === null) return;
-      desviaciones.push({ time: resultado.note.time, error: resultado.error });
+      desviaciones.push({
+        time: resultado.note.time,
+        error: resultado.error,
+        judgement: resultado.judgement,
+      });
     }
 
     // T-004, "El punto critico: el tiempo de la pulsacion":
@@ -155,10 +164,14 @@ export function runGame(chart: Chart, audio: AudioBuffer): Promise<ScoreState> {
     function finalizar(): void {
       if (detenido) return;
       const estadoFinal = { ...engine.state, counts: { ...engine.state.counts } };
+      // Se lee clock.userOffset antes de limpiar(): es el offset con el que
+      // se jugo esta partida, lo que necesita el boton de "corregir offset"
+      // de la pantalla de resultados (T-007) para calcular el offset nuevo.
+      const offsetDeEstaPartida = clock.userOffset;
       limpiar();
       app.destroy(true, { children: true });
       contenedor.innerHTML = '';
-      mostrarResultados(contenedor, estadoFinal, desviaciones);
+      mostrarResultados(contenedor, estadoFinal, desviaciones, offsetDeEstaPartida);
       resolve(estadoFinal);
     }
 
