@@ -38,22 +38,40 @@ anticipacion de metronomo, algo humano. A raiz de eso se adelantaron T-007
 un jugador de su nivel).
 
 | T-009 | Skins: cargar una `.osk` y usar sus imagenes de notas y receptores | Sonnet |
+| T-010 | Sistema de diseno propio, menu principal y logo que respira | Sonnet |
+| T-011 | Navegacion (router), song select y pantalla de ajustes | Sonnet + Opus |
 
-234 tests pasando en `main`, mas el e2e de Playwright.
+301 tests pasando en `main`, mas el e2e de Playwright.
 
-## Lo que sigue (decision de Arnold)
+Nota sobre T-011: el agente de Sonnet se cayo por limite de sesion cuando ya
+tenia casi todo hecho; solo faltaba actualizar el e2e a la navegacion nueva.
+Opus lo verifico, arreglo el e2e (Menu -> Jugar -> click track) y lo fusiono.
 
-Todo lo que Arnold pidio hasta ahora esta hecho y jugable: importar mapas,
-velocidad, salir, calibracion de offset y skins. El proyecto llego a un punto
-donde lo que sigue necesita su direccion:
+## Identidad visual
 
-- **Fase 3, song select:** la lista de canciones con animacion, el header, el
-  logo que respira. Es la parte donde su gusto manda (dio capturas de osu!).
-  Conviene saber cuanto quiere calcar el look de osu! contra tener algo propio
-  antes de construirla.
-- **La cancion y el video del avance II (28 de octubre):** es el camino critico
-  del curso y no depende del codigo. El plan del video esta en la conversacion.
-  Puede arrancar cuando quiera.
+`docs/DISENO.md` es el contrato de diseno: "instrumento de precision", oscuro,
+acento teal (sacado del color MAX del juego), tipografia Sora + IBM Plex Sans +
+JetBrains Mono, el numero cuatro como hilo. Toda pantalla nueva sale de ahi.
+La estructura ya es: menu limpio (logo, Jugar, Ajustes), song select con la
+biblioteca y sus dificultades, y ajustes aparte.
+
+## Lo que sigue
+
+- **T-012, pulir Ajustes:** estilar los inputs nativos feos (los "Choose File"
+  grises), agregar remapeo de teclas y opciones de graficos/fps. Los controles
+  ya viven en la pantalla de ajustes; falta terminarla.
+- **Fase 4, motor de dificultad:** el vector de siete skillsets y el star rating
+  de verdad. Es el ticket grande que le pone estrellas al song select.
+- **Header persistente** con tiempo y tiempo jugado (esta en las capturas de
+  Arnold, todavia sin hacer).
+- **La cancion y el video del avance II (28 de octubre):** camino critico del
+  curso, no depende del codigo. El plan del video esta en la conversacion.
+
+## Limpieza pendiente menor
+
+Varios comentarios en `game.ts`, `logo.ts`, `router.ts` y `click-track.ts`
+todavia mencionan `cargador.ts`, que se elimino en T-011. Son historicos y no
+afectan nada, pero conviene actualizarlos en algun momento.
 
 ## Como jugarlo ahora mismo
 
