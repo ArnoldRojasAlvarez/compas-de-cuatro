@@ -11,6 +11,9 @@ export default [
       '**/node_modules/**',
       '**/.vite/**',
       '**/*.tsbuildinfo',
+      // Worktrees de agentes en paralelo: son otras copias del repo, no se
+      // lintean desde aca (cada agente corre su propio lint en su worktree).
+      '.claude/**',
     ],
   },
   js.configs.recommended,
