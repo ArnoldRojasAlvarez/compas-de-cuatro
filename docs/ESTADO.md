@@ -2,8 +2,9 @@
 
 Ultima actualizacion: 21 de setiembre de 2026.
 
-Este archivo es el punto de entrada para retomar el trabajo. Si estas
-empezando una sesion nueva, lee esto y despues `CLAUDE.md`.
+Este archivo es el estado corto y siempre al dia. **Si sos una sesion NUEVA que
+toma el proyecto, empeza por `docs/HANDOFF.md`**, que explica el metodo de
+trabajo, las reglas y las lecciones; despues volve aca y a `CLAUDE.md`.
 
 ## Donde esta todo
 
