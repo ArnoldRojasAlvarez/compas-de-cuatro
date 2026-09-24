@@ -1,4 +1,7 @@
-// Tests de T-005 (API publica de @tetra/storage: importarOsz/listarMapas).
+// Tests de T-005 (API publica de @tetra/storage: importarOsz/listarMapas),
+// actualizados por T-011 a la nueva forma (importarOsz/listarCanciones, ver
+// "Parte A" del ticket): una cancion con todas sus dificultades, no una
+// entrada por dificultad.
 //
 // vitest corre en entorno node (ver vitest.config.ts), que no trae
 // IndexedDB: se usa fake-indexeddb (ver el ticket, "Para la capa de
@@ -18,7 +21,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { zipSync } from 'fflate';
-import { importarOsz, listarMapas, importarOsk, listarSkins } from './index.js';
+import { importarOsz, listarCanciones, importarOsk, listarSkins } from './index.js';
 
 const OSU_DE_PRUEBA = `osu file format v14
 
@@ -70,8 +73,10 @@ beforeEach(async () => {
   }
 });
 
-describe('importarOsz + listarMapas', () => {
-  it('guarda el mapa y devuelve un id que despues aparece en listarMapas', async () => {
+const OSU_SEGUNDA_DIFICULTAD = OSU_DE_PRUEBA.replace('Version:Normal', 'Version:Hard');
+
+describe('importarOsz + listarCanciones', () => {
+  it('guarda la cancion y devuelve un id que despues aparece en listarCanciones', async () => {
     const osz = armarOsz({
       'mapa.osu': new TextEncoder().encode(OSU_DE_PRUEBA),
       'audio.wav': new Uint8Array([9, 9, 9]),
@@ -81,15 +86,56 @@ describe('importarOsz + listarMapas', () => {
     expect(typeof id).toBe('string');
     expect(id.length).toBeGreaterThan(0);
 
-    const mapas = await listarMapas();
-    expect(mapas).toHaveLength(1);
-    expect(mapas[0]!.id).toBe(id);
-    expect(mapas[0]!.chart.metadata.title).toBe('Cancion de prueba');
-    expect(mapas[0]!.chart.notes).toHaveLength(2);
-    expect(mapas[0]!.audio.size).toBe(3);
+    const canciones = await listarCanciones();
+    expect(canciones).toHaveLength(1);
+    expect(canciones[0]!.id).toBe(id);
+    expect(canciones[0]!.titulo).toBe('Cancion de prueba');
+    expect(canciones[0]!.artista).toBe('Artista de prueba');
+    expect(canciones[0]!.audio.size).toBe(3);
+    expect(canciones[0]!.dificultades).toHaveLength(1);
+    expect(canciones[0]!.dificultades[0]!.notes).toHaveLength(2);
   });
 
-  it('dos importaciones seguidas quedan como dos mapas con ids distintos', async () => {
+  it('un .osz con varias dificultades las guarda todas bajo una sola cancion', async () => {
+    const osz = armarOsz({
+      'Normal.osu': new TextEncoder().encode(OSU_DE_PRUEBA),
+      'Hard.osu': new TextEncoder().encode(OSU_SEGUNDA_DIFICULTAD),
+      'audio.wav': new Uint8Array([1, 2, 3]),
+    });
+
+    const id = await importarOsz(osz);
+    const canciones = await listarCanciones();
+    expect(canciones).toHaveLength(1);
+
+    const cancion = canciones[0]!;
+    expect(cancion.id).toBe(id);
+    // Las dos comparten el mismo audio (una sola cancion, ver el ticket,
+    // "Parte A"): no queda duplicado por dificultad.
+    expect(cancion.audio.size).toBe(3);
+    expect(cancion.dificultades).toHaveLength(2);
+    const nombres = cancion.dificultades.map((d) => d.metadata.difficultyName).sort();
+    expect(nombres).toEqual(['Hard', 'Normal']);
+  });
+
+  it('una dificultad que no parsea (otro modo de juego) se salta y las demas se guardan igual', async () => {
+    const osuDeOtroModo = OSU_DE_PRUEBA.replace('Mode: 3', 'Mode: 0').replace(
+      'Version:Normal',
+      'Version:Standard',
+    );
+    const osz = armarOsz({
+      'Normal.osu': new TextEncoder().encode(OSU_DE_PRUEBA),
+      'Standard.osu': new TextEncoder().encode(osuDeOtroModo),
+      'audio.wav': new Uint8Array([1]),
+    });
+
+    await importarOsz(osz);
+    const canciones = await listarCanciones();
+    expect(canciones).toHaveLength(1);
+    expect(canciones[0]!.dificultades).toHaveLength(1);
+    expect(canciones[0]!.dificultades[0]!.metadata.difficultyName).toBe('Normal');
+  });
+
+  it('dos importaciones seguidas quedan como dos canciones con ids distintos', async () => {
     const osz = armarOsz({
       'mapa.osu': new TextEncoder().encode(OSU_DE_PRUEBA),
       'audio.wav': new Uint8Array([1]),
@@ -99,20 +145,20 @@ describe('importarOsz + listarMapas', () => {
     const id2 = await importarOsz(osz);
     expect(id1).not.toBe(id2);
 
-    const mapas = await listarMapas();
-    expect(mapas).toHaveLength(2);
-    const ids = mapas.map((m) => m.id).sort();
+    const canciones = await listarCanciones();
+    expect(canciones).toHaveLength(2);
+    const ids = canciones.map((c) => c.id).sort();
     expect(ids).toEqual([id1, id2].sort());
   });
 
-  it('listarMapas con la base vacia devuelve un array vacio', async () => {
-    expect(await listarMapas()).toEqual([]);
+  it('listarCanciones con la base vacia devuelve un array vacio', async () => {
+    expect(await listarCanciones()).toEqual([]);
   });
 
   it('un .osz invalido (sin .osu) rechaza la promesa y no guarda nada', async () => {
     const osz = armarOsz({ 'audio.wav': new Uint8Array([1]) });
     await expect(importarOsz(osz)).rejects.toThrow();
-    expect(await listarMapas()).toEqual([]);
+    expect(await listarCanciones()).toEqual([]);
   });
 });
 
@@ -123,16 +169,18 @@ describe('con el .osz real del fixture de T-005', () => {
     const osz = new Blob([bytes], { type: 'application/zip' });
 
     const id = await importarOsz(osz);
-    const mapas = await listarMapas();
-    expect(mapas).toHaveLength(1);
+    const canciones = await listarCanciones();
+    expect(canciones).toHaveLength(1);
 
-    const guardado = mapas[0]!;
+    const guardado = canciones[0]!;
     expect(guardado.id).toBe(id);
-    expect(guardado.chart.metadata.title).toBe('Mapa de prueba T-005');
+    expect(guardado.titulo).toBe('Mapa de prueba T-005');
+    expect(guardado.dificultades).toHaveLength(1);
+    const chart = guardado.dificultades[0]!;
     // Generado por tools/generar-fixture-mania-test.mjs: 20 notas, la
     // ultima es una hold de 5700 a 6300 ms (ver ese script).
-    expect(guardado.chart.notes).toHaveLength(20);
-    const ultima = guardado.chart.notes[19]!;
+    expect(chart.notes).toHaveLength(20);
+    const ultima = chart.notes[19]!;
     expect(ultima.kind).toBe('hold');
     if (ultima.kind === 'hold') {
       expect(ultima.time).toBe(5700);
@@ -195,7 +243,7 @@ describe('importarOsk + listarSkins', () => {
     expect(await listarSkins()).toEqual([]);
   });
 
-  it('importar una skin no toca los mapas guardados, y viceversa (tiendas separadas)', async () => {
+  it('importar una skin no toca las canciones guardadas, y viceversa (tiendas separadas)', async () => {
     const osz = armarOsz({
       'mapa.osu': new TextEncoder().encode(OSU_DE_PRUEBA),
       'audio.wav': new Uint8Array([1]),
@@ -205,7 +253,7 @@ describe('importarOsk + listarSkins', () => {
     await importarOsz(osz);
     await importarOsk(osk);
 
-    expect(await listarMapas()).toHaveLength(1);
+    expect(await listarCanciones()).toHaveLength(1);
     expect(await listarSkins()).toHaveLength(1);
   });
 

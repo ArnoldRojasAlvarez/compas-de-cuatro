@@ -55,9 +55,9 @@ test('el reloj de juego no se desincroniza del audio en 60s de reproduccion real
 }) => {
   await page.goto('/');
 
-  // T-006: desde que existe el cargador de desarrollo (ver
-  // apps/web/src/cargador.ts) la pagina ya no arranca el click track sola:
-  // hay que pedirlo con el boton, igual que haria una persona jugando.
+  // T-011: la pagina arranca en el menu. Para llegar al click track hay que
+  // navegar como una persona: Menu -> Jugar (song select) -> Jugar click track.
+  await page.getByRole('button', { name: 'Jugar', exact: true }).click();
   await page.getByRole('button', { name: 'Jugar click track' }).click();
 
   // Espera a que el bucle de juego haya arrancado el reloj de audio.

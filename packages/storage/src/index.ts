@@ -1,25 +1,30 @@
 // T-005: punto de entrada de @tetra/storage. API publica chica, tal cual la
 // pide el ticket (ver docs/tickets/T-005-importador-osu.md, "La capa de
-// navegador va aparte"):
+// navegador va aparte").
 //
-//   importarOsz(file): Promise<ChartId>
-//   listarMapas(): Promise<MapaGuardado[]>
+// T-011 cambia la forma que devuelve importarOsz (ver "Parte A" del
+// ticket): antes una sola dificultad (ChartId/MapaGuardado, ver db.ts para
+// por que esa tienda sigue ahi sin usarse), ahora una cancion completa con
+// todas sus dificultades:
+//
+//   importarOsz(file): Promise<SongId>
+//   listarCanciones(): Promise<CancionGuardada[]>
 //
 // Todo lo demas (unzip, parseo, IndexedDB) es detalle interno repartido
 // entre osz.ts y db.ts.
 
-import { extraerMapaDeOsz } from './osz.js';
+import { extraerCancionDeOsz } from './osz.js';
 import { extraerImagenesDeOsk } from './osk.js';
-import { guardarMapa, listarMapasDeLaBase, guardarSkin, listarSkinsDeLaBase } from './db.js';
-import type { ChartId, MapaGuardado, SkinId, SkinGuardada } from './db.js';
+import { guardarCancion, listarCancionesDeLaBase, guardarSkin, listarSkinsDeLaBase } from './db.js';
+import type { SongId, CancionGuardada, SkinId, SkinGuardada } from './db.js';
 
-export type { ChartId, MapaGuardado, SkinId, SkinGuardada } from './db.js';
-export type { MapaImportado } from './osz.js';
-export { elegirArchivoOsu, mimeDesdeNombre, extraerMapaDeOsz } from './osz.js';
+export type { SongId, CancionGuardada, SkinId, SkinGuardada } from './db.js';
+export type { MapaImportado, CancionImportada } from './osz.js';
+export { elegirArchivoOsu, elegirArchivosOsu, mimeDesdeNombre, extraerMapaDeOsz, extraerCancionDeOsz } from './osz.js';
 export type { ClaveImagenSkin, ImagenesDeSkin } from './osk.js';
 export { ubicarImagenesDeSkin, extraerImagenesDeOsk } from './osk.js';
 
-function crearId(): ChartId {
+function crearId(): SongId {
   return crypto.randomUUID();
 }
 
@@ -28,24 +33,39 @@ function crearIdSkin(): SkinId {
 }
 
 /**
- * Importa un archivo .osz: lo descomprime, parsea el .osu que trae adentro
- * y guarda el Chart resultante junto con su audio (y portada, si hay) en
- * IndexedDB. Devuelve el id con el que quedo guardado.
+ * Importa un archivo .osz: lo descomprime, parsea todos los .osu que trae
+ * adentro (una dificultad por cada uno que sea mania 4K valido) y guarda la
+ * cancion resultante, con su audio (y portada, si hay) compartidos entre
+ * todas sus dificultades, en IndexedDB. Devuelve el id con el que quedo
+ * guardada.
  */
-export async function importarOsz(archivo: Blob): Promise<ChartId> {
-  const extraido = await extraerMapaDeOsz(archivo);
+export async function importarOsz(archivo: Blob): Promise<SongId> {
+  const extraido = await extraerCancionDeOsz(archivo);
   const id = crearId();
-  const mapa: MapaGuardado =
+  const cancion: CancionGuardada =
     extraido.background === undefined
-      ? { id, chart: extraido.chart, audio: extraido.audio }
-      : { id, chart: extraido.chart, audio: extraido.audio, background: extraido.background };
-  await guardarMapa(mapa);
+      ? {
+          id,
+          titulo: extraido.titulo,
+          artista: extraido.artista,
+          audio: extraido.audio,
+          dificultades: extraido.dificultades,
+        }
+      : {
+          id,
+          titulo: extraido.titulo,
+          artista: extraido.artista,
+          audio: extraido.audio,
+          background: extraido.background,
+          dificultades: extraido.dificultades,
+        };
+  await guardarCancion(cancion);
   return id;
 }
 
-/** Devuelve todos los mapas guardados hasta ahora. */
-export function listarMapas(): Promise<MapaGuardado[]> {
-  return listarMapasDeLaBase();
+/** Devuelve todas las canciones guardadas hasta ahora, cada una con todas sus dificultades. */
+export function listarCanciones(): Promise<CancionGuardada[]> {
+  return listarCancionesDeLaBase();
 }
 
 /**

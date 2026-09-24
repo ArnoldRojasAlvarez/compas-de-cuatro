@@ -8,7 +8,13 @@
 
 import { describe, expect, it } from 'vitest';
 import { zipSync } from 'fflate';
-import { elegirArchivoOsu, extraerMapaDeOsz, mimeDesdeNombre } from './osz.js';
+import {
+  elegirArchivoOsu,
+  elegirArchivosOsu,
+  extraerCancionDeOsz,
+  extraerMapaDeOsz,
+  mimeDesdeNombre,
+} from './osz.js';
 
 const OSU_DE_PRUEBA = `osu file format v14
 
@@ -56,6 +62,29 @@ describe('elegirArchivoOsu', () => {
 
   it('devuelve null si no hay ningun .osu', () => {
     expect(elegirArchivoOsu(['audio.mp3', 'fondo.jpg'])).toBeNull();
+  });
+});
+
+describe('elegirArchivosOsu', () => {
+  it('devuelve todos los .osu, ordenados alfabeticamente (T-011)', () => {
+    expect(elegirArchivosOsu(['Insane.osu', 'Easy.osu', 'Normal.osu', 'audio.mp3'])).toEqual([
+      'Easy.osu',
+      'Insane.osu',
+      'Normal.osu',
+    ]);
+  });
+
+  it('con un solo .osu devuelve un array de un elemento', () => {
+    expect(elegirArchivosOsu(['mapa.osu', 'audio.mp3'])).toEqual(['mapa.osu']);
+  });
+
+  it('sin ningun .osu devuelve un array vacio, no null', () => {
+    expect(elegirArchivosOsu(['audio.mp3', 'fondo.jpg'])).toEqual([]);
+  });
+
+  it('elegirArchivoOsu (singular) sigue siendo el primer elemento de elegirArchivosOsu', () => {
+    const nombres = ['Insane.osu', 'Easy.osu', 'audio.mp3'];
+    expect(elegirArchivoOsu(nombres)).toBe(elegirArchivosOsu(nombres)[0]);
   });
 });
 
@@ -125,5 +154,83 @@ describe('extraerMapaDeOsz', () => {
       // sin 'audio.wav'
     });
     await expect(extraerMapaDeOsz(osz)).rejects.toThrow(/audio\.wav/);
+  });
+});
+
+// T-011, "Parte A": extraerCancionDeOsz reemplaza a extraerMapaDeOsz para
+// el song select (guarda TODAS las dificultades, no solo la primera).
+describe('extraerCancionDeOsz', () => {
+  const OSU_SEGUNDA_DIFICULTAD = OSU_DE_PRUEBA.replace('Version:Normal', 'Version:Insane');
+
+  it('con un solo .osu, se comporta como extraerMapaDeOsz pero con dificultades: [chart]', async () => {
+    const osz = armarOsz({
+      'mapa.osu': new TextEncoder().encode(OSU_DE_PRUEBA),
+      'audio.wav': new Uint8Array([1, 2, 3, 4, 5]),
+    });
+
+    const resultado = await extraerCancionDeOsz(osz);
+    expect(resultado.titulo).toBe('Cancion de prueba');
+    expect(resultado.artista).toBe('Artista de prueba');
+    expect(resultado.audio.type).toBe('audio/wav');
+    expect(resultado.audio.size).toBe(5);
+    expect(resultado.dificultades).toHaveLength(1);
+    expect(resultado.dificultades[0]!.notes).toHaveLength(3);
+  });
+
+  it('con varias dificultades, las junta todas bajo una cancion con un solo audio', async () => {
+    const osz = armarOsz({
+      'Normal.osu': new TextEncoder().encode(OSU_DE_PRUEBA),
+      'Insane.osu': new TextEncoder().encode(OSU_SEGUNDA_DIFICULTAD),
+      'audio.wav': new Uint8Array([1, 2, 3]),
+    });
+
+    const resultado = await extraerCancionDeOsz(osz);
+    expect(resultado.dificultades).toHaveLength(2);
+    // Orden alfabetico de archivo (Insane.osu antes que Normal.osu), no el
+    // orden de dificultad: mismo criterio determinista que elegirArchivosOsu.
+    expect(resultado.dificultades.map((d) => d.metadata.difficultyName)).toEqual([
+      'Insane',
+      'Normal',
+    ]);
+    // Un solo Blob de audio para las dos, no uno por dificultad.
+    expect(resultado.audio.size).toBe(3);
+  });
+
+  it('una dificultad invalida (Mode distinto de 3) se saltea sin romper las demas', async () => {
+    const osuStd = OSU_DE_PRUEBA.replace('Mode: 3', 'Mode: 0').replace(
+      'Version:Normal',
+      'Version:Standard',
+    );
+    const osz = armarOsz({
+      'Normal.osu': new TextEncoder().encode(OSU_DE_PRUEBA),
+      'Standard.osu': new TextEncoder().encode(osuStd),
+      'audio.wav': new Uint8Array([1]),
+    });
+
+    const resultado = await extraerCancionDeOsz(osz);
+    expect(resultado.dificultades).toHaveLength(1);
+    expect(resultado.dificultades[0]!.metadata.difficultyName).toBe('Normal');
+  });
+
+  it('rechaza un .osz sin ningun archivo .osu', async () => {
+    const osz = armarOsz({ 'audio.wav': new Uint8Array([1, 2, 3]) });
+    await expect(extraerCancionDeOsz(osz)).rejects.toThrow(/\.osu/);
+  });
+
+  it('rechaza un .osz donde NINGUNA dificultad parsea', async () => {
+    const osuInvalido = OSU_DE_PRUEBA.replace('Mode: 3', 'Mode: 0');
+    const osz = armarOsz({
+      'mapa.osu': new TextEncoder().encode(osuInvalido),
+      'audio.wav': new Uint8Array([1, 2, 3]),
+    });
+    await expect(extraerCancionDeOsz(osz)).rejects.toThrow();
+  });
+
+  it('rechaza si falta el audio del .osu elegido para el audio de la cancion', async () => {
+    const osz = armarOsz({
+      'mapa.osu': new TextEncoder().encode(OSU_DE_PRUEBA),
+      // sin 'audio.wav'
+    });
+    await expect(extraerCancionDeOsz(osz)).rejects.toThrow(/audio\.wav/);
   });
 });

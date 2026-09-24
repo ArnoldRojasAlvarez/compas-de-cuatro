@@ -13,7 +13,7 @@
 // nunca mide tiempo de gameplay ni comparte instancia con game.ts (que
 // arma el suyo propio en runGame). Se cierra entero al llamar a detener().
 
-import { RUTA_AUDIO_CLICK } from './cargador.js';
+import { RUTA_AUDIO_CLICK } from './click-track.js';
 import {
   ESTADO_PULSO_INICIAL,
   anguloDeRotacion,

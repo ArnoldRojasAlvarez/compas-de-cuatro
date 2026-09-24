@@ -1,19 +1,28 @@
 // T-010: menu principal. Primera pantalla con identidad visual propia (ver
-// docs/DISENO.md, el contrato de diseno completo): agrupa el logo que
-// respira (logo.ts) con el cargador de desarrollo que ya existia
-// (cargador.ts, T-006), que sigue siendo el camino a jugar hasta que
-// exista el song select (T-011, ver el ticket, "Fuera de alcance").
+// docs/DISENO.md, el contrato de diseno completo): el logo que respira
+// (logo.ts) mas los dos accesos que pide T-011, "menu": Jugar (song select)
+// y Ajustes.
+//
+// T-011 le saca el panel del cargador de desarrollo que tenia embebido
+// (ver el ticket, "menu": "se le quita el panel del cargador... el cargador
+// se reemplaza entero por el song select y ajustes"). El menu queda limpio:
+// logo + titulo + lema + Jugar + Ajustes, nada mas.
 
-import { mostrarCargador } from './cargador.js';
 import { crearLogo, type Logo } from './logo.js';
+
+/** Gancho de navegacion que le pasa el router (ver router.ts). */
+export interface OpcionesMenu {
+  /** Ir al song select ("Jugar"). */
+  aJugar: () => void;
+  /** Ir a ajustes. */
+  aAjustes: () => void;
+}
 
 /**
  * Muestra el menu principal dentro de `contenedor`, reemplazando lo que
- * hubiera. Es el nuevo punto de entrada de la app (ver main.ts): antes
- * arrancaba directo en el cargador (T-006), ahora el cargador vive adentro
- * del menu, en su propio panel.
+ * hubiera. Es el nuevo punto de entrada de la app (ver router.ts).
  */
-export function mostrarMenu(contenedor: HTMLElement): void {
+export function mostrarMenu(contenedor: HTMLElement, opciones: OpcionesMenu): void {
   contenedor.innerHTML = '';
 
   const menu = document.createElement('div');
@@ -38,16 +47,10 @@ export function mostrarMenu(contenedor: HTMLElement): void {
 
   menu.appendChild(encabezado);
 
-  const zonaCargador = document.createElement('div');
-  zonaCargador.className = 'tetra-menu-cargador';
-  menu.appendChild(zonaCargador);
-
-  contenedor.appendChild(menu);
-
   // El logo se crea recien con zonaLogo ya en el documento (crearLogo le
   // agrega un <canvas> adentro). Si fallara por lo que sea (por ejemplo un
   // navegador sin CanvasRenderingContext2D), no debe tumbar el menu
-  // entero: el ticket pide un menu usable, el logo es la pieza de
+  // entero: el menu tiene que seguir siendo usable, el logo es la pieza de
   // identidad, no una dependencia dura de "se puede jugar".
   let logo: Logo | null = null;
   try {
@@ -56,20 +59,36 @@ export function mostrarMenu(contenedor: HTMLElement): void {
     // sin logo: el menu sigue siendo usable, el hueco visual queda vacio.
   }
 
-  // El cargador (T-006) sigue siendo el camino a jugar (ver el ticket,
-  // "Parte B"): se embebe entero en su propio panel, no se reescribe. Dos
-  // ganchos lo conectan con el logo (ver cargador.ts, OpcionesCargador):
-  //
-  // - alEmpezarPartida: se llama justo antes de runGame, para apagar el
-  //   loop del logo y su audio aparte antes de que el juego tome el foco
-  //   (ver el ticket, "Ojo con el reloj" y "Rendimiento": nada de dos
-  //   audios sonando ni un rAF colgado).
-  // - alVolver: al volver de una partida (completada o abortada con
-  //   Escape), en vez de redibujar solo el panel del cargador (el default
-  //   de mostrarCargador), se reconstruye el menu entero para que el logo
-  //   vuelva a respirar con una instancia nueva.
-  mostrarCargador(zonaCargador, {
-    alEmpezarPartida: () => logo?.detener(),
-    alVolver: () => mostrarMenu(contenedor),
+  // Al salir del menu (a song-select o a ajustes) hay que apagar el logo:
+  // su bucle de dibujo y su audio de fondo quedarian corriendo detras de la
+  // pantalla nueva si no (ver logo.ts, `Logo.detener`, y el ticket,
+  // "Cuidado con lo que ya funciona": "nada de audios colgados ni dos
+  // loops"). No hace falta esperar a "empezar una partida" para esto como
+  // antes de T-011: alcanza con dejar el menu.
+  const accesos = document.createElement('div');
+  accesos.className = 'tetra-menu-accesos';
+
+  const botonJugar = document.createElement('button');
+  botonJugar.type = 'button';
+  botonJugar.className = 'tetra-menu-boton tetra-menu-boton-primario';
+  botonJugar.textContent = 'Jugar';
+  botonJugar.addEventListener('click', () => {
+    logo?.detener();
+    opciones.aJugar();
   });
+  accesos.appendChild(botonJugar);
+
+  const botonAjustes = document.createElement('button');
+  botonAjustes.type = 'button';
+  botonAjustes.className = 'tetra-menu-boton';
+  botonAjustes.textContent = 'Ajustes';
+  botonAjustes.addEventListener('click', () => {
+    logo?.detener();
+    opciones.aAjustes();
+  });
+  accesos.appendChild(botonAjustes);
+
+  menu.appendChild(accesos);
+
+  contenedor.appendChild(menu);
 }

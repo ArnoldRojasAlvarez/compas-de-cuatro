@@ -23,19 +23,28 @@ import { parseOsu } from '@tetra/core';
 const decodificadorUtf8 = new TextDecoder('utf-8');
 
 /**
+ * Todos los nombres de archivo `.osu` de un `.osz`, en orden alfabetico
+ * determinista (T-011, "Parte A": el song select necesita las N
+ * dificultades de una cancion, no solo la primera). Insensible a
+ * mayusculas/minusculas en la extension, igual que en osk.ts.
+ */
+export function elegirArchivosOsu(nombres: readonly string[]): string[] {
+  return nombres.filter((nombre) => nombre.toLowerCase().endsWith('.osu')).sort();
+}
+
+/**
  * Elige, entre los nombres de archivo de un .osz, cual .osu importar.
  *
- * Un .osz puede traer varias dificultades (varios .osu). T-005 importa una
- * sola por llamada (ver la firma de `importarOsz` en el ticket, que
- * devuelve un unico ChartId): se elige la primera en orden alfabetico para
- * que el resultado sea determinista. Elegir entre todas las dificultades es
- * trabajo del song select, que es fase 3 (fuera de alcance de este
- * ticket). Devuelve `null` si no hay ningun .osu en el zip.
+ * T-005 importaba una sola dificultad por llamada: se elegia la primera en
+ * orden alfabetico para que el resultado fuera determinista (ver
+ * `elegirArchivosOsu` arriba, de la que esta funcion es apenas el primer
+ * elemento). T-011 agrega `extraerCancionDeOsz`, que si importa todas las
+ * dificultades; esta funcion (y `extraerMapaDeOsz`, mas abajo) quedan tal
+ * cual para no romper lo que ya las usaba. Devuelve `null` si no hay ningun
+ * .osu en el zip.
  */
 export function elegirArchivoOsu(nombres: readonly string[]): string | null {
-  const candidatos = nombres.filter((nombre) => nombre.toLowerCase().endsWith('.osu'));
-  if (candidatos.length === 0) return null;
-  return [...candidatos].sort()[0]!;
+  return elegirArchivosOsu(nombres)[0] ?? null;
 }
 
 /** Adivina el tipo MIME de un archivo a partir de su extension. */
@@ -113,4 +122,89 @@ export async function extraerMapaDeOsz(archivo: Blob): Promise<MapaImportado> {
   }
   const background = new Blob([bytesFondo], { type: mimeDesdeNombre(nombreFondo!) });
   return { chart, audio, background };
+}
+
+/** Resultado de descomprimir y parsear un .osz completo (todas sus dificultades), listo para guardar como una cancion (T-011). */
+export interface CancionImportada {
+  titulo: string;
+  artista: string;
+  audio: Blob;
+  background?: Blob;
+  /** Una entrada por cada .osu que parseo como mania 4K valido. Nunca vacio: ver el @throws de abajo. */
+  dificultades: Chart[];
+}
+
+/**
+ * Descomprime un .osz y parsea TODAS las dificultades de mania 4K validas
+ * que contenga (T-011, "Parte A": antes, `extraerMapaDeOsz` arriba solo
+ * importaba la primera). Un `.osu` que no parsea (por ejemplo porque es de
+ * otro modo de juego, `Mode` distinto de 3: un `.osz` real puede traer
+ * dificultades de standard ademas de mania) se saltea en silencio en vez de
+ * hacer fallar la cancion entera; si NINGUNA dificultad parsea, se lanza
+ * (mismo criterio que `extraerMapaDeOsz`: un .osz sin ninguna dificultad
+ * jugable no es un .osz valido para este juego).
+ *
+ * El audio y la portada se toman del `.osu` que ordena primero en
+ * `elegirArchivosOsu`: en un set real las distintas dificultades de una
+ * misma cancion comparten el mismo `AudioFilename` (y la misma portada), asi
+ * que alcanza con resolverlo una vez en vez de por dificultad. Lo mismo para
+ * el titulo y el artista, que se muestran a nivel cancion en el song select
+ * (cada dificultad conserva igual su propio `chart.metadata`, incluido su
+ * `difficultyName`).
+ *
+ * @throws {Error} si el zip no trae ningun .osu, si ninguno de los que trae
+ * parsea como mania 4K, o si falta el archivo de audio que declara el .osu
+ * elegido para el audio de la cancion.
+ */
+export async function extraerCancionDeOsz(archivo: Blob): Promise<CancionImportada> {
+  const bytes = new Uint8Array(await archivo.arrayBuffer());
+  const zip = unzipSync(bytes);
+  const nombres = Object.keys(zip);
+
+  const nombresOsu = elegirArchivosOsu(nombres);
+  if (nombresOsu.length === 0) {
+    throw new Error('El .osz no contiene ningun archivo .osu.');
+  }
+
+  const dificultades: Chart[] = [];
+  for (const nombreOsu of nombresOsu) {
+    const bytesOsu = zip[nombreOsu];
+    if (bytesOsu === undefined) continue; // no deberia pasar (nombreOsu sale de Object.keys(zip)), guard por las dudas
+    const resultado = parseOsu(decodificadorUtf8.decode(bytesOsu));
+    if (resultado.ok) {
+      dificultades.push(resultado.chart);
+    }
+    // Un .osu que no parsea (por ejemplo una dificultad de otro modo de
+    // juego) se saltea: no hace falta que TODAS las dificultades del .osz
+    // sean mania 4K validas, alcanza con que alguna lo sea (se valida mas
+    // abajo).
+  }
+
+  if (dificultades.length === 0) {
+    throw new Error('El .osz no contiene ninguna dificultad de mania 4K valida.');
+  }
+
+  const primera = dificultades[0]!;
+  const bytesAudio = zip[primera.metadata.audioFile];
+  if (bytesAudio === undefined) {
+    throw new Error(
+      `El .osz no trae el archivo de audio declarado en el .osu ` +
+        `(AudioFilename:${primera.metadata.audioFile}).`,
+    );
+  }
+  const audio = new Blob([bytesAudio], { type: mimeDesdeNombre(primera.metadata.audioFile) });
+
+  const nombreFondo = primera.metadata.backgroundFile;
+  const bytesFondo = nombreFondo === undefined ? undefined : zip[nombreFondo];
+  const base: CancionImportada = {
+    titulo: primera.metadata.title,
+    artista: primera.metadata.artist,
+    audio,
+    dificultades,
+  };
+  if (bytesFondo === undefined) {
+    return base;
+  }
+  const background = new Blob([bytesFondo], { type: mimeDesdeNombre(nombreFondo!) });
+  return { ...base, background };
 }
