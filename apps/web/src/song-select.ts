@@ -1,10 +1,11 @@
 // T-011: song select, el corazon de este ticket (ver el ticket, "Parte B").
-// Reemplaza al cargador de desarrollo (cargador.ts, T-006, ya borrado):
-// biblioteca de canciones con sus dificultades, buscar/ordenar/aleatorio,
-// preview de audio al enfocar, y la zona de soltar .osz (que antes vivia
-// suelta en el cargador). Offset/velocidad/skin se leen aca (para resolver
-// la skin y arrancar la partida) pero se EDITAN en ajustes.ts: esta
-// pantalla no tiene controles para cambiarlos, solo los aplica.
+// Reemplaza a la pantalla del cargador de desarrollo (T-006, eliminada en
+// este mismo ticket): biblioteca de canciones con sus dificultades,
+// buscar/ordenar/aleatorio, preview de audio al enfocar, y la zona de
+// soltar .osz (que antes vivia suelta en el cargador). Offset/velocidad/
+// skin/teclas se leen aca (para resolver la skin y arrancar la partida)
+// pero se EDITAN en ajustes.ts: esta pantalla no tiene controles para
+// cambiarlos, solo los aplica.
 //
 // Router (ver router.ts): la unica salida de esta pantalla es "Menu". Al
 // terminar o abortar una partida se vuelve a esta misma pantalla (no al
@@ -42,7 +43,8 @@ import {
  * Devuelve `undefined` sin lanzar cuando no hay skin activa, o cuando la
  * guardada ya no existe en la base: la skin es aditiva, nunca un
  * requisito, asi que esto nunca debe ser motivo para no poder jugar. Movida
- * aca desde cargador.ts (T-011): es la unica pantalla que arranca partidas.
+ * aca desde la pantalla del cargador de desarrollo (T-011, ya eliminada):
+ * es la unica pantalla que arranca partidas.
  */
 async function resolverTexturasDeSkinActiva(): Promise<TexturasDeSkin | undefined> {
   const id = leerSkinActiva();
@@ -160,7 +162,8 @@ export function mostrarSongSelect(contenedor: HTMLElement, opciones: OpcionesSon
   // pinta los resultados o limpia la pantalla directo sobre #app, sin
   // importar que `contenedor` se le paso a este mostrarSongSelect: #app es
   // lo unico que esta garantizado que siga en el documento en ese momento
-  // (mismo razonamiento que tenia cargador.ts).
+  // (mismo razonamiento que tenia la pantalla del cargador de desarrollo,
+  // ya eliminada).
   function raizApp(): HTMLElement {
     return document.getElementById('app') ?? contenedor;
   }
@@ -239,16 +242,34 @@ export function mostrarSongSelect(contenedor: HTMLElement, opciones: OpcionesSon
   const columnaLista = document.createElement('div');
   columnaLista.className = 'tetra-song-select-columna-lista';
 
+  // T-012 "Parte D": el <input type=file> nativo queda oculto (ver
+  // style.css, `.tetra-input-archivo-oculto`) y se dispara con
+  // `entradaArchivo.click()` desde un boton restilado adentro de la misma
+  // zona de soltar: el "Choose File" gris del navegador era justo lo que
+  // Arnold señalo que desentonaba (ver el ticket, "Contexto").
   const zonaImportar = document.createElement('div');
   zonaImportar.className = 'tetra-song-select-zona';
-  zonaImportar.textContent = 'Solta aca un archivo .osz de mania 4K';
-  columnaLista.appendChild(zonaImportar);
+
+  const textoZona = document.createElement('p');
+  textoZona.className = 'tetra-song-select-zona-texto';
+  textoZona.textContent = 'Solta aca un archivo .osz de mania 4K';
+  zonaImportar.appendChild(textoZona);
 
   const entradaArchivo = document.createElement('input');
   entradaArchivo.type = 'file';
   entradaArchivo.accept = '.osz';
-  entradaArchivo.className = 'tetra-song-select-input-archivo';
-  columnaLista.appendChild(entradaArchivo);
+  entradaArchivo.id = 'tetra-song-select-archivo';
+  entradaArchivo.className = 'tetra-input-archivo-oculto';
+  zonaImportar.appendChild(entradaArchivo);
+
+  const botonElegirArchivo = document.createElement('button');
+  botonElegirArchivo.type = 'button';
+  botonElegirArchivo.className = 'tetra-song-select-zona-boton';
+  botonElegirArchivo.textContent = 'o elegir archivo...';
+  botonElegirArchivo.addEventListener('click', () => entradaArchivo.click());
+  zonaImportar.appendChild(botonElegirArchivo);
+
+  columnaLista.appendChild(zonaImportar);
 
   const botonClickTrack = document.createElement('button');
   botonClickTrack.type = 'button';
@@ -395,7 +416,7 @@ export function mostrarSongSelect(contenedor: HTMLElement, opciones: OpcionesSon
 
     const botonJugar = document.createElement('button');
     botonJugar.type = 'button';
-    botonJugar.className = 'tetra-song-select-jugar';
+    botonJugar.className = 'tetra-song-select-jugar tetra-boton-primario';
     botonJugar.textContent = `Jugar ${info.nombre}`;
     botonJugar.addEventListener('click', () => void jugarDificultadEnfocada());
     detalleEl.appendChild(botonJugar);

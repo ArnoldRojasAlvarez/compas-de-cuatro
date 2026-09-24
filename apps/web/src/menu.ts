@@ -70,7 +70,7 @@ export function mostrarMenu(contenedor: HTMLElement, opciones: OpcionesMenu): vo
 
   const botonJugar = document.createElement('button');
   botonJugar.type = 'button';
-  botonJugar.className = 'tetra-menu-boton tetra-menu-boton-primario';
+  botonJugar.className = 'tetra-menu-boton tetra-boton-primario';
   botonJugar.textContent = 'Jugar';
   botonJugar.addEventListener('click', () => {
     logo?.detener();

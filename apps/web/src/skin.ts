@@ -9,7 +9,8 @@
 // packages/storage/src/db.ts), localStorage guarda apenas la referencia.
 // Que esa referencia todavia exista en la base al recargar (por ejemplo,
 // si el usuario borro la base a mano) es responsabilidad de quien la lee
-// (ver cargador.ts): esta funcion no valida nada, solo lee y escribe el id.
+// (ver song-select.ts, `resolverTexturasDeSkinActiva`): esta funcion no
+// valida nada, solo lee y escribe el id.
 
 import type { SkinId } from '@tetra/storage';
 

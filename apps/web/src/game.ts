@@ -18,6 +18,8 @@ import {
 import { mostrarResultados, type Desviacion } from './results.js';
 import { leerOffset } from './offset.js';
 import { leerVelocidad, velocidadAScrollDuration } from './velocidad.js';
+import { leerKeyMap } from './keymap.js';
+import { leerMostrarFps } from './graficos.js';
 
 // scrollDuration no es fijo desde T-008: sale de la velocidad guardada por
 // el jugador (ver apps/web/src/velocidad.ts) y se calcula una sola vez al
@@ -40,7 +42,8 @@ const LEAD_IN_MS: Ms = 1500;
  * opciones que planteaba ("distinguir termino/abandono en la misma promesa"
  * o "una senal de aborto aparte"), se elige la primera, para no sumar un
  * segundo canal de comunicacion (callback o EventTarget) a algo que ya es
- * una promesa. Quien llama (`cargador.ts`) discrimina por `estado`.
+ * una promesa. Quien llama (song-select.ts, ver su funcion `jugar`)
+ * discrimina por `estado`.
  */
 export type ResultadoPartida =
   | { readonly estado: 'completado'; readonly score: ScoreState }
@@ -70,12 +73,23 @@ declare global {
  * Ensambla el HUD (score, combo, precision, fps/ms) como DOM plano. Nada de
  * React aca (ver CLAUDE.md, regla 4): un re-render de React a mitad de un
  * stream es un frame perdido, y este HUD se actualiza una vez por frame.
+ *
+ * T-012 "Parte C": `mostrarFps` decide si el contador de FPS/ms se agrega
+ * al DOM. Se lee una sola vez al armar el HUD (igual que el offset y la
+ * velocidad mas abajo en runGame): no hay ajuste en caliente a mitad de
+ * partida en el alcance de este ticket. Cuando esta apagado, `fpsMs` es
+ * `null` y `actualizarHud` se lo salta entero, no solo lo oculta con CSS:
+ * asi tampoco se paga el costo (minimo, pero real) de formatear el string
+ * cada frame para un elemento que nadie va a ver.
  */
-function crearHud(contenedor: HTMLElement): {
+function crearHud(
+  contenedor: HTMLElement,
+  mostrarFps: boolean,
+): {
   score: HTMLElement;
   combo: HTMLElement;
   precision: HTMLElement;
-  fpsMs: HTMLElement;
+  fpsMs: HTMLElement | null;
 } {
   const hud = document.createElement('div');
   hud.className = 'tetra-hud';
@@ -83,9 +97,10 @@ function crearHud(contenedor: HTMLElement): {
   const score = document.createElement('div');
   const combo = document.createElement('div');
   const precision = document.createElement('div');
-  const fpsMs = document.createElement('div');
+  const fpsMs = mostrarFps ? document.createElement('div') : null;
 
-  hud.append(score, combo, precision, fpsMs);
+  hud.append(score, combo, precision);
+  if (fpsMs) hud.append(fpsMs);
   contenedor.appendChild(hud);
 
   return { score, combo, precision, fpsMs };
@@ -99,6 +114,7 @@ function actualizarHud(
   hud.score.textContent = `Score: ${estado.score}`;
   hud.combo.textContent = `Combo: ${estado.combo} (max ${estado.maxCombo})`;
   hud.precision.textContent = `Precision: ${(estado.accuracy * 100).toFixed(2)}%`;
+  if (!hud.fpsMs) return; // T-012 "Parte C": el interruptor de FPS esta apagado.
   // fps y ms salen de la diferencia entre el t de este frame y el anterior,
   // los dos leidos de clock.now(): ni performance.now() ni el delta de rAF
   // entran en este calculo (ver CLAUDE.md, "El reloj es el audio"). Es una
@@ -112,11 +128,11 @@ function actualizarHud(
 /**
  * T-009: `skin` son texturas ya resueltas (ver @tetra/engine,
  * `cargarTexturasDeSkin`), no el .osk crudo ni los Blob que guarda
- * @tetra/storage: quien llama (cargador.ts) es responsable de resolver la
- * skin activa antes de arrancar la partida, una sola vez (ver el ticket,
- * "Rendimiento"). Si no hay skin activa, `skin` queda `undefined` y
- * createPlayfield cae al fallback de rectangulos (ver
- * packages/engine/src/playfield.ts).
+ * @tetra/storage: quien llama (song-select.ts, ver
+ * `resolverTexturasDeSkinActiva`) es responsable de resolver la skin activa
+ * antes de arrancar la partida, una sola vez (ver el ticket, "Rendimiento").
+ * Si no hay skin activa, `skin` queda `undefined` y createPlayfield cae al
+ * fallback de rectangulos (ver packages/engine/src/playfield.ts).
  */
 export function runGame(
   chart: Chart,
@@ -148,7 +164,7 @@ export function runGame(
     const lienzo = document.createElement('div');
     lienzo.className = 'tetra-lienzo';
     contenedor.appendChild(lienzo);
-    const hud = crearHud(contenedor);
+    const hud = crearHud(contenedor, leerMostrarFps());
 
     // Contexto de audio dedicado a la reproduccion y al reloj de juego. El
     // contexto usado para decodificar el archivo (en main.ts) es otro: son
@@ -156,10 +172,10 @@ export function runGame(
     // reproduccion (ver el reporte de T-004, "Decisiones no cubiertas por
     // el ticket").
     const ctx = new AudioContext();
-    // T-007: el offset se calibra en el cargador (ver cargador.ts) y se
-    // guarda con apps/web/src/offset.ts; al arrancar una partida se lee y
-    // se pasa como userOffset, para que el reloj arranque ya corregido en
-    // vez de con el offset en 0 de siempre.
+    // T-007: el offset se calibra en ajustes.ts y se guarda con
+    // apps/web/src/offset.ts; al arrancar una partida se lee y se pasa
+    // como userOffset, para que el reloj arranque ya corregido en vez de
+    // con el offset en 0 de siempre.
     const clock = createAudioClock(ctx, audio, { userOffset: leerOffset() });
     const engine = createJudgeEngine(chart);
     window.__tetraDebug = { clock, ctx };
@@ -238,10 +254,10 @@ export function runGame(
      * que hace finalizar() (reloj, input, contexto de audio), mas
      * `playfield.destroy()` y `app.destroy()`, pero SIN pintar resultados:
      * una partida abandonada no tiene un resultado que valga la pena
-     * mostrar (ver el ticket). `cargador.ts` es quien decide volver a la
-     * pantalla del cargador al ver `estado: 'abortado'`, no este archivo:
-     * game.ts no importa cargador.ts (seria una dependencia circular, ver
-     * cargador.ts que ya importa de aca).
+     * mostrar (ver el ticket). song-select.ts (su funcion `jugar`) es quien
+     * decide volver al song select al ver `estado: 'abortado'`, no este
+     * archivo: game.ts no importa song-select.ts (seria una dependencia
+     * circular, ya que song-select.ts es quien importa de aca).
      */
     function abortar(): void {
       if (detenido) return;
@@ -287,6 +303,11 @@ export function runGame(
         const playfield = createPlayfield(app, chart, opcionesPista, skin);
         playfieldParaLimpieza = playfield;
         input = createKeyboardInput(window, toGameTime);
+        // T-012 "Parte B": el remapeo de teclas se edita en ajustes.ts y se
+        // persiste con apps/web/src/keymap.ts; se lee y se aplica aca, una
+        // sola vez al arrancar la partida, mismo momento que el offset y la
+        // velocidad de arriba.
+        input.setKeyMap(leerKeyMap());
 
         clock.start(LEAD_IN_MS);
 

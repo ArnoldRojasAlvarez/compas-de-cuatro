@@ -1,11 +1,10 @@
-// T-006 creo el click track como parte del cargador de desarrollo
-// (cargador.ts, ver su cabecera historica). T-011 reemplaza ese cargador
-// por el song select y saca esta parte a su propio archivo: el click track
-// sigue siendo el fixture que prueba sincronia (ver
-// apps/web/e2e/sincronia.spec.ts) y sigue alimentando el audio del logo del
-// menu (logo.ts), asi que necesita vivir en un lugar que ninguno de los
-// dos "posea": ni el menu ni el song select son mas dueños del click track
-// que el otro.
+// T-006 creo el click track como parte del cargador de desarrollo, una
+// pantalla que T-011 elimino: la reemplazo por el song select, que le dio
+// a esta parte su propio archivo. El click track sigue siendo el fixture
+// que prueba sincronia (ver apps/web/e2e/sincronia.spec.ts) y sigue
+// alimentando el audio del logo del menu (logo.ts), asi que necesita vivir
+// en un lugar que ninguno de los dos "posea": ni el menu ni el song select
+// son mas dueños del click track que el otro.
 
 import type { Chart } from '@tetra/core';
 

@@ -18,8 +18,9 @@
 // propia interfaz chica de opciones (OpcionesMenu, OpcionesSongSelect,
 // OpcionesAjustes), y este archivo es el unico que conoce a las tres e
 // importa las tres funciones mostrarX. Mismo patron que ya usaba
-// OpcionesCargador antes de T-011, solo que centralizado aca en vez de
-// repartido entre menu.ts y cargador.ts.
+// OpcionesCargador antes de T-011 (la pantalla del cargador de desarrollo,
+// ya eliminada), solo que centralizado aca en vez de repartido entre
+// menu.ts y esa pantalla.
 
 import { mostrarMenu } from './menu.js';
 import { mostrarSongSelect } from './song-select.js';

@@ -1,7 +1,7 @@
 // punto de entrada del paquete
 
 export type { InputEvent, InputSource } from './input.js';
-export { createKeyboardInput } from './input.js';
+export { CODIGOS_TECLAS_POR_DEFECTO, createKeyboardInput } from './input.js';
 
 export type { Playfield, PlayfieldOptions } from './playfield.js';
 export { createPlayfield } from './playfield.js';

@@ -1,9 +1,9 @@
 // T-010: logica pura del logo que respira (docs/tickets/T-010-menu-y-logo.md,
 // "Parte C"), separada de logo.ts igual que cargador-logica.ts separa la
-// logica de cargador.ts: esto no toca Canvas, AudioContext ni
-// requestAnimationFrame, asi que se puede testear sin navegador (ver
-// vitest.config.ts, entorno node). logo.ts es la unica pieza que si
-// necesita DOM: lee estos calculos y los dibuja.
+// logica de decodificacion de audio de quien la usa (song-select.ts): esto
+// no toca Canvas, AudioContext ni requestAnimationFrame, asi que se puede
+// testear sin navegador (ver vitest.config.ts, entorno node). logo.ts es la
+// unica pieza que si necesita DOM: lee estos calculos y los dibuja.
 
 /** Energia del cuadro actual del analizador, normalizada a 0..1 (promedio
  * de las magnitudes de frecuencia sobre 255, el maximo de un Uint8Array). */

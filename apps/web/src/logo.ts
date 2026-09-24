@@ -35,10 +35,10 @@ export interface Logo {
   /**
    * Detiene el bucle de dibujo y libera el audio del menu: desconecta el
    * AnalyserNode, para la fuente y cierra el AudioContext dedicado. Hay
-   * que llamarla SIEMPRE antes de arrancar una partida (ver cargador.ts,
-   * `OpcionesCargador.alEmpezarPartida`, y menu.ts) para no dejar dos
-   * audios sonando en paralelo ni un rAF colgado (ver el ticket,
-   * "Rendimiento"). Es seguro llamarla mas de una vez.
+   * que llamarla SIEMPRE antes de salir del menu (ver menu.ts, los
+   * handlers de los botones "Jugar" y "Ajustes") para no dejar dos audios
+   * sonando en paralelo ni un rAF colgado (ver el ticket, "Rendimiento").
+   * Es seguro llamarla mas de una vez.
    */
   detener(): void;
 }
@@ -253,9 +253,9 @@ export function crearLogo(contenedor: HTMLElement): Logo {
     analizador?.disconnect();
     if (audioCtx) {
       void audioCtx.close().catch(() => {
-        // cerrar el contexto es best-effort, igual que en cargador.ts y
-        // game.ts: si el navegador ya lo cerro por su cuenta no hay nada
-        // que hacer.
+        // cerrar el contexto es best-effort, igual que en game.ts y
+        // song-select.ts: si el navegador ya lo cerro por su cuenta no hay
+        // nada que hacer.
       });
     }
   }

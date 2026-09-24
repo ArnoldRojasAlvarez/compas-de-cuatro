@@ -1,8 +1,9 @@
 /* T-004: estilos del HUD y la pantalla de resultados. T-010 suma el
-   sistema de tokens (tokens.css) y el menu principal: el resto de las
-   reglas de aca abajo se migraron a los tokens de a poco (bienvenido pero
-   no obligatorio segun el ticket, ver docs/tickets/T-010-menu-y-logo.md,
-   "Parte A"), asi que todo lo que se ve en pantalla sale de un solo lugar. */
+   sistema de tokens (tokens.css) y el menu principal. T-012 ("Pulir
+   ajustes") restila TODOS los controles de la app con esos mismos tokens
+   (ver docs/DISENO.md y docs/tickets/T-012-pulir-ajustes.md, "Parte D"):
+   nada de botones, inputs, selects ni file inputs con el estilo por
+   defecto del navegador. */
 
 @import './tokens.css';
 
@@ -21,6 +22,186 @@ body {
   justify-content: center;
   gap: var(--espacio-2);
 }
+
+/* ---------------------------------------------------------------------- */
+/* T-012 "Parte D": controles base, compartidos por toda la app (menu,     */
+/* song select, ajustes, resultados). Una sola regla por tipo de control  */
+/* en vez de una clase por pantalla: asi ningun boton, input, select o    */
+/* file input nuevo puede quedar sin restilar por descuido.                */
+/* ---------------------------------------------------------------------- */
+
+#app button {
+  font-family: var(--fuente-cuerpo);
+  font-size: var(--tipo-sm);
+  font-weight: 500;
+  color: var(--tinta);
+  background: var(--superficie-2);
+  border: 1px solid var(--linea);
+  border-radius: var(--radio-control);
+  padding: var(--espacio-2) var(--espacio-4);
+  cursor: pointer;
+  transition:
+    background-color 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease;
+}
+
+#app button:hover:not(:disabled) {
+  background: var(--linea);
+}
+
+#app button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+/* Foco visible en todo lo interactivo (ticket, "Parte D"): un solo anillo,
+   con el acento, consistente en toda la app. :focus-visible (no :focus) para
+   no mostrar el anillo en un clic de mouse, solo con teclado. */
+#app button:focus-visible,
+#app input:focus-visible,
+#app select:focus-visible,
+#app [tabindex]:focus-visible {
+  outline: 2px solid var(--acento);
+  outline-offset: 2px;
+}
+
+/* El boton principal de cada pantalla (ticket: "puede destacarse con el
+   acento... una sola cosa brilla por pantalla", docs/DISENO.md, "Layout y
+   principios"): "Jugar" en el menu, "Jugar <dificultad>" en el song
+   select. Ajustes y resultados no tienen un boton "principal" analogo, asi
+   que no usan esta clase: cero brillos ahi, no varios. */
+#app .tetra-boton-primario {
+  background: var(--acento);
+  border-color: var(--acento);
+  color: var(--fondo);
+  font-weight: 600;
+}
+
+#app .tetra-boton-primario:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--acento) 85%, white);
+  border-color: color-mix(in srgb, var(--acento) 85%, white);
+}
+
+/* Boton "volver" (menu/song-select/ajustes): mismo control base, look mas
+   discreto (fantasma) porque no compite con el contenido de la pantalla. */
+#app .tetra-boton-volver {
+  background: transparent;
+  border-color: transparent;
+  color: var(--tinta-2);
+  padding: var(--espacio-1) var(--espacio-2);
+}
+
+#app .tetra-boton-volver:hover:not(:disabled) {
+  background: var(--superficie-2);
+  color: var(--tinta);
+}
+
+#app input[type='number'],
+#app input[type='text'],
+#app input[type='search'] {
+  font-family: var(--fuente-datos);
+  font-size: var(--tipo-sm);
+  font-variant-numeric: tabular-nums;
+  color: var(--tinta);
+  background: var(--superficie);
+  border: 1px solid var(--linea);
+  border-radius: var(--radio-control);
+  padding: var(--espacio-1) var(--espacio-2);
+}
+
+/* Quitar las flechas nativas de los inputs numericos (ticket, "Parte D":
+   "sin las flechas nativas si desentonan, los botones de mas y menos ya
+   existen"): offset y velocidad ya tienen sus propios botones -/+. */
+#app input[type='number']::-webkit-outer-spin-button,
+#app input[type='number']::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+#app input[type='number'] {
+  appearance: textfield;
+  -moz-appearance: textfield;
+}
+
+#app select {
+  font-family: var(--fuente-cuerpo);
+  font-size: var(--tipo-sm);
+  color: var(--tinta);
+  background: var(--superficie);
+  border: 1px solid var(--linea);
+  border-radius: var(--radio-control);
+  padding: var(--espacio-1) var(--espacio-2);
+}
+
+/* Input de archivo nativo, oculto pero presente (patron "visualmente
+   oculto"): sigue en el DOM y respondiendo a .click() desde el boton
+   restilado que lo dispara (ver ajustes.ts y song-select.ts), pero invisible
+   y fuera del flujo. display:none no se usa: en algunos navegadores un
+   elemento con display:none no dispara dialogo con .click(); este patron si
+   funciona en todos. */
+.tetra-input-archivo-oculto {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Interruptor de FPS/ms (ajustes.ts, "Graficos"): un <input type=checkbox>
+   real (accesible, funciona con teclado y lector de pantalla) restilado
+   entero como un switch, sin rastro del checkbox por defecto. */
+.tetra-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--espacio-3);
+  cursor: pointer;
+  font-size: var(--tipo-sm);
+  color: var(--tinta);
+}
+
+.tetra-toggle input[type='checkbox'] {
+  appearance: none;
+  -webkit-appearance: none;
+  position: relative;
+  width: 40px;
+  height: 22px;
+  flex-shrink: 0;
+  background: var(--superficie-2);
+  border: 1px solid var(--linea);
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.tetra-toggle input[type='checkbox']::before {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--tinta-2);
+  transition: transform 0.15s ease, background-color 0.15s ease;
+}
+
+.tetra-toggle input[type='checkbox']:checked {
+  background: var(--acento);
+  border-color: var(--acento);
+}
+
+.tetra-toggle input[type='checkbox']:checked::before {
+  transform: translateX(18px);
+  background: var(--fondo);
+}
+
+/* ---------------------------------------------------------------------- */
+/* HUD y resultados (T-004, T-007)                                        */
+/* ---------------------------------------------------------------------- */
 
 .tetra-lienzo canvas {
   display: block;
@@ -61,6 +242,25 @@ body {
 
 .tetra-resultados-grafico {
   border: 1px solid var(--linea);
+}
+
+/* T-007: estadisticas cuantificadas y boton de correccion de offset en la
+   pantalla de resultados (ver src/results.ts). */
+
+.tetra-resultados-estadisticas {
+  display: flex;
+  gap: var(--espacio-6);
+  font-family: var(--fuente-datos);
+  font-size: var(--tipo-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+.tetra-resultados-corregir {
+  margin-top: var(--espacio-1);
+}
+
+.tetra-resultados-volver-song-select {
+  margin-top: var(--espacio-4);
 }
 
 /* ---------------------------------------------------------------------- */
@@ -116,139 +316,414 @@ body {
   text-wrap: balance;
 }
 
-.tetra-menu-cargador {
-  width: 100%;
+.tetra-menu-accesos {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espacio-2);
+  width: min(100%, 280px);
 }
 
-/* T-006: cargador de desarrollo, provisional (ver src/cargador.ts). Migrado
-   a los tokens en T-010: ahora vive dentro de un panel del menu, no suelto
-   en la pantalla. */
+.tetra-menu-boton {
+  width: 100%;
+  padding: var(--espacio-3) var(--espacio-4);
+  font-size: var(--tipo-base);
+  text-align: center;
+}
 
-.tetra-cargador {
+/* ---------------------------------------------------------------------- */
+/* T-011/T-012: song select (ver src/song-select.ts). Sin estilos hasta    */
+/* T-012: esta seccion es enteramente nueva.                               */
+/* ---------------------------------------------------------------------- */
+
+.tetra-song-select {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espacio-4);
+  width: min(94vw, 920px);
+  padding: var(--espacio-4) 0 var(--espacio-6);
+  box-sizing: border-box;
+}
+
+.tetra-song-select-encabezado {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--espacio-3);
+}
+
+.tetra-song-select-encabezado h1 {
+  margin: 0;
+  font-family: var(--fuente-display);
+  font-weight: 600;
+  font-size: var(--tipo-xl);
+  color: var(--tinta);
+}
+
+.tetra-song-select-herramientas {
+  display: flex;
+  gap: var(--espacio-2);
+  margin-left: auto;
+  flex-wrap: wrap;
+}
+
+.tetra-song-select-buscar {
+  min-width: 220px;
+}
+
+.tetra-song-select-cuerpo {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(260px, 320px);
+  gap: var(--espacio-5);
+  align-items: start;
+}
+
+.tetra-song-select-columna-lista {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espacio-3);
+  min-width: 0;
+}
+
+.tetra-song-select-zona {
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: var(--espacio-2);
-  width: 100%;
-  box-sizing: border-box;
-  padding: var(--espacio-4) var(--espacio-6);
-  background: var(--superficie);
-  border: 1px solid var(--linea);
+  padding: var(--espacio-4);
+  border: 2px dashed var(--linea);
   border-radius: var(--radio-panel);
   text-align: center;
-}
-
-.tetra-cargador h1 {
-  display: none; /* T-010: el titulo ya lo muestra el encabezado del menu (tetra-menu-titulo); el <h1> del cargador standalone queda oculto para no duplicarlo. */
-}
-
-.tetra-cargador-aviso {
-  margin: 0;
-  font-size: var(--tipo-xs);
-  color: var(--tinta-3);
-}
-
-.tetra-cargador-zona {
-  width: 100%;
-  box-sizing: border-box;
-  padding: var(--espacio-5) var(--espacio-4);
-  border: 2px dashed var(--linea);
-  border-radius: var(--radio-control);
   color: var(--tinta-2);
-  cursor: default;
 }
 
-.tetra-cargador-zona-activa {
+.tetra-song-select-zona-activa {
   border-color: var(--acento);
   color: var(--tinta);
 }
 
-.tetra-cargador-error {
+.tetra-song-select-zona-texto {
+  margin: 0;
+  font-size: var(--tipo-sm);
+}
+
+.tetra-song-select-zona-boton {
+  font-size: var(--tipo-xs);
+}
+
+.tetra-song-select-click-track {
+  align-self: flex-start;
+}
+
+.tetra-song-select-error {
   min-height: 1.2em;
+  margin: 0;
   color: var(--j-miss);
   font-size: var(--tipo-sm);
 }
 
-.tetra-cargador-volver {
-  margin: var(--espacio-4);
+.tetra-song-select-lista {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--espacio-1);
+  max-height: 52vh;
+  overflow-y: auto;
+  border: 1px solid var(--linea);
+  border-radius: var(--radio-panel);
+  background: var(--superficie);
 }
 
-/* T-007: control de calibracion de offset (ver src/cargador.ts). */
+.tetra-song-select-lista-vacia {
+  padding: var(--espacio-4);
+  color: var(--tinta-3);
+  font-size: var(--tipo-sm);
+  text-align: center;
+}
 
-.tetra-cargador-offset {
+.tetra-song-item {
+  border-bottom: 1px solid var(--linea);
+}
+
+.tetra-song-item:last-child {
+  border-bottom: none;
+}
+
+.tetra-song-item-cabecera {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  width: 100%;
+  box-sizing: border-box;
+  padding: var(--espacio-2) var(--espacio-3);
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  text-align: left;
+}
+
+.tetra-song-item-cabecera:hover:not(:disabled) {
+  background: var(--superficie-2);
+}
+
+/* La cancion en foco se resalta (docs/DISENO.md, "una sola cosa brilla por
+   pantalla": aca es literal, el borde izquierdo con el acento marca cual
+   es la unica cancion "activa" en la lista). */
+.tetra-song-item-enfocada {
+  background: var(--superficie-2);
+  border-left: 2px solid var(--acento);
+}
+
+.tetra-song-item-enfocada .tetra-song-item-cabecera {
+  padding-left: calc(var(--espacio-3) - 2px);
+}
+
+.tetra-song-item-titulo {
+  font-size: var(--tipo-sm);
+  color: var(--tinta);
+}
+
+.tetra-song-item-artista {
+  font-size: var(--tipo-xs);
+  color: var(--tinta-3);
+}
+
+.tetra-song-item-dificultades {
+  list-style: none;
+  margin: 0;
+  padding: 0 var(--espacio-3) var(--espacio-2);
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--espacio-1);
+}
+
+.tetra-dificultad-item {
+  font-size: var(--tipo-xs);
+  padding: var(--espacio-1) var(--espacio-2);
+}
+
+.tetra-dificultad-item-enfocada {
+  background: var(--acento);
+  border-color: var(--acento);
+  color: var(--fondo);
+}
+
+.tetra-song-select-detalle {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espacio-2);
+  padding: var(--espacio-4);
+  background: var(--superficie);
+  border: 1px solid var(--linea);
+  border-radius: var(--radio-panel);
+  min-height: 200px;
+  box-sizing: border-box;
+}
+
+.tetra-song-select-detalle-vacio {
+  margin: auto;
+  color: var(--tinta-3);
+  font-size: var(--tipo-sm);
+  text-align: center;
+}
+
+.tetra-song-select-detalle-titulo {
+  margin: 0;
+  font-family: var(--fuente-display);
+  font-weight: 600;
+  font-size: var(--tipo-lg);
+  color: var(--tinta);
+  text-wrap: balance;
+}
+
+.tetra-song-select-detalle-artista {
+  margin: 0;
+  color: var(--tinta-2);
+  font-size: var(--tipo-sm);
+}
+
+.tetra-song-select-detalle-dificultad {
+  margin: 0;
+  color: var(--acento);
+  font-size: var(--tipo-sm);
+}
+
+.tetra-song-select-datos {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: var(--espacio-1) var(--espacio-3);
+  margin: 0;
+  font-family: var(--fuente-datos);
+  font-size: var(--tipo-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+.tetra-song-select-datos dt {
+  color: var(--tinta-3);
+}
+
+.tetra-song-select-datos dd {
+  margin: 0;
+  color: var(--tinta);
+  text-align: right;
+}
+
+.tetra-song-select-densidad {
+  margin: 0;
+  color: var(--tinta-3);
+  font-size: var(--tipo-xs);
+}
+
+.tetra-song-select-jugar {
+  margin-top: auto;
+  width: 100%;
+  padding: var(--espacio-3) var(--espacio-4);
+  font-size: var(--tipo-base);
+}
+
+/* ---------------------------------------------------------------------- */
+/* T-012: ajustes (ver src/ajustes.ts). Reorganizado en secciones con      */
+/* titulo (ticket, "Parte D"): Juego, Teclas, Graficos, Apariencia.        */
+/* ---------------------------------------------------------------------- */
+
+.tetra-ajustes {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espacio-5);
+  width: min(92vw, 560px);
+  padding: var(--espacio-4) 0 var(--espacio-6);
+}
+
+.tetra-ajustes-encabezado {
   display: flex;
   align-items: center;
+  gap: var(--espacio-3);
+}
+
+.tetra-ajustes-encabezado h1 {
+  margin: 0;
+  font-family: var(--fuente-display);
+  font-weight: 600;
+  font-size: var(--tipo-xl);
+}
+
+.tetra-ajustes-seccion {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espacio-3);
+  padding: var(--espacio-4);
+  background: var(--superficie);
+  border: 1px solid var(--linea);
+  border-radius: var(--radio-panel);
+}
+
+.tetra-ajustes-seccion-titulo {
+  margin: 0;
+  font-family: var(--fuente-display);
+  font-weight: 600;
+  font-size: var(--tipo-sm);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--tinta-2);
+}
+
+.tetra-ajustes-fila {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espacio-1);
+}
+
+.tetra-ajustes-fila + .tetra-ajustes-fila {
+  margin-top: var(--espacio-2);
+  padding-top: var(--espacio-2);
+  border-top: 1px solid var(--linea);
+}
+
+.tetra-ajustes-control {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
   gap: var(--espacio-2);
   font-size: var(--tipo-sm);
 }
 
-.tetra-cargador-offset input {
+.tetra-ajustes-control label {
+  min-width: 90px;
+  color: var(--tinta-2);
+}
+
+.tetra-ajustes-offset input,
+.tetra-ajustes-velocidad input {
   width: 64px;
   text-align: right;
-  font-family: var(--fuente-datos);
-  font-variant-numeric: tabular-nums;
 }
 
-.tetra-cargador-offset-ayuda {
-  margin: 0;
-  font-size: var(--tipo-xs);
-  color: var(--tinta-3);
-}
-
-/* T-008: control de velocidad de caida (ver src/cargador.ts). Mismo estilo
-   que el control de offset de arriba. */
-
-.tetra-cargador-velocidad {
-  display: flex;
-  align-items: center;
-  gap: var(--espacio-2);
-  font-size: var(--tipo-sm);
-}
-
-.tetra-cargador-velocidad input {
-  width: 48px;
-  text-align: right;
-  font-family: var(--fuente-datos);
-  font-variant-numeric: tabular-nums;
-}
-
-.tetra-cargador-velocidad-ayuda {
-  margin: 0;
-  font-size: var(--tipo-xs);
-  color: var(--tinta-3);
-}
-
-/* T-009: control de skin (ver src/cargador.ts). Mismo estilo que los
-   controles de offset y velocidad de arriba. */
-
-.tetra-cargador-skin {
-  display: flex;
-  align-items: center;
-  gap: var(--espacio-2);
-  font-size: var(--tipo-sm);
-}
-
-.tetra-cargador-skin select {
+.tetra-ajustes-skin select {
   max-width: 220px;
 }
 
-.tetra-cargador-skin-ayuda {
+.tetra-ajustes-ayuda {
   margin: 0;
   font-size: var(--tipo-xs);
   color: var(--tinta-3);
 }
 
-/* T-007: estadisticas cuantificadas y boton de correccion de offset en la
-   pantalla de resultados (ver src/results.ts). */
-
-.tetra-resultados-estadisticas {
-  display: flex;
-  gap: var(--espacio-6);
-  font-family: var(--fuente-datos);
+.tetra-ajustes-error {
+  min-height: 1.2em;
+  margin: 0;
+  color: var(--j-miss);
   font-size: var(--tipo-sm);
-  font-variant-numeric: tabular-nums;
 }
 
-.tetra-resultados-corregir {
-  margin-top: var(--espacio-1);
+/* Remapeo de teclas */
+
+.tetra-ajustes-teclas-grilla {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--espacio-2);
+}
+
+.tetra-tecla-casillero {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--espacio-1);
+}
+
+.tetra-tecla-etiqueta {
+  font-size: var(--tipo-xs);
+  color: var(--tinta-3);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.tetra-tecla-boton {
+  width: 100%;
+  padding: var(--espacio-3) var(--espacio-1);
+  font-family: var(--fuente-datos);
+  font-size: var(--tipo-base);
+  text-align: center;
+}
+
+.tetra-tecla-boton-capturando {
+  border-color: var(--acento);
+  color: var(--acento);
+}
+
+.tetra-tecla-reset {
+  align-self: flex-start;
+  font-size: var(--tipo-xs);
+}
+
+/* ---------------------------------------------------------------------- */
+/* Responsive: el song select es lo unico con un layout de dos columnas,   */
+/* asi que es lo unico que necesita un quiebre para pantallas angostas.    */
+/* ---------------------------------------------------------------------- */
+
+@media (max-width: 720px) {
+  .tetra-song-select-cuerpo {
+    grid-template-columns: 1fr;
+  }
 }
