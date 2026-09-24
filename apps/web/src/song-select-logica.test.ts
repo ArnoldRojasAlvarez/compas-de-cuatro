@@ -13,9 +13,12 @@ import {
   densidadNotasPorSegundo,
   duracionMs,
   elegirIndiceAleatorio,
+  estrellasDeCancion,
   filtrarCanciones,
+  filtrarPorRangoDeEstrellas,
   formatearDuracion,
   ordenarCanciones,
+  type ObtenerEstrellas,
 } from './song-select-logica.js';
 
 function chart(parcial: Partial<Chart> = {}): Chart {
@@ -295,6 +298,102 @@ describe('ordenarCanciones', () => {
     const sinDificultades = cancion({ id: 'z', titulo: 'Z', dificultades: [] });
     const resultado = ordenarCanciones([...lista, sinDificultades], 'bpm');
     expect(resultado[0]!.id).toBe('z');
+  });
+
+  it('por estrellas, orden ascendente segun el maximo ya calculado de cada cancion', () => {
+    const chartA = lista[1]!.dificultades[0]!; // 'a', bpm 175
+    const chartB = lista[0]!.dificultades[0]!; // 'b', bpm 200
+    const chartC = lista[2]!.dificultades[0]!; // 'c', bpm 150
+    const estrellas: ObtenerEstrellas = (chart) => {
+      if (chart === chartA) return 5;
+      if (chart === chartB) return 1;
+      if (chart === chartC) return 3;
+      return undefined;
+    };
+    // Si se ignorara `obtenerEstrellas` (por ejemplo, cayera al orden de
+    // bpm), esto daria ['c','a','b'] en vez de ['b','c','a'] (1 < 3 < 5).
+    const resultado = ordenarCanciones(lista, 'estrellas', estrellas);
+    expect(resultado.map((c) => c.id)).toEqual(['b', 'c', 'a']);
+  });
+});
+
+describe('estrellasDeCancion', () => {
+  it('con una sola dificultad calculada, devuelve su valor', () => {
+    const c = cancion({ id: 'x', dificultades: [chart()] });
+    const chartX = c.dificultades[0]!;
+    const obtener: ObtenerEstrellas = (ch) => (ch === chartX ? 4.2 : undefined);
+    expect(estrellasDeCancion(c, obtener)).toBe(4.2);
+  });
+
+  it('con varias dificultades, devuelve el maximo, no el primero ni el promedio', () => {
+    const facil = chart({ metadata: { ...chart().metadata, difficultyName: 'Facil' } });
+    const dificil = chart({ metadata: { ...chart().metadata, difficultyName: 'Dificil' } });
+    const c = cancion({ id: 'x', dificultades: [facil, dificil] });
+    const obtener: ObtenerEstrellas = (ch) => (ch === facil ? 2 : ch === dificil ? 7 : undefined);
+    // Una implementacion que tomara la primera dificultad daria 2, o el
+    // promedio daria 4.5: ninguna de las dos es lo que pide el ticket (el
+    // "maximo" para ordenar/filtrar).
+    expect(estrellasDeCancion(c, obtener)).toBe(7);
+  });
+
+  it('dificultades sin calcular todavia (undefined) no cuentan como 0 real: se ignoran del maximo', () => {
+    const sinCalcular = chart({ metadata: { ...chart().metadata, difficultyName: 'Sin calcular' } });
+    const calculada = chart({ metadata: { ...chart().metadata, difficultyName: 'Calculada' } });
+    const c = cancion({ id: 'x', dificultades: [sinCalcular, calculada] });
+    const obtener: ObtenerEstrellas = (ch) => (ch === calculada ? 3 : undefined);
+    expect(estrellasDeCancion(c, obtener)).toBe(3);
+  });
+
+  it('sin ninguna dificultad calculada todavia, da 0', () => {
+    const c = cancion({ id: 'x', dificultades: [chart()] });
+    expect(estrellasDeCancion(c, () => undefined)).toBe(0);
+  });
+});
+
+describe('filtrarPorRangoDeEstrellas', () => {
+  const chart2 = chart({ metadata: { ...chart().metadata, difficultyName: '2' } });
+  const chart5 = chart({ metadata: { ...chart().metadata, difficultyName: '5' } });
+  const chart8 = chart({ metadata: { ...chart().metadata, difficultyName: '8' } });
+  const lista = [
+    cancion({ id: 'baja', dificultades: [chart2] }),
+    cancion({ id: 'media', dificultades: [chart5] }),
+    cancion({ id: 'alta', dificultades: [chart8] }),
+  ];
+  const obtener: ObtenerEstrellas = (ch) => {
+    if (ch === chart2) return 2;
+    if (ch === chart5) return 5;
+    if (ch === chart8) return 8;
+    return undefined;
+  };
+
+  it('sin minimo ni maximo (null, null), devuelve todo sin filtrar', () => {
+    expect(filtrarPorRangoDeEstrellas(lista, null, null, obtener)).toHaveLength(3);
+  });
+
+  it('con minimo, excluye lo que queda por debajo', () => {
+    const resultado = filtrarPorRangoDeEstrellas(lista, 4, null, obtener);
+    expect(resultado.map((c) => c.id)).toEqual(['media', 'alta']);
+  });
+
+  it('con maximo, excluye lo que queda por encima', () => {
+    const resultado = filtrarPorRangoDeEstrellas(lista, null, 6, obtener);
+    expect(resultado.map((c) => c.id)).toEqual(['baja', 'media']);
+  });
+
+  it('el rango es inclusivo en los dos extremos', () => {
+    // Si fuera exclusivo, 'baja' (2) y 'alta' (8) quedarian afuera de [2, 8].
+    const resultado = filtrarPorRangoDeEstrellas(lista, 2, 8, obtener);
+    expect(resultado.map((c) => c.id).sort()).toEqual(['alta', 'baja', 'media']);
+  });
+
+  it('un rango que no matchea nada devuelve vacio', () => {
+    expect(filtrarPorRangoDeEstrellas(lista, 9, 10, obtener)).toEqual([]);
+  });
+
+  it('no muta el arreglo de entrada', () => {
+    const original = [...lista];
+    filtrarPorRangoDeEstrellas(lista, 4, null, obtener);
+    expect(lista).toEqual(original);
   });
 });
 

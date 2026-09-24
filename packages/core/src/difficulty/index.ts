@@ -377,3 +377,28 @@ export const PARAMETROS_DIFICULTAD: {
     technical: 0.0009411735630901524,
   },
 };
+
+/**
+ * Version del modelo de dificultad (T-014). El song select (ver
+ * apps/web/src/dificultad-logica.ts) cachea el resultado de
+ * `calcularDificultad` por mapa en IndexedDB, y la clave de esa cache
+ * incluye este numero junto al hash del mapa. Cualquier cambio a
+ * `PARAMETROS_DIFICULTAD` (o al algoritmo de `calcularDificultad` mismo)
+ * TIENE que subir esta version: si no, la cache sigue devolviendo el
+ * resultado viejo y el song select muestra estrellas desactualizadas sin
+ * que nadie se entere (ver el ticket T-014, "La trampa que hay que
+ * evitar"). T-015, cuando calibre `escala` de verdad, sube esto a 2.
+ */
+export const VERSION_MODELO_DIFICULTAD = 1;
+
+/**
+ * Mientras sea `false`, el modelo NO esta calibrado contra mapas reales:
+ * las `escala` de arriba salen de igualar NPS entre patrones canonicos, no
+ * de datos (ver el JSDoc de `PARAMETROS_DIFICULTAD`, "SESGO CONOCIDO",
+ * subestima jacks y chordjack). El song select (T-014) tiene que marcar
+ * cualquier estrella como provisional mientras esto sea `false`, para no
+ * mostrarle al jugador un numero como si fuera definitivo. T-015 lo pone
+ * en `true` cuando la calibracion contra mapas rankeados de osu! este
+ * hecha.
+ */
+export const MODELO_CALIBRADO = false;

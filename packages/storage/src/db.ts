@@ -5,7 +5,7 @@
 // usuario real va a tener en desarrollo (T-011, "Rendimiento": no hace
 // falta virtualizar para esa escala).
 
-import type { Chart } from '@tetra/core';
+import type { Chart, DifficultyResult } from '@tetra/core';
 import type { ImagenesDeSkin } from './osk.js';
 
 const NOMBRE_BASE = 'tetra-mapas';
@@ -26,10 +26,16 @@ const NOMBRE_BASE = 'tetra-mapas';
 // llego a produccion) y no vale la pena escribir un migrador de un modelo
 // a otro para eso; si algun dia hiciera falta, la tienda vieja sigue ahi
 // intacta para escribirlo.
-const VERSION_BASE = 3;
+//
+// T-014 agrega 'dificultades' (cache de estrellas por mapa, ver
+// DificultadCacheada mas abajo): version 4. Mismo patron de guard con
+// `contains`, mismo razonamiento: quien ya tenia 1, 2 o 3 llega aca con
+// 'mapas'/'skins'/'canciones' intactas y solo se crea la tienda nueva.
+const VERSION_BASE = 4;
 const NOMBRE_TIENDA_MAPAS_LEGADO = 'mapas';
 const NOMBRE_TIENDA_SKINS = 'skins';
 const NOMBRE_TIENDA_CANCIONES = 'canciones';
+const NOMBRE_TIENDA_DIFICULTADES = 'dificultades';
 
 export type SongId = string;
 
@@ -49,6 +55,19 @@ export interface CancionGuardada {
   audio: Blob;
   background?: Blob;
   dificultades: Chart[];
+}
+
+/**
+ * Una entrada de la cache de dificultad (T-014, ver el ticket "Parte B" y
+ * apps/web/src/dificultad-logica.ts): `clave` combina el hash del mapa
+ * (`hashMapa` de `@tetra/core`) con `VERSION_MODELO_DIFICULTAD`, asi que un
+ * cambio de version del modelo cae en una clave distinta y la entrada vieja
+ * queda huerfana (no se borra: solo deja de leerse, mismo criterio de
+ * migracion no destructiva que el resto de esta tienda).
+ */
+export interface DificultadCacheada {
+  clave: string;
+  resultado: DifficultyResult;
 }
 
 export type SkinId = string;
@@ -75,6 +94,9 @@ function abrirBaseDeDatos(): Promise<IDBDatabase> {
       }
       if (!db.objectStoreNames.contains(NOMBRE_TIENDA_CANCIONES)) {
         db.createObjectStore(NOMBRE_TIENDA_CANCIONES, { keyPath: 'id' });
+      }
+      if (!db.objectStoreNames.contains(NOMBRE_TIENDA_DIFICULTADES)) {
+        db.createObjectStore(NOMBRE_TIENDA_DIFICULTADES, { keyPath: 'clave' });
       }
     };
 
@@ -142,6 +164,47 @@ export async function listarSkinsDeLaBase(): Promise<SkinGuardada[]> {
       const peticion = tx.objectStore(NOMBRE_TIENDA_SKINS).getAll();
       peticion.onsuccess = () => resolve(peticion.result as SkinGuardada[]);
       peticion.onerror = () => reject(peticion.error ?? new Error('No se pudieron listar las skins.'));
+    });
+  } finally {
+    db.close();
+  }
+}
+
+/** Guarda (o reemplaza si la clave ya existia) un resultado de dificultad en la cache. */
+export async function guardarDificultadCacheada(clave: string, resultado: DifficultyResult): Promise<void> {
+  const db = await abrirBaseDeDatos();
+  try {
+    const entrada: DificultadCacheada = { clave, resultado };
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction(NOMBRE_TIENDA_DIFICULTADES, 'readwrite');
+      tx.objectStore(NOMBRE_TIENDA_DIFICULTADES).put(entrada);
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error ?? new Error('No se pudo guardar la dificultad en cache.'));
+      tx.onabort = () => reject(tx.error ?? new Error('Se aborto el guardado de la dificultad en cache.'));
+    });
+  } finally {
+    db.close();
+  }
+}
+
+/**
+ * Devuelve el resultado cacheado para `clave`, o `undefined` si no hay
+ * entrada (mapa nunca calculado con esta version del modelo, o cambio de
+ * version: ver `VERSION_MODELO_DIFICULTAD` en `@tetra/core` y como
+ * `dificultad-logica.ts` arma `clave`).
+ */
+export async function leerDificultadCacheada(clave: string): Promise<DifficultyResult | undefined> {
+  const db = await abrirBaseDeDatos();
+  try {
+    return await new Promise<DifficultyResult | undefined>((resolve, reject) => {
+      const tx = db.transaction(NOMBRE_TIENDA_DIFICULTADES, 'readonly');
+      const peticion = tx.objectStore(NOMBRE_TIENDA_DIFICULTADES).get(clave);
+      peticion.onsuccess = () => {
+        const entrada = peticion.result as DificultadCacheada | undefined;
+        resolve(entrada?.resultado);
+      };
+      peticion.onerror = () =>
+        reject(peticion.error ?? new Error('No se pudo leer la dificultad cacheada.'));
     });
   } finally {
     db.close();

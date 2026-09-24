@@ -8,4 +8,11 @@ export { createJudgeEngine, HP_DELTAS } from './judge/engine.js';
 export type { ParseResult } from './chart/osu.js';
 export { parseOsu } from './chart/osu.js';
 
-export { construirFilas, calcularDificultad, PARAMETROS_DIFICULTAD } from './difficulty/index.js';
+export {
+  construirFilas,
+  calcularDificultad,
+  PARAMETROS_DIFICULTAD,
+  VERSION_MODELO_DIFICULTAD,
+  MODELO_CALIBRADO,
+} from './difficulty/index.js';
+export { hashMapa } from './difficulty/hash.js';

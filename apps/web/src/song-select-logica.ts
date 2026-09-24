@@ -138,6 +138,58 @@ function bpmDeCancion(cancion: CancionGuardada): number {
   return primera ? bpmPrincipal(primera) : 0;
 }
 
+// ---------------------------------------------------------------------------
+// Estrellas (T-014): el resultado de calcularDificultad vive afuera de
+// CancionGuardada (se calcula aparte, en un worker, y se cachea, ver
+// dificultad-logica.ts y dificultad-worker-cliente.ts), asi que estas
+// funciones reciben `obtenerEstrellas` inyectado en vez de leerlo de un
+// campo del Chart. Mismo patron que `elegirIndiceAleatorio` con
+// `aleatorio` inyectable: la logica de ordenar/filtrar queda pura y
+// testeable sin worker ni IndexedDB.
+// ---------------------------------------------------------------------------
+
+/** Da la estrella global ya calculada de un Chart, o undefined si todavia no se calculo (ver dificultad-logica.ts, "calculando"). */
+export type ObtenerEstrellas = (chart: Chart) => number | undefined;
+
+/**
+ * Estrella "de la cancion", para ordenar/filtrar la lista: el maximo entre
+ * las estrellas YA calculadas de sus dificultades (las que faltan por
+ * calcular no cuentan como 0 "de verdad", pero tampoco pueden ser
+ * `undefined` para un `Math.max`, asi que se ignoran del maximo en vez de
+ * tratarse como la dificultad mas facil). Sin ninguna dificultad calculada
+ * todavia, da 0.
+ */
+export function estrellasDeCancion(cancion: CancionGuardada, obtenerEstrellas: ObtenerEstrellas): number {
+  let maximo = 0;
+  for (const dificultad of cancion.dificultades) {
+    const estrellas = obtenerEstrellas(dificultad);
+    if (estrellas !== undefined && estrellas > maximo) maximo = estrellas;
+  }
+  return maximo;
+}
+
+/**
+ * Filtra por rango de estrellas (ver el ticket, "filtrar por rango de
+ * estrellas"). `minimo`/`maximo` en `null` quiere decir "sin cota de ese
+ * lado"; los dos en `null` (el estado inicial del filtro) devuelve la
+ * lista completa sin filtrar, igual que `filtrarCanciones` con consulta
+ * vacia. El rango es inclusivo en los dos extremos.
+ */
+export function filtrarPorRangoDeEstrellas(
+  canciones: readonly CancionGuardada[],
+  minimo: number | null,
+  maximo: number | null,
+  obtenerEstrellas: ObtenerEstrellas,
+): CancionGuardada[] {
+  if (minimo === null && maximo === null) return [...canciones];
+  return canciones.filter((cancion) => {
+    const estrellas = estrellasDeCancion(cancion, obtenerEstrellas);
+    if (minimo !== null && estrellas < minimo) return false;
+    if (maximo !== null && estrellas > maximo) return false;
+    return true;
+  });
+}
+
 /**
  * Filtra por titulo o artista, sin distinguir mayusculas/minusculas. La
  * consulta vacia (o solo espacios) devuelve la lista completa, sin filtrar:
@@ -156,18 +208,28 @@ export function filtrarCanciones(
   );
 }
 
-export type CriterioDeOrden = 'titulo' | 'bpm';
+export type CriterioDeOrden = 'titulo' | 'bpm' | 'estrellas';
 
-/** Ordena SIN mutar la lista de entrada (devuelve una copia nueva). */
+/**
+ * Ordena SIN mutar la lista de entrada (devuelve una copia nueva).
+ * `obtenerEstrellas` solo hace falta para el criterio 'estrellas' (ver
+ * `estrellasDeCancion`); tiene default para no romper a quien ya llamaba
+ * esta funcion con dos argumentos antes de T-014.
+ */
 export function ordenarCanciones(
   canciones: readonly CancionGuardada[],
   criterio: CriterioDeOrden,
+  obtenerEstrellas: ObtenerEstrellas = () => undefined,
 ): CancionGuardada[] {
   const copia = [...canciones];
   if (criterio === 'titulo') {
     copia.sort((a, b) => a.titulo.localeCompare(b.titulo, 'es', { sensitivity: 'base' }));
-  } else {
+  } else if (criterio === 'bpm') {
     copia.sort((a, b) => bpmDeCancion(a) - bpmDeCancion(b));
+  } else {
+    copia.sort(
+      (a, b) => estrellasDeCancion(a, obtenerEstrellas) - estrellasDeCancion(b, obtenerEstrellas),
+    );
   }
   return copia;
 }

@@ -12,7 +12,8 @@
 // menu, ver el ticket, "Cuidado con lo que ya funciona"), reconstruida
 // entera con `mostrarSongSelect` de nuevo.
 
-import type { Chart, Ms } from '@tetra/core';
+import type { Chart, DifficultyResult, Ms } from '@tetra/core';
+import { MODELO_CALIBRADO, SKILLSETS } from '@tetra/core';
 import {
   importarOsz,
   listarCanciones,
@@ -27,13 +28,16 @@ import { leerSkinActiva } from './skin.js';
 import { cargarAudioDelClickTrack, cargarChartDelClickTrack } from './click-track.js';
 import {
   calcularInfoDeDificultad,
-  densidadNotasPorSegundo,
   elegirIndiceAleatorio,
+  estrellasDeCancion,
   filtrarCanciones,
+  filtrarPorRangoDeEstrellas,
   formatearDuracion,
   ordenarCanciones,
   type CriterioDeOrden,
 } from './song-select-logica.js';
+import { colorDeEstrella } from './dificultad-logica.js';
+import { crearClienteDificultad } from './dificultad-worker-cliente.js';
 
 /**
  * Resuelve la skin activa (ver skin.ts) a las Texture que pide
@@ -148,6 +152,9 @@ interface EstadoSongSelect {
   orden: CriterioDeOrden;
   cancionEnfocadaId: SongId | null;
   dificultadEnfocadaIndice: number;
+  /** T-014: filtro por rango de estrellas. null de cada lado quiere decir "sin cota" (ver filtrarPorRangoDeEstrellas). */
+  filtroEstrellasMin: number | null;
+  filtroEstrellasMax: number | null;
 }
 
 /**
@@ -174,9 +181,51 @@ export function mostrarSongSelect(contenedor: HTMLElement, opciones: OpcionesSon
     orden: 'titulo',
     cancionEnfocadaId: null,
     dificultadEnfocadaIndice: 0,
+    filtroEstrellasMin: null,
+    filtroEstrellasMax: null,
   };
 
   const reproductor = crearReproductorDePreview();
+
+  // -- T-014: dificultad (estrellas) por Chart. El resultado se calcula
+  // aparte (worker + cache, ver dificultad-worker-cliente.ts) y se guarda
+  // aca por identidad de objeto (WeakMap/WeakSet): los Chart de
+  // `estado.todas` no cambian de referencia entre renders, solo cuando se
+  // vuelve a llamar cargarCanciones(). --
+  const clienteDificultad = crearClienteDificultad();
+  const resultadosDificultad = new WeakMap<Chart, DifficultyResult>();
+  const calculandoDificultad = new WeakSet<Chart>();
+
+  function obtenerEstrellas(chart: Chart): number | undefined {
+    return resultadosDificultad.get(chart)?.overall;
+  }
+
+  /**
+   * Pide el resultado de dificultad de `chart` si todavia no lo tenemos ni
+   * lo estamos calculando. `prioritaria` (la dificultad en foco) se vuelve
+   * a pedir aunque ya este en cola, para que se adelante en el worker (ver
+   * ColaConPrioridad en dificultad-logica.ts); el resultado es idempotente,
+   * asi que un pedido duplicado no rompe nada, solo hace un calculo de mas
+   * en el peor caso.
+   */
+  function solicitarDificultad(chart: Chart, prioritaria: boolean): void {
+    if (resultadosDificultad.has(chart)) return;
+    if (calculandoDificultad.has(chart) && !prioritaria) return;
+    calculandoDificultad.add(chart);
+    void clienteDificultad
+      .pedir(chart, prioritaria)
+      .then((resultado) => {
+        calculandoDificultad.delete(chart);
+        resultadosDificultad.set(chart, resultado);
+        renderizar();
+      })
+      .catch(() => {
+        // Un chart que no calcula (no deberia pasar) se queda sin estrella:
+        // no debe romper el song select (mismo criterio que el resto de
+        // esta pantalla con errores no criticos, ver mostrarErrorImportacion).
+        calculandoDificultad.delete(chart);
+      });
+  }
 
   // -- Cascara de la pantalla: se crea UNA vez. render() de mas abajo solo
   // toca el contenido de `listaEl` y `detalleEl`, nunca esto: si se
@@ -195,6 +244,7 @@ export function mostrarSongSelect(contenedor: HTMLElement, opciones: OpcionesSon
   botonVolver.textContent = '← Menu';
   botonVolver.addEventListener('click', () => {
     reproductor.destruir();
+    clienteDificultad.destruir();
     opciones.aMenu();
   });
   encabezado.appendChild(botonVolver);
@@ -221,8 +271,47 @@ export function mostrarSongSelect(contenedor: HTMLElement, opciones: OpcionesSon
   const opcionOrdenBpm = document.createElement('option');
   opcionOrdenBpm.value = 'bpm';
   opcionOrdenBpm.textContent = 'Ordenar: BPM';
-  selectOrden.append(opcionOrdenTitulo, opcionOrdenBpm);
+  const opcionOrdenEstrellas = document.createElement('option');
+  opcionOrdenEstrellas.value = 'estrellas';
+  opcionOrdenEstrellas.textContent = 'Ordenar: estrellas';
+  selectOrden.append(opcionOrdenTitulo, opcionOrdenBpm, opcionOrdenEstrellas);
   herramientas.appendChild(selectOrden);
+
+  // T-014: filtro por rango de estrellas (ver el ticket, "filtrar por
+  // rango de estrellas"). Vacio de cualquier lado = sin cota (ver
+  // filtrarPorRangoDeEstrellas); son <input type=number>, no un slider, para
+  // no meter una dependencia nueva solo para esto.
+  const filtroEstrellas = document.createElement('div');
+  filtroEstrellas.className = 'tetra-song-select-filtro-estrellas';
+
+  const etiquetaFiltroEstrellas = document.createElement('span');
+  etiquetaFiltroEstrellas.className = 'tetra-song-select-filtro-estrellas-etiqueta';
+  etiquetaFiltroEstrellas.textContent = '★';
+  filtroEstrellas.appendChild(etiquetaFiltroEstrellas);
+
+  const entradaEstrellasMin = document.createElement('input');
+  entradaEstrellasMin.type = 'number';
+  entradaEstrellasMin.min = '0';
+  entradaEstrellasMin.step = '0.1';
+  entradaEstrellasMin.placeholder = 'min';
+  entradaEstrellasMin.className = 'tetra-song-select-filtro-estrellas-input';
+  entradaEstrellasMin.setAttribute('aria-label', 'Estrellas minimas');
+  filtroEstrellas.appendChild(entradaEstrellasMin);
+
+  const separadorFiltroEstrellas = document.createElement('span');
+  separadorFiltroEstrellas.textContent = '-';
+  filtroEstrellas.appendChild(separadorFiltroEstrellas);
+
+  const entradaEstrellasMax = document.createElement('input');
+  entradaEstrellasMax.type = 'number';
+  entradaEstrellasMax.min = '0';
+  entradaEstrellasMax.step = '0.1';
+  entradaEstrellasMax.placeholder = 'max';
+  entradaEstrellasMax.className = 'tetra-song-select-filtro-estrellas-input';
+  entradaEstrellasMax.setAttribute('aria-label', 'Estrellas maximas');
+  filtroEstrellas.appendChild(entradaEstrellasMax);
+
+  herramientas.appendChild(filtroEstrellas);
 
   const botonAleatorio = document.createElement('button');
   botonAleatorio.type = 'button';
@@ -300,7 +389,14 @@ export function mostrarSongSelect(contenedor: HTMLElement, opciones: OpcionesSon
   // -- Datos derivados y foco --
 
   function listaVisible(): CancionGuardada[] {
-    return ordenarCanciones(filtrarCanciones(estado.todas, estado.consulta), estado.orden);
+    const filtradaPorTexto = filtrarCanciones(estado.todas, estado.consulta);
+    const filtradaPorEstrellas = filtrarPorRangoDeEstrellas(
+      filtradaPorTexto,
+      estado.filtroEstrellasMin,
+      estado.filtroEstrellasMax,
+      obtenerEstrellas,
+    );
+    return ordenarCanciones(filtradaPorEstrellas, estado.orden, obtenerEstrellas);
   }
 
   function enfocarCancion(id: SongId): void {
@@ -309,14 +405,21 @@ export function mostrarSongSelect(contenedor: HTMLElement, opciones: OpcionesSon
     const yaEnfocada = estado.cancionEnfocadaId === id;
     estado.cancionEnfocadaId = id;
     estado.dificultadEnfocadaIndice = 0;
+    // La dificultad que va a quedar en foco (indice 0) pasa a ser
+    // prioritaria en el worker (ver el ticket, "la dificultad en foco
+    // tiene prioridad sobre las demas").
+    const primeraDificultad = cancion.dificultades[0];
+    if (primeraDificultad) solicitarDificultad(primeraDificultad, true);
     renderizar();
     if (yaEnfocada) return; // no reinicia el preview si ya era esta misma cancion
-    const primeraDificultad = cancion.dificultades[0];
     void reproductor.reproducir(cancion, primeraDificultad ? primeraDificultad.metadata.previewTime : 0);
   }
 
   function enfocarDificultad(indice: number): void {
     estado.dificultadEnfocadaIndice = indice;
+    const cancion = estado.todas.find((candidata) => candidata.id === estado.cancionEnfocadaId);
+    const chart = cancion?.dificultades[indice];
+    if (chart) solicitarDificultad(chart, true);
     renderizar(); // misma cancion, mismo audio: no hace falta tocar el preview
   }
 
@@ -336,8 +439,25 @@ export function mostrarSongSelect(contenedor: HTMLElement, opciones: OpcionesSon
     }
   }
 
+  /**
+   * Encola (sin prioridad) TODAS las dificultades de TODAS las canciones
+   * cargadas: es lo que hace que abrir el song select con una biblioteca
+   * grande no traba la interfaz (ver el ticket, "Parte A"), calculan en el
+   * worker de a una mientras el jugador ya puede navegar la lista.
+   * `enfocarCancion`/`enfocarDificultad` adelantan la que este en foco por
+   * encima de esta cola de fondo.
+   */
+  function solicitarDificultadesDeTodas(): void {
+    for (const cancion of estado.todas) {
+      for (const dificultad of cancion.dificultades) {
+        solicitarDificultad(dificultad, false);
+      }
+    }
+  }
+
   async function cargarCanciones(idAEnfocar?: SongId): Promise<void> {
     estado.todas = await listarCanciones();
+    solicitarDificultadesDeTodas();
     const visibles = listaVisible();
     const idElegido = idAEnfocar ?? estado.cancionEnfocadaId ?? visibles[0]?.id ?? null;
     if (idElegido !== null && visibles.some((c) => c.id === idElegido)) {
@@ -349,6 +469,47 @@ export function mostrarSongSelect(contenedor: HTMLElement, opciones: OpcionesSon
   }
 
   // -- Render: solo toca listaEl y detalleEl, ver el comentario de arriba de todo. --
+
+  // T-014: el modelo todavia no esta calibrado (ver MODELO_CALIBRADO en
+  // @tetra/core y el JSDoc de PARAMETROS_DIFICULTAD, "SESGO CONOCIDO"):
+  // mientras sea false, toda estrella que se muestra lleva esta marca
+  // discreta (no un numero como si fuera definitivo, ver el ticket).
+  const TITULO_ESTRELLA_PROVISIONAL =
+    'Provisional: el modelo de dificultad todavia no se calibro contra mapas reales (T-015).';
+
+  /** Vuelca `overall` (si ya esta calculado) o un placeholder de "calculando" en `badge`, con color y marca de provisional. Ancho fijo por CSS (ver .tetra-estrella): no salta el layout al pasar de un estado al otro. */
+  function aplicarEstrellaABadge(badge: HTMLElement, overall: number | undefined): void {
+    if (overall === undefined) {
+      badge.textContent = '···';
+      badge.classList.add('tetra-estrella-calculando');
+      badge.style.removeProperty('color');
+      badge.removeAttribute('title');
+      return;
+    }
+    badge.textContent = `${overall.toFixed(1)}★`;
+    badge.classList.remove('tetra-estrella-calculando');
+    badge.style.color = `var(${colorDeEstrella(overall)})`;
+    if (!MODELO_CALIBRADO) {
+      badge.title = TITULO_ESTRELLA_PROVISIONAL;
+    }
+  }
+
+  /** Badge de estrella de UNA dificultad puntual (ver el ticket, "cada dificultad muestra su estrella global"). */
+  function crearBadgeEstrellaDeDificultad(chart: Chart): HTMLElement {
+    const badge = document.createElement('span');
+    badge.className = 'tetra-estrella tetra-dificultad-item-estrella';
+    aplicarEstrellaABadge(badge, resultadosDificultad.get(chart)?.overall);
+    return badge;
+  }
+
+  /** Badge de estrella "de la cancion" (el maximo de sus dificultades ya calculadas), para el vistazo rapido en la cabecera de la lista. */
+  function crearBadgeEstrellaDeCancion(cancion: CancionGuardada): HTMLElement {
+    const badge = document.createElement('span');
+    badge.className = 'tetra-estrella tetra-song-item-estrella';
+    const algunaCalculada = cancion.dificultades.some((d) => resultadosDificultad.has(d));
+    aplicarEstrellaABadge(badge, algunaCalculada ? estrellasDeCancion(cancion, obtenerEstrellas) : undefined);
+    return badge;
+  }
 
   function renderizarDetalle(): void {
     detalleEl.innerHTML = '';
@@ -380,10 +541,22 @@ export function mostrarSongSelect(contenedor: HTMLElement, opciones: OpcionesSon
 
     const info = calcularInfoDeDificultad(chart);
 
+    const filaDificultad = document.createElement('div');
+    filaDificultad.className = 'tetra-song-select-detalle-dificultad-fila';
+
     const nombreDificultad = document.createElement('p');
     nombreDificultad.className = 'tetra-song-select-detalle-dificultad';
     nombreDificultad.textContent = `${info.nombre} · mapeado por ${info.creador}`;
-    detalleEl.appendChild(nombreDificultad);
+    filaDificultad.appendChild(nombreDificultad);
+    filaDificultad.appendChild(crearBadgeEstrellaDeDificultad(chart));
+    detalleEl.appendChild(filaDificultad);
+
+    if (!MODELO_CALIBRADO) {
+      const avisoProvisional = document.createElement('p');
+      avisoProvisional.className = 'tetra-song-select-detalle-provisional';
+      avisoProvisional.textContent = TITULO_ESTRELLA_PROVISIONAL;
+      detalleEl.appendChild(avisoProvisional);
+    }
 
     const datos = document.createElement('dl');
     datos.className = 'tetra-song-select-datos';
@@ -405,14 +578,57 @@ export function mostrarSongSelect(contenedor: HTMLElement, opciones: OpcionesSon
     fila('HP', info.hpDrain.toFixed(1));
     detalleEl.appendChild(datos);
 
-    // Densidad provisional (T-011: NO es un star rating, ver el ticket "El
-    // star rating queda para la fase 4"): notas por segundo, marcada como
-    // provisional a proposito para no insinuar un numero de estrellas que
-    // todavia no existe.
-    const densidad = document.createElement('p');
-    densidad.className = 'tetra-song-select-densidad';
-    densidad.textContent = `Densidad (provisional): ${densidadNotasPorSegundo(chart).toFixed(2)} notas/s`;
-    detalleEl.appendChild(densidad);
+    // T-014, Parte C: el perfil de siete skillsets de la dificultad en
+    // foco (ver el ticket, "en el panel de detalle"). Barras, no radar
+    // (se leen y se comparan mejor en una sola escala, ver docs/DISENO.md).
+    const tituloPerfil = document.createElement('h3');
+    tituloPerfil.className = 'tetra-song-select-perfil-titulo';
+    tituloPerfil.textContent = 'Perfil de skillsets';
+    detalleEl.appendChild(tituloPerfil);
+
+    const resultadoDificultad = resultadosDificultad.get(chart);
+    if (!resultadoDificultad) {
+      const calculandoPerfil = document.createElement('p');
+      calculandoPerfil.className = 'tetra-song-select-perfil-calculando';
+      calculandoPerfil.textContent = 'Calculando...';
+      detalleEl.appendChild(calculandoPerfil);
+    } else {
+      const vector = resultadoDificultad.vector;
+      const maximoValor = Math.max(...SKILLSETS.map((k) => vector[k]));
+      const perfil = document.createElement('ul');
+      perfil.className = 'tetra-song-select-perfil';
+      for (const skillset of SKILLSETS) {
+        const valor = vector[skillset];
+        const esMaximo = valor === maximoValor && maximoValor > 0;
+
+        const filaSkillset = document.createElement('li');
+        filaSkillset.className = esMaximo
+          ? 'tetra-perfil-fila tetra-perfil-fila-maxima'
+          : 'tetra-perfil-fila';
+
+        const nombre = document.createElement('span');
+        nombre.className = 'tetra-perfil-fila-nombre';
+        nombre.textContent = skillset;
+        filaSkillset.appendChild(nombre);
+
+        const pista = document.createElement('span');
+        pista.className = 'tetra-perfil-fila-pista';
+        const barra = document.createElement('span');
+        barra.className = 'tetra-perfil-fila-barra';
+        const proporcion = maximoValor > 0 ? valor / maximoValor : 0;
+        barra.style.width = `${(proporcion * 100).toFixed(1)}%`;
+        pista.appendChild(barra);
+        filaSkillset.appendChild(pista);
+
+        const valorEl = document.createElement('span');
+        valorEl.className = 'tetra-perfil-fila-valor';
+        valorEl.textContent = valor.toFixed(2);
+        filaSkillset.appendChild(valorEl);
+
+        perfil.appendChild(filaSkillset);
+      }
+      detalleEl.appendChild(perfil);
+    }
 
     const botonJugar = document.createElement('button');
     botonJugar.type = 'button';
@@ -447,15 +663,24 @@ export function mostrarSongSelect(contenedor: HTMLElement, opciones: OpcionesSon
       cabecera.className = 'tetra-song-item-cabecera';
       cabecera.addEventListener('click', () => enfocarCancion(cancion.id));
 
+      const textoItem = document.createElement('span');
+      textoItem.className = 'tetra-song-item-texto';
+
       const tituloItem = document.createElement('span');
       tituloItem.className = 'tetra-song-item-titulo';
       tituloItem.textContent = cancion.titulo;
-      cabecera.appendChild(tituloItem);
+      textoItem.appendChild(tituloItem);
 
       const artistaItem = document.createElement('span');
       artistaItem.className = 'tetra-song-item-artista';
       artistaItem.textContent = cancion.artista;
-      cabecera.appendChild(artistaItem);
+      textoItem.appendChild(artistaItem);
+
+      cabecera.appendChild(textoItem);
+      // T-014: estrella "de la cancion" (el maximo de sus dificultades ya
+      // calculadas), para ubicar de un vistazo las mas dificiles sin tener
+      // que expandir cada fila (ver el ticket, "ordenar por estrellas").
+      cabecera.appendChild(crearBadgeEstrellaDeCancion(cancion));
 
       item.appendChild(cabecera);
 
@@ -476,7 +701,12 @@ export function mostrarSongSelect(contenedor: HTMLElement, opciones: OpcionesSon
             indice === estado.dificultadEnfocadaIndice
               ? 'tetra-dificultad-item tetra-dificultad-item-enfocada'
               : 'tetra-dificultad-item';
-          botonDificultad.textContent = dificultad.metadata.difficultyName;
+          const nombreDificultadItem = document.createElement('span');
+          nombreDificultadItem.textContent = dificultad.metadata.difficultyName;
+          botonDificultad.appendChild(nombreDificultadItem);
+          // T-014: la estrella de ESTA dificultad puntual (ver el ticket,
+          // "cada dificultad muestra su estrella global").
+          botonDificultad.appendChild(crearBadgeEstrellaDeDificultad(dificultad));
           botonDificultad.addEventListener('click', (evento) => {
             evento.stopPropagation();
             enfocarDificultad(indice);
@@ -518,8 +748,11 @@ export function mostrarSongSelect(contenedor: HTMLElement, opciones: OpcionesSon
     // Apagar el preview (y cerrar su AudioContext) justo antes de que
     // runGame tome el foco de audio: ver el ticket, "el preview... se
     // detiene al entrar a una partida", mismo criterio que el logo del
-    // menu con `alEmpezarPartida` (ver menu.ts).
+    // menu con `alEmpezarPartida` (ver menu.ts). El worker de dificultad
+    // tambien se apaga aca: nadie lo necesita mientras se juega, y
+    // `mostrarSongSelect` crea uno nuevo al volver.
     reproductor.destruir();
+    clienteDificultad.destruir();
     const resultado = await runGame(chart, audio, skin);
     if (resultado.estado === 'completado') {
       mostrarBotonVolverDesdeResultados();
@@ -606,7 +839,25 @@ export function mostrarSongSelect(contenedor: HTMLElement, opciones: OpcionesSon
   });
 
   selectOrden.addEventListener('change', () => {
-    estado.orden = selectOrden.value === 'bpm' ? 'bpm' : 'titulo';
+    estado.orden =
+      selectOrden.value === 'bpm' ? 'bpm' : selectOrden.value === 'estrellas' ? 'estrellas' : 'titulo';
+    sincronizarFocoConListaVisible();
+  });
+
+  /** Parsea el valor de un <input type=number> a numero o null (vacio/invalido = sin cota, ver EstadoSongSelect). */
+  function leerNumeroONull(valor: string): number | null {
+    if (valor.trim() === '') return null;
+    const n = Number(valor);
+    return Number.isFinite(n) ? n : null;
+  }
+
+  entradaEstrellasMin.addEventListener('input', () => {
+    estado.filtroEstrellasMin = leerNumeroONull(entradaEstrellasMin.value);
+    sincronizarFocoConListaVisible();
+  });
+
+  entradaEstrellasMax.addEventListener('input', () => {
+    estado.filtroEstrellasMax = leerNumeroONull(entradaEstrellasMax.value);
     sincronizarFocoConListaVisible();
   });
 

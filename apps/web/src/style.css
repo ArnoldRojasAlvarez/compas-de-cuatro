@@ -452,9 +452,9 @@ body {
 
 .tetra-song-item-cabecera {
   display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 2px;
+  flex-direction: row;
+  align-items: center;
+  gap: var(--espacio-2);
   width: 100%;
   box-sizing: border-box;
   padding: var(--espacio-2) var(--espacio-3);
@@ -462,6 +462,17 @@ body {
   border: none;
   border-radius: 0;
   text-align: left;
+}
+
+/* T-014: titulo + artista quedan en su propia columna (antes eran hijos
+   directos de la cabecera, que ahora tambien tiene la estrella al lado). */
+.tetra-song-item-texto {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
 }
 
 .tetra-song-item-cabecera:hover:not(:disabled) {
@@ -500,6 +511,9 @@ body {
 }
 
 .tetra-dificultad-item {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--espacio-2);
   font-size: var(--tipo-xs);
   padding: var(--espacio-1) var(--espacio-2);
 }
@@ -508,6 +522,13 @@ body {
   background: var(--acento);
   border-color: var(--acento);
   color: var(--fondo);
+}
+
+/* T-014: estrella dentro del boton de dificultad enfocado, mismo color que
+   el resto del boton (fondo acento) para que la marca de provisional (el
+   subrayado punteado, ver .tetra-estrella-provisional) siga siendo legible. */
+.tetra-dificultad-item-enfocada .tetra-dificultad-item-estrella {
+  color: inherit !important;
 }
 
 .tetra-song-select-detalle {
@@ -544,10 +565,28 @@ body {
   font-size: var(--tipo-sm);
 }
 
+.tetra-song-select-detalle-dificultad-fila {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--espacio-2);
+}
+
 .tetra-song-select-detalle-dificultad {
   margin: 0;
   color: var(--acento);
   font-size: var(--tipo-sm);
+}
+
+/* T-014: aviso de que las estrellas todavia no estan calibradas (ver
+   MODELO_CALIBRADO en @tetra/core). Discreto a proposito: no compite con
+   el acento ni con los datos reales del mapa (docs/DISENO.md, "una sola
+   cosa brilla por pantalla"). */
+.tetra-song-select-detalle-provisional {
+  margin: 0;
+  color: var(--tinta-3);
+  font-size: var(--tipo-xs);
+  font-style: italic;
 }
 
 .tetra-song-select-datos {
@@ -570,10 +609,139 @@ body {
   text-align: right;
 }
 
-.tetra-song-select-densidad {
+/* T-014: estrella, en cualquier contexto (lista o detalle). Ancho fijo en
+   caracteres para que el estado "calculando" (···) no salte el layout
+   cuando el resultado real llega (ver el ticket, "un estado de calculando
+   que no salte el layout"). El color lo pone JS por elemento (colorDeEstrella,
+   derivado de los tokens de juicio: docs/DISENO.md, "no un arcoiris nuevo"). */
+.tetra-estrella {
+  display: inline-block;
+  min-width: 3.5ch;
+  font-family: var(--fuente-datos);
+  font-size: var(--tipo-xs);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  color: var(--tinta);
+  flex-shrink: 0;
+}
+
+.tetra-estrella-calculando {
+  color: var(--tinta-3);
+}
+
+/* Subrayado punteado discreto: la marca visual de "provisional" (ver
+   TITULO_ESTRELLA_PROVISIONAL en song-select.ts), ademas del title/tooltip
+   nativo del <span>. */
+.tetra-estrella-provisional {
+  text-decoration: underline dotted;
+  text-decoration-color: var(--tinta-3);
+  text-underline-offset: 2px;
+  cursor: help;
+}
+
+.tetra-song-item-estrella {
+  font-size: var(--tipo-sm);
+}
+
+/* T-014, Parte C: perfil de siete skillsets (ver el ticket, "en el panel
+   de detalle"). Barras horizontales, no radar: se leen y se comparan mejor
+   en una sola escala (docs/DISENO.md). */
+.tetra-song-select-perfil-titulo {
+  margin: var(--espacio-2) 0 0;
+  font-family: var(--fuente-display);
+  font-weight: 600;
+  font-size: var(--tipo-sm);
+  color: var(--tinta-2);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.tetra-song-select-perfil-calculando {
   margin: 0;
   color: var(--tinta-3);
+  font-size: var(--tipo-sm);
+}
+
+.tetra-song-select-perfil {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--espacio-1);
+}
+
+.tetra-perfil-fila {
+  display: grid;
+  /* 10ch: el nombre mas largo de los siete skillsets es "jumpstream"/
+     "handstream" (10 caracteres). Con menos, "Jumpstre..." queda cortado. */
+  grid-template-columns: 10ch 1fr 5ch;
+  align-items: center;
+  gap: var(--espacio-2);
+}
+
+.tetra-perfil-fila-nombre {
   font-size: var(--tipo-xs);
+  color: var(--tinta-2);
+  text-transform: capitalize;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tetra-perfil-fila-pista {
+  display: block;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--superficie-2);
+  overflow: hidden;
+}
+
+.tetra-perfil-fila-barra {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--tinta-3);
+  transition: width 0.2s ease;
+}
+
+/* La barra del skillset dominante del mapa se destaca con el acento (ver
+   el ticket, "la del maximo destacada con el acento"): es la unica que
+   brilla dentro de este panel. */
+.tetra-perfil-fila-maxima .tetra-perfil-fila-barra {
+  background: var(--acento);
+}
+
+.tetra-perfil-fila-maxima .tetra-perfil-fila-nombre {
+  color: var(--tinta);
+}
+
+.tetra-perfil-fila-valor {
+  font-family: var(--fuente-datos);
+  font-size: var(--tipo-xs);
+  font-variant-numeric: tabular-nums;
+  color: var(--tinta-2);
+  text-align: right;
+}
+
+.tetra-perfil-fila-maxima .tetra-perfil-fila-valor {
+  color: var(--acento);
+}
+
+/* T-014: filtro por rango de estrellas, en la barra de herramientas. */
+.tetra-song-select-filtro-estrellas {
+  display: flex;
+  align-items: center;
+  gap: var(--espacio-1);
+}
+
+.tetra-song-select-filtro-estrellas-etiqueta {
+  color: var(--tinta-3);
+  font-size: var(--tipo-sm);
+}
+
+.tetra-song-select-filtro-estrellas-input {
+  width: 4.5ch;
 }
 
 .tetra-song-select-jugar {

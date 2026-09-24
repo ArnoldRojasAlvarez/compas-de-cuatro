@@ -13,12 +13,20 @@
 // Todo lo demas (unzip, parseo, IndexedDB) es detalle interno repartido
 // entre osz.ts y db.ts.
 
+import type { DifficultyResult } from '@tetra/core';
 import { extraerCancionDeOsz } from './osz.js';
 import { extraerImagenesDeOsk } from './osk.js';
-import { guardarCancion, listarCancionesDeLaBase, guardarSkin, listarSkinsDeLaBase } from './db.js';
+import {
+  guardarCancion,
+  listarCancionesDeLaBase,
+  guardarSkin,
+  listarSkinsDeLaBase,
+  guardarDificultadCacheada,
+  leerDificultadCacheada,
+} from './db.js';
 import type { SongId, CancionGuardada, SkinId, SkinGuardada } from './db.js';
 
-export type { SongId, CancionGuardada, SkinId, SkinGuardada } from './db.js';
+export type { SongId, CancionGuardada, SkinId, SkinGuardada, DificultadCacheada } from './db.js';
 export type { MapaImportado, CancionImportada } from './osz.js';
 export { elegirArchivoOsu, elegirArchivosOsu, mimeDesdeNombre, extraerMapaDeOsz, extraerCancionDeOsz } from './osz.js';
 export type { ClaveImagenSkin, ImagenesDeSkin } from './osk.js';
@@ -88,4 +96,19 @@ export async function importarOsk(archivo: Blob): Promise<SkinId> {
 /** Devuelve todas las skins guardadas hasta ahora. */
 export function listarSkins(): Promise<SkinGuardada[]> {
   return listarSkinsDeLaBase();
+}
+
+/**
+ * Guarda un resultado de dificultad en la cache de IndexedDB, bajo `clave`
+ * (ver `DificultadCacheada` en db.ts para que compone esa clave). Pasa tal
+ * cual a `guardarDificultadCacheada` de db.ts; existe como reexport directo
+ * para que apps/web solo importe de `@tetra/storage`, nunca de db.ts (T-014).
+ */
+export function cachearDificultad(clave: string, resultado: DifficultyResult): Promise<void> {
+  return guardarDificultadCacheada(clave, resultado);
+}
+
+/** Lee un resultado de dificultad de la cache. `undefined` si no hay entrada para esa clave. */
+export function leerDificultadDeCache(clave: string): Promise<DifficultyResult | undefined> {
+  return leerDificultadCacheada(clave);
 }
