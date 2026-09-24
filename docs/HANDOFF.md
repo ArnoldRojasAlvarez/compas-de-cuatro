@@ -171,6 +171,9 @@ tools/             generadores de fixtures
 - T-009: cargar una skin `.osk` y usar sus imagenes.
 - T-010: sistema de diseno propio, menu y logo que respira.
 - T-011: navegacion con router, song select (biblioteca con dificultades) y ajustes.
+- T-012: ajustes pulidos, remapeo de teclas, FPS, entrada por `e.code`.
+- T-013: motor de dificultad de siete skillsets (escalas provisionales, sesgo de
+  jacks documentado).
 
 **La prueba de feel ya se hizo:** en una cancion real los golpes de Arnold
 salieron centrados en cero. El motor esta bien sincronizado. Por eso se
@@ -224,6 +227,21 @@ codigo pasaba los cuatro checks y AUN ASI no estaba bien.
    despues.
 6. **Arreglos chicos de config/comentario los podes hacer vos** y declararlos, en
    vez de gastar un ciclo de agente. Para codigo de produccion, no.
+7. **Agentes en paralelo: worktrees y archivos disjuntos.** Con `isolation:
+   "worktree"` cada agente trabaja en `.claude/worktrees/agent-*` (ignorado por
+   git y por eslint desde que un `git add -A` los metio al commit como repos
+   embebidos). Solo se paraleliza lo que toca archivos distintos: T-014 espero
+   a T-012 porque los dos tocaban el song select y `style.css`. Al fusionar:
+   squash de la rama del agente sobre `main`, correr los checks en el arbol
+   principal (`npm install` primero si cambio el lockfile) y despues
+   `git worktree remove --force` y borrar las ramas.
+8. **La vista previa sirve el checkout principal, no el worktree.** Para mirar
+   el trabajo de un agente antes de fusionar, hay que levantar el server a mano
+   desde el worktree en otro puerto, o fusionar primero y mirar desde `main`.
+9. **Medir, no confiar en la captura reducida.** La vista previa escala dos veces
+   cuando se emula un ancho grande, y un layout centrado parece una columna
+   pegada a la izquierda. Ante la duda, `getBoundingClientRect()` con el
+   javascript_tool.
 
 ---
 

@@ -8,7 +8,7 @@ Estado corto y siempre al dia. **Si sos una sesion NUEVA, empeza por
 
 ## Donde esta todo
 
-- `main`: limpio, verde, 301 tests + e2e de sincronia.
+- `main`: limpio, verde, 351 tests + e2e de sincronia.
 - En curso: ver tabla de abajo.
 
 ## Hecho
@@ -26,6 +26,8 @@ Estado corto y siempre al dia. **Si sos una sesion NUEVA, empeza por
 | T-009 | Skins `.osk` cargadas por el usuario |
 | T-010 | Sistema de diseno propio, menu y logo que respira |
 | T-011 | Router, song select con biblioteca y dificultades, ajustes |
+| T-012 | Ajustes pulidos, remapeo de teclas, FPS, entrada por `e.code` (bug de teclas muertas) |
+| T-013 | Motor de dificultad de siete skillsets en `core` (escalas provisionales) |
 
 La prueba de feel de Arnold ya se hizo: en una cancion real sus golpes salieron
 centrados en cero. El motor esta bien sincronizado.
@@ -34,19 +36,23 @@ centrados en cero. El motor esta bien sincronizado.
 
 | Ticket | Que es | Estado |
 |---|---|---|
-| T-012 | Pulir ajustes: inputs estilados, remapeo de teclas, mostrar FPS | Despachado |
-| T-013 | Motor de dificultad: vector de siete skillsets en `core` | Despachado |
+| T-014 | Estrellas y perfil de siete skillsets en el song select, Web Worker, cache | Despachado |
 
 ## Lo que sigue despues
 
-- **T-014:** estrellas y perfil de skillsets en el song select, calculo en Web
-  Worker con cache, y la herramienta de calibracion contra mapas de osu! con
-  star rating conocido (Arnold arbitra).
+- **T-015:** herramienta de calibracion contra mapas de osu! con star rating
+  conocido. Arnold aporta 30 a 50 mapas con su SR y arbitra discrepancias.
 - **Header persistente** con tiempo y tiempo jugado.
 - **La cancion y el video del avance II (28 de octubre):** camino critico del
   curso, no depende del codigo.
 
 ## Deuda declarada
+
+- **Estrellas sin calibrar, con sesgo conocido:** la escala provisional
+  subestima los jacks (12 golpes/s en un dedo frente a 3 por dedo en un
+  stream). Lo corrige T-015. La UI las marca como provisionales.
+- **Ajustes en ventanas angostas:** debajo de ~560 px el boton "+1" se cae a
+  otra linea y se separa de su grupo. En escritorio se ve bien.
 
 - **Cambios de velocidad (SV):** se parsean del `.osu` pero no se aplican al
   dibujo. Todo se ve a multiplicador 1.
