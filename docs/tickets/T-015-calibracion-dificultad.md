@@ -69,6 +69,51 @@ conocido, y lo primero a revisar en el informe son `ESCALA_jackspeed` y
 `ESCALA_chordjack`. Al cerrar la calibracion, poner `MODELO_CALIBRADO = true` y
 subir `VERSION_MODELO_DIFICULTAD`.
 
+## Primeros datos reales (24 de setiembre, antes de calibrar)
+
+Arnold aporto tres mapas. Se midieron con el motor de T-013 tal cual, desde un
+script fuera del repo (los `.osz` son de terceros y no se versionan):
+
+| Mapa | Dificultad | NPS | Overall | Dominante |
+|---|---|---|---|---|
+| FRAGMENT. | AVEL'S EASY | 3.6 | 1.28 | stamina |
+| FRAGMENT. | NORMAL | 6.8 | 2.42 | stamina |
+| FRAGMENT. | HARD | 9.7 | 3.52 | jumpstream |
+| FRAGMENT. | MIGHTY'S HYPER | 12.8 | 4.87 | jumpstream |
+| FRAGMENT. | UCITYSM VS. JOHNO'S INSANE | 16.8 | 8.75 | jumpstream |
+| FRAGMENT. | FATE | 21.2 | 9.23 | jumpstream |
+| FREEDOM DiVE | 4K Normal | 5.1 | 2.68 | stamina |
+| FREEDOM DiVE | 4K Hyper | 8.0 | 4.26 | stamina |
+| FREEDOM DiVE | 4K Another | 11.9 | 6.40 | stamina |
+| FREEDOM DiVE | Fullerene's 4K DIMENSIONS | 21.6 | 15.58 | jumpstream |
+| Galaxy Collapse | Cataclysmic Hypernova | 14.7 | 14.35 | jumpstream |
+
+Lo que dicen:
+
+1. **El orden es correcto.** Dentro de cada set, el orden de Tetra coincide
+   exactamente con la escalera de los mapeadores (10 de 10). La senal de fondo
+   funciona. Estas escaleras son verdad de referencia gratis: no necesitan el
+   SR de osu!, y la herramienta deberia usarlas como criterio extra (Spearman
+   dentro de cada set).
+2. **La escala lineal se dispara arriba.** Los mapas mas densos dan 14 y 15,
+   aproximadamente el doble de lo que les da osu!. La dificultad percibida
+   crece mas lento que la densidad. **El ajuste no puede ser solo un factor:**
+   hay que ajustar una ley de potencia, `estrella = a * valor^p` con `p < 1`,
+   por minimos cuadrados en escala log-log. Eso agrega un parametro global
+   (`EXPONENTE_ESTRELLAS`, hoy implicitamente 1) al modelo de T-013.
+3. **Stamina domina los mapas faciles y largos, y es engañoso.** Un Normal de
+   cuatro minutos no es "un mapa de stamina". Causa estructural: stamina suma
+   todas las notas (`A_stam * size`), mientras que cada skillset de patron solo
+   cuenta las filas que le tocan. En los patrones puros de la escala
+   provisional la diferencia no aparecia; en mapas reales, que mezclan todo,
+   stamina queda inflada. **Arreglo propuesto para probar contra los datos:**
+   que stamina deje de acumular notas y pase a medir cuanto tiempo se sostiene
+   la dificultad de patron, por ejemplo un promedio de decaimiento lento sobre
+   el maximo instantaneo de los seis strains de pico. Asi un mapa facil y largo
+   tiene stamina baja, y una maraton de jumpstream la tiene alta.
+4. **Faltan mapas de jacks.** Ninguno de los tres tiene jacks relevantes (jack
+   menor a 1 en todos), asi que el sesgo de jacks no se puede medir todavia.
+
 ## Meta de la calibracion (no de este ticket)
 
 Correlacion de Spearman mayor a 0.85 contra osu!, y los diez casos que mas

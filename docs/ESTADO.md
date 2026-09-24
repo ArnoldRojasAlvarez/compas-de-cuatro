@@ -51,6 +51,8 @@ centrados en cero. El motor esta bien sincronizado.
 - **Estrellas sin calibrar, con sesgo conocido:** la escala provisional
   subestima los jacks (12 golpes/s en un dedo frente a 3 por dedo en un
   stream). Lo corrige T-015. La UI las marca como provisionales.
+- **Dificultades no 4K se omiten en silencio al importar:** un `.osz` con 4K y 7K
+  (FREEDOM DiVE) importa bien sus 4K, pero no avisa que salto las demas.
 - **Ajustes en ventanas angostas:** debajo de ~560 px el boton "+1" se cae a
   otra linea y se separa de su grupo. En escritorio se ve bien.
 
