@@ -59,6 +59,16 @@ con `#calibracion` en la URL). No es para jugadores.
 - [ ] Exporta JSON
 - [ ] Los cuatro checks en verde
 
+## Primer objetivo conocido: los jacks
+
+La revision de T-013 ya encontro un sesgo antes de tener datos: la escala
+provisional ("a igual notas por segundo, igual estrella") subestima los jacks,
+porque un jack concentra todos los golpes en un dedo. Por eso los mapas de
+calibracion tienen que incluir **varios mapas de jacks y de chordjacks** con SR
+conocido, y lo primero a revisar en el informe son `ESCALA_jackspeed` y
+`ESCALA_chordjack`. Al cerrar la calibracion, poner `MODELO_CALIBRADO = true` y
+subir `VERSION_MODELO_DIFICULTAD`.
+
 ## Meta de la calibracion (no de este ticket)
 
 Correlacion de Spearman mayor a 0.85 contra osu!, y los diez casos que mas

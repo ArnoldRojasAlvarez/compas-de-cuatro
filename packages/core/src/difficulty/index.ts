@@ -307,6 +307,15 @@ export function calcularDificultad(chart: Chart): DifficultyResult {
  *   que el modelo esta calculando lo que dice calcular, no un ajuste hecho
  *   a mano.
  *
+ *   SESGO CONOCIDO (revision de Opus, T-013): la regla "a igual notas por
+ *   segundo, igual estrella" subestima los jacks. Un stream a 12 notas/s
+ *   reparte la carga en cuatro dedos (3 golpes por dedo por segundo); un jack
+ *   a 12 notas/s son 12 golpes por segundo en un solo dedo, muchisimo mas
+ *   dificil. Lo mismo, en menor medida, con chordjack. No se corrige a ojo:
+ *   `ESCALA_jackspeed` y `ESCALA_chordjack` son el primer objetivo de la
+ *   calibracion contra mapas reales (T-015). Mientras tanto, la UI marca las
+ *   estrellas como provisionales (T-014).
+ *
  *   Verificado (con estas `ESCALA_k` ya escritas abajo) contra las diez
  *   propiedades del ticket en `packages/core/src/difficulty/index.test.ts`:
  *   discriminacion a 10s, velocidad, stamina, simetria, etc. Un cambio

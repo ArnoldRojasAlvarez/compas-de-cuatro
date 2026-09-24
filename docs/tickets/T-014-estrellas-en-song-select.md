@@ -61,6 +61,13 @@ como instrumentos de medicion):
   se comparan en una sola escala.
 - **Ordenar por estrellas** y **filtrar por rango de estrellas** (estaba en la
   lista original de Arnold).
+- **Marca de provisional.** Las escalas de T-013 no estan calibradas y tienen un
+  sesgo conocido (subestiman los jacks, ver el JSDoc de `PARAMETROS_DIFICULTAD`).
+  Agregar en core `MODELO_CALIBRADO = false` junto a los parametros, y mientras
+  sea `false` la UI muestra las estrellas con una marca discreta de
+  "provisional" (un tooltip o una etiqueta chica que diga que el modelo todavia
+  no se calibro contra osu!). T-015 la pone en `true`. Mostrar un numero sin
+  avisar que es provisional seria enganar al jugador.
 - Quitar la densidad "provisional" de T-011 si ya no hace falta.
 
 ## Fuera de alcance
