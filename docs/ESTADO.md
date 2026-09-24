@@ -8,8 +8,8 @@ Estado corto y siempre al dia. **Si sos una sesion NUEVA, empeza por
 
 ## Donde esta todo
 
-- `main`: limpio, verde, 351 tests + e2e de sincronia.
-- En curso: ver tabla de abajo.
+- `main`: limpio, verde, 394 tests + e2e de sincronia.
+- Nada en curso. Proximo: T-015 (calibracion), que necesita datos de Arnold.
 
 ## Hecho
 
@@ -28,6 +28,7 @@ Estado corto y siempre al dia. **Si sos una sesion NUEVA, empeza por
 | T-011 | Router, song select con biblioteca y dificultades, ajustes |
 | T-012 | Ajustes pulidos, remapeo de teclas, FPS, entrada por `e.code` (bug de teclas muertas) |
 | T-013 | Motor de dificultad de siete skillsets en `core` (escalas provisionales) |
+| T-014 | Estrellas y perfil de skillsets en el song select, Web Worker, cache versionada |
 
 La prueba de feel de Arnold ya se hizo: en una cancion real sus golpes salieron
 centrados en cero. El motor esta bien sincronizado.
@@ -36,17 +37,24 @@ centrados en cero. El motor esta bien sincronizado.
 
 | Ticket | Que es | Estado |
 |---|---|---|
-| T-014 | Estrellas y perfil de siete skillsets en el song select, Web Worker, cache | Despachado |
+| Ninguno | | |
 
 ## Lo que sigue despues
 
 - **T-015:** herramienta de calibracion contra mapas de osu! con star rating
   conocido. Arnold aporta 30 a 50 mapas con su SR y arbitra discrepancias.
+  Ya hay 11 dificultades medidas (ver el ticket) y se le pidio a Arnold el SR
+  de osu! de cada una, mas mapas de jacks y chordjacks.
 - **Header persistente** con tiempo y tiempo jugado.
 - **La cancion y el video del avance II (28 de octubre):** camino critico del
   curso, no depende del codigo.
 
 ## Deuda declarada
+
+- **`npm run dev` usa la `dist` compilada de los paquetes, no el fuente.** Despues
+  de cambiar `core`, `storage`, `audio` o `engine`, correr `npm run typecheck`
+  (que compila) antes de `npm run dev`, o la app no carga con un error de
+  "no provee el export". Arreglo de fondo pendiente: alias de Vite a `src`.
 
 - **Estrellas sin calibrar, con sesgo conocido:** la escala provisional
   subestima los jacks (12 golpes/s en un dedo frente a 3 por dedo en un

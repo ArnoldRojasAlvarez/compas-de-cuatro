@@ -149,6 +149,8 @@ tools/             generadores de fixtures
 - e2e: `cd apps/web && npx playwright test`. Si se queja del navegador:
   `npx playwright install chromium`.
 - Correr la app: `npm run dev` desde la raiz, abrir la URL que imprime Vite.
+  **Ojo:** el dev server resuelve los paquetes por su `dist` compilada. Si
+  cambiaste un paquete, corre `npm run typecheck` primero o la app no carga.
 - Gestor de paquetes: **npm workspaces** (no pnpm, no yarn).
 
 ---
@@ -174,6 +176,8 @@ tools/             generadores de fixtures
 - T-012: ajustes pulidos, remapeo de teclas, FPS, entrada por `e.code`.
 - T-013: motor de dificultad de siete skillsets (escalas provisionales, sesgo de
   jacks documentado).
+- T-014: estrellas y perfil de siete barras en el song select, Web Worker, cache
+  con version del modelo, marca de provisional.
 
 **La prueba de feel ya se hizo:** en una cancion real los golpes de Arnold
 salieron centrados en cero. El motor esta bien sincronizado. Por eso se
