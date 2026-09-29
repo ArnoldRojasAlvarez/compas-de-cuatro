@@ -166,3 +166,11 @@ modelo v3 (`scratchpad/sr-tachyon.mjs`):
 
 Siguiente dato que falta: el SR de FRAGMENT, FREEDOM DiVE, Jacks Practice y
 Las Avispas, para cubrir de 1 a 4 estrellas y los jacks.
+
+## Cuarta tanda y calibracion v1 (28 de setiembre)
+
+Arnold agrego el SR de FRAGMENT, FREEDOM DiVE 4K, Las Avispas y Jacks Practice:
+54 dificultades en total, en `docs/calibracion/sr-osu-lazer.json`. Con eso se
+hizo T-018 (pesos por skillset y curva `1.757 * lineal^0.436`): Spearman 0.962,
+error medio 0.21 estrellas sin re-ajustar. Falta cobertura de jacks de un dedo,
+tech y mapas de mas de 6.3.

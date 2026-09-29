@@ -8,8 +8,8 @@ Estado corto y siempre al dia. **Si sos una sesion NUEVA, empeza por
 
 ## Donde esta todo
 
-- `main`: limpio, verde, 418 tests + e2e de sincronia.
-- En curso: T-018, primera calibracion con 54 SR de osu! lazer.
+- `main`: limpio, verde, 423 tests + e2e de sincronia.
+- En curso: nada.
 
 ## Hecho
 
@@ -31,6 +31,7 @@ Estado corto y siempre al dia. **Si sos una sesion NUEVA, empeza por
 | T-014 | Estrellas y perfil de skillsets en el song select, Web Worker, cache versionada |
 | T-016 | Motor v2: stamina como media movil del strain en estrellas, anclada en regimen; exponente de estrellas (version 2) |
 | T-017 | Jackspeed en cualquier fila con jack; chordjack igual que T-013 (version 3) |
+| T-018 | Calibracion v1 con 54 SR de osu! lazer: Spearman 0.962, error medio 0.21 estrellas (version 4) |
 | T-015 | Herramienta `#calibracion`: SR de osu! por dificultad, Spearman, ajuste log-log, export JSON |
 
 La prueba de feel de Arnold ya se hizo: en una cancion real sus golpes salieron
@@ -40,7 +41,6 @@ centrados en cero. El motor esta bien sincronizado.
 
 | Ticket | Que es | Estado |
 |---|---|---|
-| T-018 | Calibracion v1: pesos por skillset y curva de estrellas | Despachado |
 
 ## Lo que sigue despues
 
@@ -59,16 +59,10 @@ centrados en cero. El motor esta bien sincronizado.
   (que compila) antes de `npm run dev`, o la app no carga con un error de
   "no provee el export". Arreglo de fondo pendiente: alias de Vite a `src`.
 
-- **Estrellas sin calibrar:** la escala lineal infla los mapas densos (los mas
-  pesados dan 15 a 22). Jackspeed ya se activa (T-017) pero esta subvaluado:
-  su escala es la de stream y un jack de un dedo es mas dificil a igual nps. La UI marca las estrellas como
-  provisionales hasta T-015.
-- **Dificultades no 4K se omiten en silencio al importar:** un `.osz` con 4K y 7K
-  (FREEDOM DiVE) importa bien sus 4K, pero no avisa que salto las demas.
-- **Tabla de `#calibracion` en ventanas angostas:** desborda y hay scroll
-  horizontal de pagina. Herramienta de desarrollo, no bloquea.
-- **Ajustes en ventanas angostas:** debajo de ~560 px el boton "+1" se cae a
-  otra linea y se separa de su grupo. En escritorio se ve bien.
+- **Calibracion parcial:** 54 dificultades de chordjack, jumpstream y stream,
+  SR 1.3 a 6.3 (datos en `docs/calibracion/`). Sin cobertura de jacks de un
+  dedo, tech ni mapas de mas de 6.3; jackspeed sigue con peso 1 sin datos.
+  Por eso `MODELO_CALIBRADO = false` y la UI sigue diciendo "provisional".
 
 - **Cambios de velocidad (SV):** se parsean del `.osu` pero no se aplican al
   dibujo. Todo se ve a multiplicador 1.
