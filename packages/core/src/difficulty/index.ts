@@ -106,9 +106,12 @@ function vectorVacio(): SkillVector {
  * decreciente para que un solo pico aislado no domine y el valor converja
  * aunque el mapa sea largo.
  */
-export function calcularDificultad(chart: Chart): DifficultyResult {
+export function calcularDificultad(
+  chart: Chart,
+  parametros: ParametrosDificultad = PARAMETROS_DIFICULTAD,
+): DifficultyResult {
   const filas = construirFilas(chart.notes);
-  const P = PARAMETROS_DIFICULTAD;
+  const P = parametros;
 
   const vector = vectorVacio();
 
@@ -227,22 +230,24 @@ export function calcularDificultad(chart: Chart): DifficultyResult {
     strain.technical += A.technical * v * ratioRitmoAcotado;
 
     // Stamina v2 (T-016): media movil exponencial, en el tiempo, de la
-    // dificultad instantanea de patron m. `m` se mide en UNIDADES DE ESTRELLA:
-    // m = max_k(ESCALA_k * strain_k) sobre los seis de pico. Los strains
-    // crudos no son comparables entre skillsets (la ESCALA de chordjack es
-    // ~4 veces la de stream), y con el max crudo un chordjack sostenido casi
-    // no alimentaba stamina. `exponenteEstrellas` NO se aplica dentro de m
-    // (se aplica una sola vez, al valor agregado de cada skillset al final).
+    // dificultad instantanea de patron m. `m` se mide en UNIDADES LINEALES
+    // (T-018): m = max_k(PESO_k * ESCALA_k * strain_k) sobre los seis de pico.
+    // Los strains crudos no son comparables entre skillsets (la ESCALA de
+    // chordjack es ~4 veces la de stream), y con el max crudo un chordjack
+    // sostenido casi no alimentaba stamina. La curva de estrellas
+    // (`coefEstrellas`, `exponenteEstrellas`) NO se aplica dentro de m (se
+    // aplica una sola vez, al lineal agregado de cada skillset al final).
     // En regimen sostenido S tiende a m; un mapa facil da m bajo y stamina
     // baja por largo que sea. Ya no cuenta notas.
     const E = P.escala;
+    const W = P.pesoCalibracion;
     const m = Math.max(
-      E.stream * strain.stream,
-      E.jumpstream * strain.jumpstream,
-      E.handstream * strain.handstream,
-      E.jackspeed * strain.jackspeed,
-      E.chordjack * strain.chordjack,
-      E.technical * strain.technical,
+      W.stream * E.stream * strain.stream,
+      W.jumpstream * E.jumpstream * strain.jumpstream,
+      W.handstream * E.handstream * strain.handstream,
+      W.jackspeed * E.jackspeed * strain.jackspeed,
+      W.chordjack * E.chordjack * strain.chordjack,
+      W.technical * E.technical * strain.technical,
     );
     const f = Math.exp((-P.decaimientoStamina * dt) / 1000);
     strain.stamina = strain.stamina * f + m * (1 - f);
@@ -268,7 +273,10 @@ export function calcularDificultad(chart: Chart): DifficultyResult {
       valor += pico * peso;
       peso *= P.pesoAgregacion;
     }
-    vector[k] = P.escala[k] * valor ** P.exponenteEstrellas;
+    // T-018: dos etapas. Lineal (T-013 intacto, mas el peso de calibracion) y
+    // despues la curva de estrellas. La curva es monotona creciente y 0 da 0.
+    const lineal = P.pesoCalibracion[k] * P.escala[k] * valor;
+    vector[k] = P.coefEstrellas * lineal ** P.exponenteEstrellas;
   }
 
   let overall = 0;
@@ -282,6 +290,21 @@ export function calcularDificultad(chart: Chart): DifficultyResult {
 // ---------------------------------------------------------------------------
 // Constantes del modelo
 // ---------------------------------------------------------------------------
+
+/** Forma de las constantes del modelo (ver `PARAMETROS_DIFICULTAD`). */
+export interface ParametrosDificultad {
+  readonly dtMinimoMs: number;
+  readonly topeRitmo: number;
+  readonly duracionSeccionMs: number;
+  readonly pesoAgregacion: number;
+  readonly decaimientoRapido: number;
+  readonly decaimientoStamina: number;
+  readonly coefEstrellas: number;
+  readonly exponenteEstrellas: number;
+  readonly pesoCalibracion: Readonly<Record<Skillset, number>>;
+  readonly aportes: Readonly<Record<Exclude<Skillset, 'stamina'>, number>>;
+  readonly escala: Readonly<Record<Skillset, number>>;
+}
 
 /**
  * Todas las constantes del modelo de dificultad, en un solo lugar para
@@ -374,6 +397,12 @@ export function calcularDificultad(chart: Chart): DifficultyResult {
  *   da 1.0146 estrellas, antes 0). `ESCALA_stamina` no cambia: el stream de
  *   referencia de 600s no tiene jacks; re-derivado 1.0000070228262397 contra
  *   1.0000070228262024 (igual a 1e-13). Script: `escala-t017.mjs` (scratchpad).
+ *   T-018 no toca ninguna `ESCALA_k`. ESCALA_stamina re-derivada en T-018 con el
+ *   procedimiento de T-016 (stream sostenido de 600s a 12 nps, con el lineal,
+ *   sin curva): 4.0000021152156915 / 3.999974024093306 = 1.0000070228262024,
+ *   identico al valor de T-016. Con los parametros de produccion y la curva,
+ *   stream y stamina dan los dos 3.21566 en ese mapa. Script: `escala600-t018.mjs`
+ *   (scratchpad).
  *
  *   SESGO CONOCIDO (revision de Opus, T-013): la regla "a igual notas por
  *   segundo, igual estrella" subestima los jacks. Un stream a 12 notas/s
@@ -390,9 +419,25 @@ export function calcularDificultad(chart: Chart): DifficultyResult {
  *   futuro al modelo que desalinee esta tabla lo va a mostrar un test
  *   fallando, no un numero mudo en este comentario.
  *
- * - `exponenteEstrellas` (T-016): `estrella_k = ESCALA_k * valor_k ^ p`. Vale 1
- *   (no cambia nada) hasta que T-015 lo ajuste con datos por minimos
- *   cuadrados log-log. No se elige a ojo.
+ * - CALIBRACION V1 (T-018): la estrella se separa en dos etapas,
+ *   `lineal_k = pesoCalibracion_k * ESCALA_k * valor_k` (T-013 intacto mas el
+ *   peso) y `estrella_k = coefEstrellas * lineal_k ^ exponenteEstrellas`.
+ *   `ESCALA_k` NO cambia: sigue siendo el anclaje sintetico de T-013 (y T-016
+ *   para stamina). `overall` es el max de las estrellas (equivale a aplicar la
+ *   curva al max lineal, porque la curva es monotona). El `m` de stamina usa
+ *   `lineal_k` (con el peso, sin curva): stream tiene peso 1 y la curva es la
+ *   misma para todos, asi que el anclaje de stamina en regimen sigue valiendo
+ *   (re-derivado en T-018, ver el punto de ESCALA_stamina abajo).
+ *   Valores: `coefEstrellas` 1.757, `exponenteEstrellas` 0.436 (minimos
+ *   cuadrados log-log contra el SR de osu!), `pesoCalibracion` jumpstream 1.15
+ *   y chordjack 1.4 (busqueda en grilla, relativos a stream; dejando afuera un
+ *   set por vez quedan en 1.15 a 1.3 y 1.4 a 1.55, estables). Jackspeed queda en
+ *   1: no es identificable con estos datos (ningun mapa lo tiene de dominante).
+ *   Cobertura de los datos: 54 dificultades de 5 sets (Tachyon Anime
+ *   Chordjacks 2, FREEDOM DiVE 4K, FRAGMENT, Las Avispas, Jacks Practice),
+ *   SR de 1.32 a 6.28, fuente osu! lazer (docs/calibracion/sr-osu-lazer.json).
+ *   Faltan mapas de jacks puros, stream y tech con SR, por eso
+ *   `MODELO_CALIBRADO` sigue en `false`.
  *
  * - `aportes` no incluye stamina: en v2 stamina no acumula notas.
  *
@@ -416,24 +461,24 @@ export function calcularDificultad(chart: Chart): DifficultyResult {
  *   de crecer, para que un unico salto de datos corrupto (o una nota suelta
  *   aislada) no domine todo el skillset.
  */
-export const PARAMETROS_DIFICULTAD: {
-  readonly dtMinimoMs: number;
-  readonly topeRitmo: number;
-  readonly duracionSeccionMs: number;
-  readonly pesoAgregacion: number;
-  readonly decaimientoRapido: number;
-  readonly decaimientoStamina: number;
-  readonly exponenteEstrellas: number;
-  readonly aportes: Readonly<Record<Exclude<Skillset, 'stamina'>, number>>;
-  readonly escala: Readonly<Record<Skillset, number>>;
-} = {
+export const PARAMETROS_DIFICULTAD: ParametrosDificultad = {
   dtMinimoMs: 25,
   topeRitmo: 2,
   duracionSeccionMs: 400,
   pesoAgregacion: 0.9,
   decaimientoRapido: 0.35,
   decaimientoStamina: 0.02,
-  exponenteEstrellas: 1,
+  coefEstrellas: 1.757,
+  exponenteEstrellas: 0.436,
+  pesoCalibracion: {
+    stream: 1,
+    jumpstream: 1.15,
+    handstream: 1,
+    stamina: 1,
+    jackspeed: 1,
+    chordjack: 1.4,
+    technical: 1,
+  },
   aportes: {
     stream: 1,
     jumpstream: 1,
@@ -465,9 +510,11 @@ export const PARAMETROS_DIFICULTAD: {
  * evitar"). Historial: 1 = T-013 (stamina acumulaba notas); 2 = T-016
  * (stamina como media movil de la dificultad de patron, mas
  * `exponenteEstrellas`); 3 = T-017 (jackspeed aporta con cualquier columna
- * repetida sin importar el tamano de la fila; chordjack sigue como en T-013).
+ * repetida sin importar el tamano de la fila; chordjack sigue como en T-013);
+ * 4 = T-018 (primera calibracion contra el SR de osu!: pesos por skillset y
+ * curva de estrellas en dos etapas).
  */
-export const VERSION_MODELO_DIFICULTAD = 3;
+export const VERSION_MODELO_DIFICULTAD = 4;
 
 /**
  * Mientras sea `false`, el modelo NO esta calibrado contra mapas reales:

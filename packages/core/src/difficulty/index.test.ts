@@ -20,7 +20,12 @@ declare const process: { hrtime: { bigint: () => bigint } };
 import { describe, expect, it } from 'vitest';
 import type { Chart, Column, Note } from '../types.js';
 import { SKILLSETS } from '../types.js';
-import { PARAMETROS_DIFICULTAD, calcularDificultad, construirFilas } from './index.js';
+import {
+  PARAMETROS_DIFICULTAD,
+  calcularDificultad,
+  construirFilas,
+  type ParametrosDificultad,
+} from './index.js';
 
 // ---------------------------------------------------------------------------
 // Helpers para armar mapas y patrones de prueba
@@ -345,6 +350,25 @@ const MAPAS_REFERENCIA_V1: Array<[string, Note[]]> = [
   ['irregular', patronRitmoIrregular(10_000, 60, 140)],
 ];
 
+/**
+ * Parametros neutros (T-018): sin pesos, sin curva (coef 1, exponente 1). Con
+ * ellos el modelo tiene que dar exactamente el vector de v3.
+ */
+const PARAMETROS_NEUTROS: ParametrosDificultad = {
+  ...PARAMETROS_DIFICULTAD,
+  coefEstrellas: 1,
+  exponenteEstrellas: 1,
+  pesoCalibracion: {
+    stream: 1,
+    jumpstream: 1,
+    handstream: 1,
+    stamina: 1,
+    jackspeed: 1,
+    chordjack: 1,
+    technical: 1,
+  },
+};
+
 describe('stamina v2', () => {
   it('un mapa largo (240s) y facil (5 nps, filas de 1 y 2 mezcladas) NO tiene stamina como skillset maximo', () => {
     const notes = mapaFacilMezclado(240_000);
@@ -378,7 +402,7 @@ describe('stamina v2', () => {
     expect(largo.overall).toBeGreaterThanOrEqual(corto.overall);
   });
 
-  it('con exponenteEstrellas = 1 los seis skillsets de pico dan los mismos valores que en v1', () => {
+  it('con parametros neutros (pesos 1, coef 1, exponente 1) los seis skillsets de pico dan los mismos valores que en v1', () => {
     // Valores obtenidos corriendo el modelo v1 (antes de T-016) sobre estos
     // mapas (`stamina` cambio a proposito y no se compara; los otros seis no,
     // salvo chordjack.jackspeed por T-017, ver abajo).
@@ -428,14 +452,86 @@ describe('stamina v2', () => {
     };
 
     for (const [nombre, notes] of MAPAS_REFERENCIA_V1) {
-      const { vector } = calcularDificultad(crearMapa(notes));
+      // T-018: se inyectan parametros neutros. Con los de produccion (pesos y
+      // curva de la calibracion) los numeros ya no son los de v1 a proposito.
+      const { vector } = calcularDificultad(crearMapa(notes), PARAMETROS_NEUTROS);
       for (const [k, esperado] of Object.entries(V1[nombre]!)) {
         expect(vector[k as keyof typeof vector], `${nombre}.${k}`).toBe(esperado);
       }
     }
 
-    // Al final, para poder correr este test tambien contra el modelo viejo.
-    expect(PARAMETROS_DIFICULTAD.exponenteEstrellas).toBe(1);
+    // Sanidad: los neutros de verdad son neutros (el test no puede pasar
+    // por accidente con parametros que no lo son).
+    expect(PARAMETROS_NEUTROS.exponenteEstrellas).toBe(1);
+    expect(PARAMETROS_NEUTROS.coefEstrellas).toBe(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 5b bis. Calibracion v1 (T-018): curva de estrellas en dos etapas
+// ---------------------------------------------------------------------------
+
+describe('calibracion v1 (T-018)', () => {
+  it('los parametros de produccion son los de la calibracion', () => {
+    expect(PARAMETROS_DIFICULTAD.coefEstrellas).toBe(1.757);
+    expect(PARAMETROS_DIFICULTAD.exponenteEstrellas).toBe(0.436);
+    expect(PARAMETROS_DIFICULTAD.pesoCalibracion.jumpstream).toBe(1.15);
+    expect(PARAMETROS_DIFICULTAD.pesoCalibracion.chordjack).toBe(1.4);
+    for (const k of ['stream', 'handstream', 'stamina', 'jackspeed', 'technical'] as const) {
+      expect(PARAMETROS_DIFICULTAD.pesoCalibracion[k], k).toBe(1);
+    }
+  });
+
+  it('la curva es monotona: mas lineal da mas estrella, y 0 da 0', () => {
+    // Un mapa mas rapido tiene mas lineal en stream; con la curva de
+    // produccion la estrella tiene que crecer con el (una curva con
+    // exponente negativo o no monotona lo delataria).
+    const nps = [4, 6, 8, 10, 12, 16, 20];
+    const estrellas = nps.map(
+      (n) => calcularDificultad(crearMapa(patronStream(10_000, 1000 / n))).vector.stream,
+    );
+    for (let i = 1; i < estrellas.length; i++) {
+      expect(estrellas[i]!, `${nps[i]} nps`).toBeGreaterThan(estrellas[i - 1]!);
+    }
+    // Lineal 0 da estrella 0: un mapa sin notas (y skillsets sin aporte).
+    expect(calcularDificultad(crearMapa([])).overall).toBe(0);
+    const stream = calcularDificultad(crearMapa(patronStream(10_000)));
+    expect(stream.vector.handstream).toBe(0);
+  });
+
+  it('la estrella es coef * lineal ^ exponente, con el lineal de los parametros neutros', () => {
+    // Con neutros el vector es el lineal; con los de produccion (stream tiene
+    // peso 1) la estrella es la curva aplicada a ese lineal.
+    const chart = crearMapa(patronStream(10_000));
+    const lineal = calcularDificultad(chart, PARAMETROS_NEUTROS).vector.stream;
+    const estrella = calcularDificultad(chart).vector.stream;
+    const esperado =
+      PARAMETROS_DIFICULTAD.coefEstrellas * lineal ** PARAMETROS_DIFICULTAD.exponenteEstrellas;
+    expect(estrella).toBeCloseTo(esperado, 12);
+  });
+
+  it('el peso de calibracion multiplica el lineal antes de la curva', () => {
+    const chart = crearMapa(patronChordjack(10_000));
+    const base = calcularDificultad(chart, PARAMETROS_NEUTROS).vector.chordjack;
+    const conPeso = calcularDificultad(chart).vector.chordjack;
+    const esperado =
+      PARAMETROS_DIFICULTAD.coefEstrellas *
+      (PARAMETROS_DIFICULTAD.pesoCalibracion.chordjack * base) **
+        PARAMETROS_DIFICULTAD.exponenteEstrellas;
+    expect(conPeso).toBeCloseTo(esperado, 12);
+  });
+
+  it('overall es la curva aplicada al maximo lineal', () => {
+    const chart = crearMapa(patronJumpstream(10_000));
+    const maxLineal = Math.max(
+      ...SKILLSETS.map((k) => PARAMETROS_DIFICULTAD.pesoCalibracion[k] *
+        calcularDificultad(chart, {
+          ...PARAMETROS_NEUTROS,
+        }).vector[k]),
+    );
+    const esperado =
+      PARAMETROS_DIFICULTAD.coefEstrellas * maxLineal ** PARAMETROS_DIFICULTAD.exponenteEstrellas;
+    expect(calcularDificultad(chart).overall).toBeCloseTo(esperado, 12);
   });
 });
 
@@ -545,9 +641,17 @@ describe('invariancia temporal', () => {
     // ejemplo, que dependiera del tiempo absoluto en vez de dt entre filas)
     // daria una diferencia muchisimo mayor que este piso de ruido, y esta
     // tolerancia la seguiria agarrando.
+    //
+    // T-018: la curva x^0.436 amplifica el ruido de punto flotante cerca de 0
+    // (un technical de 1.8e-16 pasa a ~1e-7 en estrellas), asi que la
+    // comparacion se hace sobre el lineal (deshaciendo la curva), donde el
+    // ruido sigue en 1e-13. El umbral no se aflojo.
+    const { coefEstrellas, exponenteEstrellas } = PARAMETROS_DIFICULTAD;
+    const aLineal = (estrella: number): number =>
+      (estrella / coefEstrellas) ** (1 / exponenteEstrellas);
     for (const skillset of SKILLSETS) {
-      const a = vectorOriginal[skillset];
-      const b = vectorDesplazado[skillset];
+      const a = aLineal(vectorOriginal[skillset]);
+      const b = aLineal(vectorDesplazado[skillset]);
       const toleracia = 1e-9 * Math.max(1, Math.abs(a), Math.abs(b));
       expect(Math.abs(a - b)).toBeLessThanOrEqual(toleracia);
     }
