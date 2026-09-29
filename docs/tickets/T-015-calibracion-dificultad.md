@@ -141,3 +141,28 @@ plan original.
 
 La herramienta funciona y esta fusionada. La calibracion en si se hace despues,
 con los datos de Arnold.
+
+## Tercera tanda (28 de setiembre): primer SR real de osu!
+
+Arnold paso capturas de osu! lazer con el SR de 32 dificultades de Tachyon Anime
+Chordjacks 2 (rango 4.22 a 6.28; faltan Keikan, Last Stardust 1.2 y 1.3, Over
+The Galaxy 1.3 y My Sweet Maiden 1.4, que no salian en pantalla). Contra el
+modelo v3 (`scratchpad/sr-tachyon.mjs`):
+
+- **Spearman 0.913** en las 32, y 0.905 solo en las 8 versiones base. La meta
+  de la fase era mayor a 0.85: el orden ya la cumple en chordjack.
+- **Ajuste log-log:** `a = 2.29`, `p = 0.38`, R² = 0.83. Confirma que hace
+  falta un exponente bastante menor a 1, pero **no se aplica todavia**: el rango
+  de SR es angosto (4 a 6) y un p ajustado ahi no vale para los extremos (con
+  esos numeros, el EASY de FRAGMENT daria 1.8). Hace falta el SR de mapas
+  faciles y de otros estilos para fijar la curva.
+- **Discrepancias sistematicas** (con el ajuste aplicado):
+  - Endou - Coolest, el unico donde domina jumpstream, sale sobrevaluado en
+    todas sus variantes (+0.03 a +0.53). Jumpstream pesa demasiado frente a
+    chordjack.
+  - Akino - MIIRO sale subvaluado en todas (-0.14 a -0.51). Hay algo en ese
+    mapa que el modelo no ve; pedirle a Arnold que diga que patron tiene.
+- Ojo: es el SR de lazer, no el de stable. Usar siempre la misma fuente.
+
+Siguiente dato que falta: el SR de FRAGMENT, FREEDOM DiVE, Jacks Practice y
+Las Avispas, para cubrir de 1 a 4 estrellas y los jacks.
