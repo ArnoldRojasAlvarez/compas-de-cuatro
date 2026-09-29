@@ -211,10 +211,17 @@ export function calcularDificultad(chart: Chart): DifficultyResult {
         // fila.size es 3 o 4 (una fila valida tiene entre 1 y 4 notas).
         strain.handstream += A.handstream * v * (fila.size / 3);
       }
-    } else if (fila.size === 1) {
-      strain.jackspeed += A.jackspeed * (1000 / dcMinimo);
     } else {
-      strain.chordjack += A.chordjack * (1000 / dcMinimo) * (fila.size / 2);
+      // T-017: jackspeed aporta con al menos una columna repetida, sin
+      // importar el tamano de la fila (un jack de un dedo dentro de un
+      // acorde, [12][2][23], es jackspeed). Chordjack conserva la definicion
+      // de T-013: fila de 2 o mas notas con alguna columna repetida (acordes
+      // densos con repeticiones parciales, [124][14][134]). Una fila de 2 o
+      // mas notas con jack alimenta los dos skillsets.
+      strain.jackspeed += A.jackspeed * (1000 / dcMinimo);
+      if (fila.size >= 2) {
+        strain.chordjack += A.chordjack * (1000 / dcMinimo) * (fila.size / 2);
+      }
     }
 
     strain.technical += A.technical * v * ratioRitmoAcotado;
@@ -353,6 +360,21 @@ export function calcularDificultad(chart: Chart): DifficultyResult {
  *   que el modelo esta calculando lo que dice calcular, no un ajuste hecho
  *   a mano.
  *
+ *   RE-ANCLAJE EN T-017 (jackspeed por columna repetida): se volvio a aplicar
+ *   la regla 1 (patrones canonicos, 12 nps, 60s, `escala = 1`, `ESCALA_k =
+ *   4 / valor_k`) con la definicion final: jackspeed aporta en cualquier fila
+ *   con al menos una columna repetida (`1000/dcMinimo`, sin importar el
+ *   tamano de la fila); chordjack queda EXACTAMENTE como en T-013 (fila de 2
+ *   o mas notas con alguna columna repetida, aporte `(1000/dcMinimo) *
+ *   size/2`). Los dos patrones canonicos (una columna repetida; acorde {0,1}
+ *   repetido) dan los mismos valores que en T-013: valor_jackspeed
+ *   4174.575169287345 y valor_chordjack 1058.8625120551303, asi que las dos
+ *   escalas no cambian. Lo que cambia es que una fila con jack de 2 o mas
+ *   notas alimenta los dos skillsets (en el canonico de chordjack jackspeed
+ *   da 1.0146 estrellas, antes 0). `ESCALA_stamina` no cambia: el stream de
+ *   referencia de 600s no tiene jacks; re-derivado 1.0000070228262397 contra
+ *   1.0000070228262024 (igual a 1e-13). Script: `escala-t017.mjs` (scratchpad).
+ *
  *   SESGO CONOCIDO (revision de Opus, T-013): la regla "a igual notas por
  *   segundo, igual estrella" subestima los jacks. Un stream a 12 notas/s
  *   reparte la carga en cuatro dedos (3 golpes por dedo por segundo); un jack
@@ -442,9 +464,10 @@ export const PARAMETROS_DIFICULTAD: {
  * que nadie se entere (ver el ticket T-014, "La trampa que hay que
  * evitar"). Historial: 1 = T-013 (stamina acumulaba notas); 2 = T-016
  * (stamina como media movil de la dificultad de patron, mas
- * `exponenteEstrellas`).
+ * `exponenteEstrellas`); 3 = T-017 (jackspeed aporta con cualquier columna
+ * repetida sin importar el tamano de la fila; chordjack sigue como en T-013).
  */
-export const VERSION_MODELO_DIFICULTAD = 2;
+export const VERSION_MODELO_DIFICULTAD = 3;
 
 /**
  * Mientras sea `false`, el modelo NO esta calibrado contra mapas reales:

@@ -380,7 +380,8 @@ describe('stamina v2', () => {
 
   it('con exponenteEstrellas = 1 los seis skillsets de pico dan los mismos valores que en v1', () => {
     // Valores obtenidos corriendo el modelo v1 (antes de T-016) sobre estos
-    // mapas (`stamina` cambio a proposito y no se compara; los otros seis no).
+    // mapas (`stamina` cambio a proposito y no se compara; los otros seis no,
+    // salvo chordjack.jackspeed por T-017, ver abajo).
     const V1: Record<string, Record<string, number>> = {
       mezclado: {
         stream: 0.168617436816568,
@@ -410,7 +411,9 @@ describe('stamina v2', () => {
         stream: 0,
         jumpstream: 0,
         handstream: 0,
-        jackspeed: 0,
+        // T-017: cambio a proposito. Antes de T-017 este acorde repetido no
+        // aportaba a jackspeed (0); ahora una fila con jack alimenta jackspeed tambien.
+        jackspeed: 0.8180981243647812,
         chordjack: 3.2253593617033736,
         technical: 1.7787561674984835e-16,
       },
@@ -433,6 +436,64 @@ describe('stamina v2', () => {
 
     // Al final, para poder correr este test tambien contra el modelo viejo.
     expect(PARAMETROS_DIFICULTAD.exponenteEstrellas).toBe(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 5c. Jackspeed por columna (T-017)
+// ---------------------------------------------------------------------------
+
+/**
+ * Ciclo [12][2][23] repetido: la columna 2 (en base 0, la del medio) se
+ * repite en cada fila, pero las filas tienen dos, una y dos notas. Es un jack
+ * de un dedo dentro de filas de distinto tamano. Columnas en base 0: [12] =
+ * {1,2}, [2] = {2}, [23] = {2,3}. Cada fila comparte exactamente UNA columna
+ * con la anterior (la 2), asi que nunca hay dos columnas repetidas juntas.
+ */
+function patronJackDeUnDedoEnAcordes(duracionMs: number, dt: number = 1000 / 12): Note[] {
+  const ciclo: Column[][] = [[1, 2], [2], [2, 3]];
+  const notes: Note[] = [];
+  let i = 0;
+  for (let t = 0; t < duracionMs; t += dt) {
+    for (const c of ciclo[i % ciclo.length]!) notes.push(nota(c, t));
+    i++;
+  }
+  return notes;
+}
+
+/** Jackspeed medido con el modelo v2 (main, T-016) sobre `patronJackDeUnDedoEnAcordes(10_000)`. */
+const JACKSPEED_V2_ACORDES_CON_JACK = 1.1146920885168663;
+
+describe('jackspeed por columna (T-017)', () => {
+  it('[12][2][23] repetido: jackspeed es al menos 2.5 veces el del modelo v2', () => {
+    const { vector } = calcularDificultad(crearMapa(patronJackDeUnDedoEnAcordes(10_000)));
+
+    // Con el modelo v2 solo las filas de 1 nota alimentaban jackspeed (1.11
+    // en este mapa); las filas de 2 caian solo en chordjack. Con T-017 todas
+    // las filas con la columna 2 repetida aportan: medido 3.234 (2.9x el v2).
+    // Umbral 2.5x: entre ambos, sin pegarse al valor medido.
+    expect(vector.jackspeed).toBeGreaterThanOrEqual(2.5 * JACKSPEED_V2_ACORDES_CON_JACK);
+    // El acorde con jack parcial sigue contando como chordjack (definicion de T-013).
+    expect(vector.chordjack).toBeGreaterThan(0);
+  });
+
+  it('un jack puro de una columna [1][1][1]: jackspeed es el maximo del vector', () => {
+    const notes: Note[] = [];
+    for (let t = 0; t < 10_000; t += 1000 / 12) notes.push(nota(1, t));
+    const { vector } = calcularDificultad(crearMapa(notes));
+
+    const maximo = Math.max(...SKILLSETS.map((k) => vector[k]));
+    expect(vector.jackspeed).toBe(maximo);
+    expect(vector.jackspeed).toBeGreaterThan(1);
+  });
+
+  it('[12][12][12] repetido: chordjack es el maximo del vector', () => {
+    const notes: Note[] = [];
+    for (let t = 0; t < 10_000; t += 1000 / 6) notes.push(nota(1, t), nota(2, t));
+    const { vector } = calcularDificultad(crearMapa(notes));
+
+    const maximo = Math.max(...SKILLSETS.map((k) => vector[k]));
+    expect(vector.chordjack).toBe(maximo);
   });
 });
 
