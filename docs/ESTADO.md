@@ -1,6 +1,6 @@
 # Estado del proyecto
 
-Ultima actualizacion: 24 de setiembre de 2026.
+Ultima actualizacion: 28 de setiembre de 2026.
 
 Estado corto y siempre al dia. **Si sos una sesion NUEVA, empeza por
 `docs/HANDOFF.md`** (metodo de trabajo, reglas, lecciones), despues
@@ -8,8 +8,8 @@ Estado corto y siempre al dia. **Si sos una sesion NUEVA, empeza por
 
 ## Donde esta todo
 
-- `main`: limpio, verde, 394 tests + e2e de sincronia.
-- En curso: T-015 y T-016 en paralelo. Ver tabla.
+- `main`: limpio, verde, 411 tests + e2e de sincronia.
+- En curso: T-016 en revision (segunda vuelta). Ver tabla.
 
 ## Hecho
 
@@ -29,6 +29,7 @@ Estado corto y siempre al dia. **Si sos una sesion NUEVA, empeza por
 | T-012 | Ajustes pulidos, remapeo de teclas, FPS, entrada por `e.code` (bug de teclas muertas) |
 | T-013 | Motor de dificultad de siete skillsets en `core` (escalas provisionales) |
 | T-014 | Estrellas y perfil de skillsets en el song select, Web Worker, cache versionada |
+| T-015 | Herramienta `#calibracion`: SR de osu! por dificultad, Spearman, ajuste log-log, export JSON |
 
 La prueba de feel de Arnold ya se hizo: en una cancion real sus golpes salieron
 centrados en cero. El motor esta bien sincronizado.
@@ -37,16 +38,15 @@ centrados en cero. El motor esta bien sincronizado.
 
 | Ticket | Que es | Estado |
 |---|---|---|
-| T-015 | Herramienta de calibracion (`#calibracion`) | Despachado |
-| T-016 | Motor v2: stamina sostenida y exponente de estrellas | Despachado |
+| T-016 | Motor v2: stamina sostenida y exponente de estrellas | Devuelto: el max de strains mezclaba unidades crudas y stamina quedo casi muerta; se corrige normalizando por ESCALA |
 | T-017 | Jackspeed por columna | Escrito, espera a T-016 |
 
 ## Lo que sigue despues
 
-- **T-015:** herramienta de calibracion contra mapas de osu! con star rating
-  conocido. Arnold aporta 30 a 50 mapas con su SR y arbitra discrepancias.
-  Ya hay 11 dificultades medidas (ver el ticket) y se le pidio a Arnold el SR
-  de osu! de cada una, mas mapas de jacks y chordjacks.
+- **Calibracion con datos:** la herramienta ya esta (T-015). Falta que Arnold
+  anote el SR de osu! de unas 25 dificultades. Los tres primeros `.osz`
+  (FRAGMENT, FREEDOM DiVE, Galaxy Collapse) ya no estan en Descargas; hacen
+  falta de nuevo para verificar T-016 y T-017 contra las escaleras faciles.
 - **Header persistente** con tiempo y tiempo jugado.
 - **La cancion y el video del avance II (28 de octubre):** camino critico del
   curso, no depende del codigo.
@@ -64,6 +64,8 @@ centrados en cero. El motor esta bien sincronizado.
   provisionales hasta T-015.
 - **Dificultades no 4K se omiten en silencio al importar:** un `.osz` con 4K y 7K
   (FREEDOM DiVE) importa bien sus 4K, pero no avisa que salto las demas.
+- **Tabla de `#calibracion` en ventanas angostas:** desborda y hay scroll
+  horizontal de pagina. Herramienta de desarrollo, no bloquea.
 - **Ajustes en ventanas angostas:** debajo de ~560 px el boton "+1" se cae a
   otra linea y se separa de su grupo. En escritorio se ve bien.
 
