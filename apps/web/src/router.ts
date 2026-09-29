@@ -25,6 +25,7 @@
 import { mostrarMenu } from './menu.js';
 import { mostrarSongSelect } from './song-select.js';
 import { mostrarAjustes } from './ajustes.js';
+import { mostrarCalibracion } from './calibracion.js';
 
 /** Arranca el router sobre `contenedor` (siempre `#app`) y muestra el menu, la pantalla raiz. */
 export function iniciarRouter(contenedor: HTMLElement): void {
@@ -38,5 +39,37 @@ export function iniciarRouter(contenedor: HTMLElement): void {
     mostrarAjustes(contenedor, { aMenu });
   }
 
-  aMenu();
+  // T-015: `#calibracion` es una herramienta de desarrollo, fuera de la
+  // navegacion normal (ningun boton lleva ahi). Se entra escribiendo el hash
+  // en la URL, ya sea al cargar o con la app abierta.
+  //
+  // Cambiar el hash con otra pantalla montada (song select con audio y
+  // worker vivos, por ejemplo) no se puede desmontar limpio desde aca: esas
+  // pantallas se limpian solas solo por sus propios botones. Por eso, si el
+  // hash cambia de un lado al otro de #calibracion, se recarga la pagina
+  // (barato, es una herramienta de dev) en vez de montar encima. Salir de la
+  // herramienta usa replaceState para limpiar el hash sin disparar
+  // `hashchange`, asi el boton "Volver" no recarga.
+  const HASH_CALIBRACION = '#calibracion';
+  const enCalibracion = window.location.hash === HASH_CALIBRACION;
+  window.addEventListener('hashchange', () => {
+    if ((window.location.hash === HASH_CALIBRACION) !== enCalibracion) {
+      window.location.reload();
+    }
+  });
+
+  if (enCalibracion) {
+    mostrarCalibracion(contenedor, {
+      aMenu: () => {
+        window.history.replaceState(
+          null,
+          '',
+          window.location.pathname + window.location.search,
+        );
+        aMenu();
+      },
+    });
+  } else {
+    aMenu();
+  }
 }

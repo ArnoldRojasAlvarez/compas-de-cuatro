@@ -16,3 +16,6 @@ export {
   MODELO_CALIBRADO,
 } from './difficulty/index.js';
 export { hashMapa } from './difficulty/hash.js';
+
+export type { AjusteLogLog } from './estadistica/index.js';
+export { rangos, spearman, ajustarLeyDePotencia } from './estadistica/index.js';

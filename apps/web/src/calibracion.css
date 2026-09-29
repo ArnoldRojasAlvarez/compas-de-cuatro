@@ -1,0 +1,113 @@
+/* T-015: estilos de la pantalla de calibracion (herramienta de desarrollo).
+   Archivo propio a proposito, importado desde calibracion.ts: no toca
+   style.css. Solo usa tokens de tokens.css. */
+
+.calibracion {
+  align-self: stretch;
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: var(--espacio-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--espacio-4);
+  align-items: stretch;
+  justify-content: flex-start;
+}
+
+.calibracion__cabecera {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--espacio-4);
+  flex-wrap: wrap;
+}
+
+.calibracion__titulo {
+  margin: 0;
+  font-family: var(--fuente-display);
+  font-size: var(--tipo-xl);
+}
+
+.calibracion__acciones {
+  display: flex;
+  gap: var(--espacio-2);
+}
+
+.calibracion h2 {
+  margin: 0 0 var(--espacio-2);
+  font-family: var(--fuente-display);
+  font-size: var(--tipo-lg);
+}
+
+.calibracion__aviso,
+.calibracion__estado,
+.calibracion__vacio {
+  margin: 0;
+  color: var(--tinta-2);
+  font-size: var(--tipo-sm);
+}
+
+.calibracion__resumen,
+.calibracion__peores {
+  background: var(--superficie);
+  border: 1px solid var(--linea);
+  padding: var(--espacio-4);
+  overflow-x: auto;
+}
+
+.calibracion__dato {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--espacio-4);
+  padding: var(--espacio-1) 0;
+  font-size: var(--tipo-sm);
+}
+
+.calibracion__dato-etiqueta {
+  color: var(--tinta-2);
+}
+
+.calibracion__dato-valor {
+  font-family: var(--fuente-datos);
+}
+
+.calibracion__tabla {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--tipo-sm);
+}
+
+.calibracion__tabla th,
+.calibracion__tabla td {
+  text-align: left;
+  padding: var(--espacio-1) var(--espacio-2);
+  border-bottom: 1px solid var(--linea);
+  vertical-align: middle;
+}
+
+.calibracion__tabla th {
+  color: var(--tinta-2);
+  font-weight: 500;
+}
+
+.calibracion__num,
+.calibracion__vector {
+  font-family: var(--fuente-datos);
+  white-space: nowrap;
+}
+
+.calibracion__vector {
+  color: var(--tinta-2);
+  font-size: var(--tipo-xs);
+}
+
+#app .calibracion input.calibracion__sr {
+  width: 5em;
+}
+
+#app .calibracion input.calibracion__notas {
+  width: 100%;
+  min-width: 12em;
+}
