@@ -66,3 +66,21 @@ programa. Eso va adelantado y hay que decirlo en el video.
    1920x1080, que es lo que graba OBS.
 4. Opcional: que la musica del menu sea la cancion de Arnold en vez del click
    track.
+
+## Video corto de esta semana (completa el Avance I)
+
+Arnold necesita un video esta semana para completar el Avance I. La cancion no
+esta hecha, asi que el video muestra **el punto de partida**: el programa que ya
+existe y la primera sesion de composicion. De 2 a 3 minutos.
+
+| Parte | Duracion | Que se graba |
+|---|---|---|
+| 1. El programa | 45 s | Tetra en pantalla completa (F11): menu, song select con el perfil de skillsets, una partida corta con el click track o el mapa de prueba, resultados con la desviacion en ms |
+| 2. Primera sesion | 1 a 1.5 min | El DAW: fijar tempo y compas 4/4, prender el metronomo y armar el primer ritmo de bateria (bombo en 1 y 3, caja en 2 y 4, hi-hat en corcheas). Acelerado donde sea repetitivo |
+| 3. Cierre | 15 s | Texto: que sigue (terminar la pieza en octubre, mapearla, tocarla en vivo en la semana 17) |
+
+Extra si alcanza el tiempo: mapear 8 compases de ese ritmo en osu! lazer,
+exportar el `.osz` y tocarlo en Tetra. Es el proyecto entero en miniatura.
+
+Tetra ya esta listo para grabar: `npm run dev` funciona sin compilar antes
+(desde el 29 de setiembre).
