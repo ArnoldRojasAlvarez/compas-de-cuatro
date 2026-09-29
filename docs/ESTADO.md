@@ -8,8 +8,8 @@ Estado corto y siempre al dia. **Si sos una sesion NUEVA, empeza por
 
 ## Donde esta todo
 
-- `main`: limpio, verde, 411 tests + e2e de sincronia.
-- En curso: T-016 en revision (segunda vuelta). Ver tabla.
+- `main`: limpio, verde, 415 tests + e2e de sincronia.
+- En curso: T-017. Ver tabla.
 
 ## Hecho
 
@@ -29,6 +29,7 @@ Estado corto y siempre al dia. **Si sos una sesion NUEVA, empeza por
 | T-012 | Ajustes pulidos, remapeo de teclas, FPS, entrada por `e.code` (bug de teclas muertas) |
 | T-013 | Motor de dificultad de siete skillsets en `core` (escalas provisionales) |
 | T-014 | Estrellas y perfil de skillsets en el song select, Web Worker, cache versionada |
+| T-016 | Motor v2: stamina como media movil del strain en estrellas, anclada en regimen; exponente de estrellas (version 2) |
 | T-015 | Herramienta `#calibracion`: SR de osu! por dificultad, Spearman, ajuste log-log, export JSON |
 
 La prueba de feel de Arnold ya se hizo: en una cancion real sus golpes salieron
@@ -38,15 +39,14 @@ centrados en cero. El motor esta bien sincronizado.
 
 | Ticket | Que es | Estado |
 |---|---|---|
-| T-016 | Motor v2: stamina sostenida y exponente de estrellas | Devuelto: el max de strains mezclaba unidades crudas y stamina quedo casi muerta; se corrige normalizando por ESCALA |
-| T-017 | Jackspeed por columna | Escrito, espera a T-016 |
+| T-017 | Jackspeed por columna | Despachado |
 
 ## Lo que sigue despues
 
 - **Calibracion con datos:** la herramienta ya esta (T-015). Falta que Arnold
-  anote el SR de osu! de unas 25 dificultades. Los tres primeros `.osz`
-  (FRAGMENT, FREEDOM DiVE, Galaxy Collapse) ya no estan en Descargas; hacen
-  falta de nuevo para verificar T-016 y T-017 contra las escaleras faciles.
+  anote el SR de osu! de unas 25 dificultades. Los `.osz` de Arnold los
+  importa osu! lazer y desaparecen de Descargas; se leen de su almacen con
+  `medir-lazer.mjs` (scratchpad, ver T-017).
 - **Header persistente** con tiempo y tiempo jugado.
 - **La cancion y el video del avance II (28 de octubre):** camino critico del
   curso, no depende del codigo.

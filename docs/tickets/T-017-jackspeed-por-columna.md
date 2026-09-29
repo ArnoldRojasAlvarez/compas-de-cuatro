@@ -49,9 +49,13 @@ Re-anclar `ESCALA_jackspeed` y `ESCALA_chordjack` con la regla 1 de T-013
 
 ## Verificacion contra mapas reales (obligatoria)
 
-Con el script de medicion (ver T-016) sobre los seis `.osz` de Arnold en
-`C:\Users\Arnold\Downloads` (FRAGMENT, FREEDOM DiVE, Galaxy Collapse, Jacks
-Practice, Tachyon Anime Chordjacks 2, Las Avispas). Criterios:
+Los `.osz` ya no estan en Descargas: osu! lazer los importo a su almacen
+(`%APPDATA%\osu\files`, archivos por hash). Hay un script que los lee de ahi,
+solo los seis titulos de Arnold:
+`C:\Users\Arnold\AppData\Local\Temp\claude\C--Users-Arnold-Desktop-Musica\d3546429-2d3f-4f3a-9262-41aa0a376f52\scratchpad\medir-lazer.mjs`.
+Se corre con `RAIZ=<tu worktree> node medir-lazer.mjs` despues de `npm run typecheck`
+(sin `RAIZ` mide `main`). La salida de referencia del modelo v2 esta en `lazer-v2.txt`
+en esa misma carpeta. No copies nada de ese almacen al repo. Criterios:
 
 - Jackspeed deja de ser ~0 en Jacks Practice.
 - Siguen en orden las escaleras (FRAGMENT, FREEDOM DiVE, Jacks Practice Lv.1 a
