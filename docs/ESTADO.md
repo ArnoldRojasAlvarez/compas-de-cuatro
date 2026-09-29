@@ -54,10 +54,10 @@ centrados en cero. El motor esta bien sincronizado.
 
 ## Deuda declarada
 
-- **`npm run dev` usa la `dist` compilada de los paquetes, no el fuente.** Despues
-  de cambiar `core`, `storage`, `audio` o `engine`, correr `npm run typecheck`
-  (que compila) antes de `npm run dev`, o la app no carga con un error de
-  "no provee el export". Arreglo de fondo pendiente: alias de Vite a `src`.
+- **Scripts y Vitest usan la `dist`:** `npm run dev` y `npm run build` ya leen
+  el fuente de los paquetes (alias en `apps/web/vite.config.ts`). Los scripts
+  de medicion y Vitest siguen importando la `dist`: correr `npm run typecheck`
+  despues de cambiar un paquete.
 
 - **Calibracion parcial:** 54 dificultades de chordjack, jumpstream y stream,
   SR 1.3 a 6.3 (datos en `docs/calibracion/`). Sin cobertura de jacks de un

@@ -475,7 +475,7 @@ export function mostrarSongSelect(contenedor: HTMLElement, opciones: OpcionesSon
   // mientras sea false, toda estrella que se muestra lleva esta marca
   // discreta (no un numero como si fuera definitivo, ver el ticket).
   const TITULO_ESTRELLA_PROVISIONAL =
-    'Provisional: el modelo de dificultad todavia no se calibro contra mapas reales (T-015).';
+    'Calibracion parcial: ajustada con 54 mapas de osu! de chordjack, jumpstream y stream. En otros estilos puede desviarse.';
 
   /** Vuelca `overall` (si ya esta calculado) o un placeholder de "calculando" en `badge`, con color y marca de provisional. Ancho fijo por CSS (ver .tetra-estrella): no salta el layout al pasar de un estado al otro. */
   function aplicarEstrellaABadge(badge: HTMLElement, overall: number | undefined): void {
