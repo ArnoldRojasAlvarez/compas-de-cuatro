@@ -9,7 +9,7 @@ Estado corto y siempre al dia. **Si sos una sesion NUEVA, empeza por
 ## Donde esta todo
 
 - `main`: limpio, verde, 418 tests + e2e de sincronia.
-- En curso: nada. Proximo paso del motor: calibrar con SR de osu! (T-015).
+- En curso: T-018, primera calibracion con 54 SR de osu! lazer.
 
 ## Hecho
 
@@ -40,6 +40,7 @@ centrados en cero. El motor esta bien sincronizado.
 
 | Ticket | Que es | Estado |
 |---|---|---|
+| T-018 | Calibracion v1: pesos por skillset y curva de estrellas | Despachado |
 
 ## Lo que sigue despues
 
