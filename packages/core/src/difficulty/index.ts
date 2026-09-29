@@ -19,7 +19,14 @@
 //   provisional. Ver el JSDoc de `PARAMETROS_DIFICULTAD` para el detalle y
 //   como se obtuvo cada numero.
 
-import type { Chart, DifficultyResult, Note, Row, SkillVector, Skillset } from '../types.js';
+import type {
+  Chart,
+  DifficultyResult,
+  Note,
+  Row,
+  SkillVector,
+  Skillset,
+} from '../types.js';
 import { COLUMN_COUNT, SKILLSETS } from '../types.js';
 
 /**
@@ -186,9 +193,11 @@ export function calcularDificultad(chart: Chart): DifficultyResult {
 
     // Decaimiento exponencial de los siete acumuladores antes de sumar el
     // aporte de esta fila (S_k = S_k * exp(-decaimiento_k * dt/1000) + aporte_k).
+    // Stamina (v2) no entra aca: no decae ni acumula notas, es una media
+    // movil que se actualiza mas abajo, despues de los seis de pico.
     for (const k of SKILLSETS) {
-      const decaimiento = k === 'stamina' ? P.decaimientoStamina : P.decaimientoRapido;
-      strain[k] *= Math.exp((-decaimiento * dt) / 1000);
+      if (k === 'stamina') continue;
+      strain[k] *= Math.exp((-P.decaimientoRapido * dt) / 1000);
     }
 
     const A = P.aportes;
@@ -209,7 +218,27 @@ export function calcularDificultad(chart: Chart): DifficultyResult {
     }
 
     strain.technical += A.technical * v * ratioRitmoAcotado;
-    strain.stamina += A.stamina * fila.size;
+
+    // Stamina v2 (T-016): media movil exponencial, en el tiempo, de la
+    // dificultad instantanea de patron m. `m` se mide en UNIDADES DE ESTRELLA:
+    // m = max_k(ESCALA_k * strain_k) sobre los seis de pico. Los strains
+    // crudos no son comparables entre skillsets (la ESCALA de chordjack es
+    // ~4 veces la de stream), y con el max crudo un chordjack sostenido casi
+    // no alimentaba stamina. `exponenteEstrellas` NO se aplica dentro de m
+    // (se aplica una sola vez, al valor agregado de cada skillset al final).
+    // En regimen sostenido S tiende a m; un mapa facil da m bajo y stamina
+    // baja por largo que sea. Ya no cuenta notas.
+    const E = P.escala;
+    const m = Math.max(
+      E.stream * strain.stream,
+      E.jumpstream * strain.jumpstream,
+      E.handstream * strain.handstream,
+      E.jackspeed * strain.jackspeed,
+      E.chordjack * strain.chordjack,
+      E.technical * strain.technical,
+    );
+    const f = Math.exp((-P.decaimientoStamina * dt) / 1000);
+    strain.stamina = strain.stamina * f + m * (1 - f);
 
     registrarEnSeccion(fila.time);
 
@@ -232,7 +261,7 @@ export function calcularDificultad(chart: Chart): DifficultyResult {
       valor += pico * peso;
       peso *= P.pesoAgregacion;
     }
-    vector[k] = P.escala[k] * valor;
+    vector[k] = P.escala[k] * valor ** P.exponenteEstrellas;
   }
 
   let overall = 0;
@@ -280,7 +309,24 @@ export function calcularDificultad(chart: Chart): DifficultyResult {
  *
  *   `stamina` se ancla distinto (regla 3 del ticket): con el mismo stream de
  *   referencia de 60s/12nps, `ESCALA_stamina = 4 / valor_stamina` de ESE
- *   mismo corrido (no un patron propio). Consecuencia buscada: en ese
+ *   mismo corrido (no un patron propio). RE-ANCLADA EN T-016 (regla 3 nueva, reemplaza
+ *   la de T-013 para stamina): stamina ya no suma notas sino que es una media
+ *   movil (vida media 35s) de m = max_k(ESCALA_k * strain_k) sobre los seis de
+ *   pico, es decir, en unidades de estrella (con el max de strains crudos
+ *   stamina quedaba casi muerta en maratones de chordjack). La referencia es
+ *   un stream SOSTENIDO de 600s a 12 nps, donde la media movil ya esta en
+ *   regimen, y el anclaje es `stamina_estrella = stream_estrella` en ese mismo
+ *   mapa (no un 4 fijo). Con `ESCALA_stamina = 1` (las otras seis con su
+ *   valor definitivo) ese mapa da stream = 4.0000021152156915 y
+ *   `valor_stamina` = 3.999974024093306, entonces
+ *   `ESCALA_stamina = 4.0000021152156915 / 3.999974024093306 =
+ *   1.0000070228262024`. Se cambio la referencia de 60s a 600s porque con 60s
+ *   la media movil estaba a ~70% de su regimen (`valor_stamina` 2.62) y la
+ *   escala resultante (1.525) hacia que stamina superara al patron en
+ *   cualquier mapa largo, aunque fuera facil. Las otras seis escalas no
+ *   cambian. En m no se aplica `exponenteEstrellas`; se aplica una sola vez,
+ *   al valor agregado de cada skillset (stamina incluido).
+ *   Consecuencia buscada: en ese
  *   stream de 60s, `stamina` y `stream` dan igual (los dos 4.00); en mapas
  *   mas cortos gana el patron, en maratones mas largos gana stamina (ver
  *   "Stamina mide duracion" en los tests).
@@ -298,7 +344,7 @@ export function calcularDificultad(chart: Chart): DifficultyResult {
  *   | jackspeed   | columna 0 repetida                             | 4174.575169287345    | 0.0009581813329002417  |
  *   | chordjack   | acorde {0,1} repetido                          | 1058.8625120551303   | 0.0037776386966769278  |
  *   | technical   | roll con dt alternando 50/116.667ms            | 4250.013129211589    | 0.0009411735630901524  |
- *   | stamina     | (del mismo corrido de stream de referencia)    | 4053.4417552066866   | 0.0009868157091099089  |
+ *   | stamina (v2)| (del mismo corrido de stream de referencia)    | 3.999974024093306    | 1.0000070228262024     |
  *
  *   Que `jackspeed` de exactamente el mismo `valor_k` que `stream` no es
  *   casualidad: con una sola columna, `1000/dc` (jackspeed) y `v` (stream)
@@ -321,6 +367,12 @@ export function calcularDificultad(chart: Chart): DifficultyResult {
  *   discriminacion a 10s, velocidad, stamina, simetria, etc. Un cambio
  *   futuro al modelo que desalinee esta tabla lo va a mostrar un test
  *   fallando, no un numero mudo en este comentario.
+ *
+ * - `exponenteEstrellas` (T-016): `estrella_k = ESCALA_k * valor_k ^ p`. Vale 1
+ *   (no cambia nada) hasta que T-015 lo ajuste con datos por minimos
+ *   cuadrados log-log. No se elige a ojo.
+ *
+ * - `aportes` no incluye stamina: en v2 stamina no acumula notas.
  *
  * - `decaimientoRapido` / `decaimientoStamina`: tasas de decaimiento en 1/s
  *   (`S_k *= exp(-decaimiento_k * dt_segundos)`). Los seis skillsets de pico
@@ -349,7 +401,8 @@ export const PARAMETROS_DIFICULTAD: {
   readonly pesoAgregacion: number;
   readonly decaimientoRapido: number;
   readonly decaimientoStamina: number;
-  readonly aportes: Readonly<Record<Skillset, number>>;
+  readonly exponenteEstrellas: number;
+  readonly aportes: Readonly<Record<Exclude<Skillset, 'stamina'>, number>>;
   readonly escala: Readonly<Record<Skillset, number>>;
 } = {
   dtMinimoMs: 25,
@@ -358,11 +411,11 @@ export const PARAMETROS_DIFICULTAD: {
   pesoAgregacion: 0.9,
   decaimientoRapido: 0.35,
   decaimientoStamina: 0.02,
+  exponenteEstrellas: 1,
   aportes: {
     stream: 1,
     jumpstream: 1,
     handstream: 1,
-    stamina: 1,
     jackspeed: 1,
     chordjack: 1,
     technical: 1,
@@ -371,7 +424,7 @@ export const PARAMETROS_DIFICULTAD: {
     stream: 0.0009581813329002417,
     jumpstream: 0.004189058695563852,
     handstream: 0.00734121928546354,
-    stamina: 0.0009868157091099089,
+    stamina: 1.0000070228262024,
     jackspeed: 0.0009581813329002417,
     chordjack: 0.0037776386966769278,
     technical: 0.0009411735630901524,
@@ -387,9 +440,11 @@ export const PARAMETROS_DIFICULTAD: {
  * TIENE que subir esta version: si no, la cache sigue devolviendo el
  * resultado viejo y el song select muestra estrellas desactualizadas sin
  * que nadie se entere (ver el ticket T-014, "La trampa que hay que
- * evitar"). T-015, cuando calibre `escala` de verdad, sube esto a 2.
+ * evitar"). Historial: 1 = T-013 (stamina acumulaba notas); 2 = T-016
+ * (stamina como media movil de la dificultad de patron, mas
+ * `exponenteEstrellas`).
  */
-export const VERSION_MODELO_DIFICULTAD = 1;
+export const VERSION_MODELO_DIFICULTAD = 2;
 
 /**
  * Mientras sea `false`, el modelo NO esta calibrado contra mapas reales:

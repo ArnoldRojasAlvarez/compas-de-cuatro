@@ -20,7 +20,7 @@ declare const process: { hrtime: { bigint: () => bigint } };
 import { describe, expect, it } from 'vitest';
 import type { Chart, Column, Note } from '../types.js';
 import { SKILLSETS } from '../types.js';
-import { calcularDificultad, construirFilas } from './index.js';
+import { PARAMETROS_DIFICULTAD, calcularDificultad, construirFilas } from './index.js';
 
 // ---------------------------------------------------------------------------
 // Helpers para armar mapas y patrones de prueba
@@ -231,7 +231,9 @@ describe('discriminacion: cada patron canonico tiene como skillset maximo el suy
   const DURACION_MS = 10_000;
 
   function argmax(vector: Record<string, number>): string {
-    return SKILLSETS.reduce((mejor, actual) => (vector[actual]! > vector[mejor]! ? actual : mejor));
+    return SKILLSETS.reduce((mejor, actual) =>
+      vector[actual]! > vector[mejor]! ? actual : mejor,
+    );
   }
 
   it('roll de un carril por fila da argmax stream', () => {
@@ -264,7 +266,9 @@ describe('discriminacion: cada patron canonico tiene como skillset maximo el suy
     // los cinco patrones de arriba): technical mide irregularidad encima de
     // un patron base, no reemplaza al patron. La propiedad es la
     // comparacion entre las dos variantes, no el argmax de ninguna.
-    const irregular = calcularDificultad(crearMapa(patronRitmoIrregular(DURACION_MS, 60, 140)));
+    const irregular = calcularDificultad(
+      crearMapa(patronRitmoIrregular(DURACION_MS, 60, 140)),
+    );
     const parejo = calcularDificultad(crearMapa(patronStream(DURACION_MS, 100)));
 
     // dt=100 exacto en cada fila: ratioRitmo da ln(1)=0 exacto en punto
@@ -313,13 +317,136 @@ describe('stamina mide duracion', () => {
 });
 
 // ---------------------------------------------------------------------------
+// 5b. Stamina v2 (T-016): media movil de la dificultad de patron
+// ---------------------------------------------------------------------------
+
+/**
+ * Mapa facil y largo con patrones mezclados, en un orden fijo y determinista:
+ * ciclo de seis filas de 1 y de 2 notas, cada fila disjunta de la anterior
+ * (sin jacks, tampoco en la vuelta del ciclo). 9 notas por ciclo de 6 filas
+ * cada 300ms: 1.5 notas por fila a 3.33 filas por segundo = 5 notas por segundo.
+ */
+function mapaFacilMezclado(duracionMs: number): Note[] {
+  const ciclo: Column[][] = [[0], [1, 2], [3], [0, 1], [2], [1, 3]];
+  const notes: Note[] = [];
+  let i = 0;
+  for (let t = 0; t < duracionMs; t += 300) {
+    for (const c of ciclo[i % ciclo.length]!) notes.push(nota(c, t));
+    i++;
+  }
+  return notes;
+}
+
+const MAPAS_REFERENCIA_V1: Array<[string, Note[]]> = [
+  ['mezclado', mapaFacilMezclado(60_000)],
+  ['jumpstream', patronJumpstream(10_000)],
+  ['handstream', patronHandstream(10_000)],
+  ['chordjack', patronChordjack(10_000)],
+  ['irregular', patronRitmoIrregular(10_000, 60, 140)],
+];
+
+describe('stamina v2', () => {
+  it('un mapa largo (240s) y facil (5 nps, filas de 1 y 2 mezcladas) NO tiene stamina como skillset maximo', () => {
+    const notes = mapaFacilMezclado(240_000);
+    // Sanidad del generador: de verdad son unas 5 notas por segundo.
+    expect(notes.length / 240).toBeGreaterThan(4.9);
+    expect(notes.length / 240).toBeLessThan(5.1);
+
+    const { vector } = calcularDificultad(crearMapa(notes));
+    const maximoDePatron = Math.max(
+      ...SKILLSETS.filter((k) => k !== 'stamina').map((k) => vector[k]),
+    );
+
+    // Con el modelo viejo (stamina sumaba todas las notas) stamina ganaba en
+    // este mapa: este test fallaba. Con la media movil, stamina no puede
+    // superar el strain de patron que promedia.
+    expect(vector.stamina).toBeLessThan(maximoDePatron);
+  });
+
+  it('un chordjack sostenido de 180s deja a stamina a la altura del chordjack', () => {
+    // Numeros medidos: stamina/chordjack = 1.48 con m en estrellas, y 0.375 con
+    // el max de strains crudos (el defecto). Umbral 0.8: entre ambos.
+    const { vector } = calcularDificultad(crearMapa(patronChordjack(180_000)));
+    expect(vector.stamina).toBeGreaterThanOrEqual(0.8 * vector.chordjack);
+  });
+
+  it('el mismo stream denso de 180s tiene mas stamina que el de 15s, y un overall mayor o igual', () => {
+    const corto = calcularDificultad(crearMapa(patronStream(15_000)));
+    const largo = calcularDificultad(crearMapa(patronStream(180_000)));
+
+    expect(largo.vector.stamina).toBeGreaterThan(corto.vector.stamina);
+    expect(largo.overall).toBeGreaterThanOrEqual(corto.overall);
+  });
+
+  it('con exponenteEstrellas = 1 los seis skillsets de pico dan los mismos valores que en v1', () => {
+    // Valores obtenidos corriendo el modelo v1 (antes de T-016) sobre estos
+    // mapas (`stamina` cambio a proposito y no se compara; los otros seis no).
+    const V1: Record<string, Record<string, number>> = {
+      mezclado: {
+        stream: 0.168617436816568,
+        jumpstream: 0.7371773961011495,
+        handstream: 0,
+        jackspeed: 0,
+        chordjack: 0,
+        technical: 0,
+      },
+      jumpstream: {
+        stream: 0.7413204586122378,
+        jumpstream: 3.215527436496619,
+        handstream: 0,
+        jackspeed: 0,
+        chordjack: 0,
+        technical: 0,
+      },
+      handstream: {
+        stream: 0.42290998789913553,
+        jumpstream: 0,
+        handstream: 3.2096541210104452,
+        jackspeed: 0,
+        chordjack: 0,
+        technical: 1.7787561674984835e-16,
+      },
+      chordjack: {
+        stream: 0,
+        jumpstream: 0,
+        handstream: 0,
+        jackspeed: 0,
+        chordjack: 3.2253593617033736,
+        technical: 1.7787561674984835e-16,
+      },
+      irregular: {
+        stream: 2.70852791995906,
+        jumpstream: 0,
+        handstream: 0,
+        jackspeed: 0,
+        chordjack: 0,
+        technical: 2.2373736851857404,
+      },
+    };
+
+    for (const [nombre, notes] of MAPAS_REFERENCIA_V1) {
+      const { vector } = calcularDificultad(crearMapa(notes));
+      for (const [k, esperado] of Object.entries(V1[nombre]!)) {
+        expect(vector[k as keyof typeof vector], `${nombre}.${k}`).toBe(esperado);
+      }
+    }
+
+    // Al final, para poder correr este test tambien contra el modelo viejo.
+    expect(PARAMETROS_DIFICULTAD.exponenteEstrellas).toBe(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // 6. Simetria espejo
 // ---------------------------------------------------------------------------
 
 describe('simetria espejo', () => {
   it('reflejar las columnas (c -> 3 - c) da EXACTAMENTE el mismo vector', () => {
     const original = patronJumpstream(10_000);
-    const espejo = original.map((n): Note => ({ ...n, column: (3 - n.column) as Column }));
+    const espejo = original.map((n): Note => ({
+      ...n,
+      column: (3 - n.column) as Column,
+    }));
 
     const vectorOriginal = calcularDificultad(crearMapa(original)).vector;
     const vectorEspejo = calcularDificultad(crearMapa(espejo)).vector;
