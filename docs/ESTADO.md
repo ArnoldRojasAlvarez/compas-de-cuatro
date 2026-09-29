@@ -8,8 +8,8 @@ Estado corto y siempre al dia. **Si sos una sesion NUEVA, empeza por
 
 ## Donde esta todo
 
-- `main`: limpio, verde, 415 tests + e2e de sincronia.
-- En curso: T-017. Ver tabla.
+- `main`: limpio, verde, 418 tests + e2e de sincronia.
+- En curso: nada. Proximo paso del motor: calibrar con SR de osu! (T-015).
 
 ## Hecho
 
@@ -30,6 +30,7 @@ Estado corto y siempre al dia. **Si sos una sesion NUEVA, empeza por
 | T-013 | Motor de dificultad de siete skillsets en `core` (escalas provisionales) |
 | T-014 | Estrellas y perfil de skillsets en el song select, Web Worker, cache versionada |
 | T-016 | Motor v2: stamina como media movil del strain en estrellas, anclada en regimen; exponente de estrellas (version 2) |
+| T-017 | Jackspeed en cualquier fila con jack; chordjack igual que T-013 (version 3) |
 | T-015 | Herramienta `#calibracion`: SR de osu! por dificultad, Spearman, ajuste log-log, export JSON |
 
 La prueba de feel de Arnold ya se hizo: en una cancion real sus golpes salieron
@@ -39,7 +40,6 @@ centrados en cero. El motor esta bien sincronizado.
 
 | Ticket | Que es | Estado |
 |---|---|---|
-| T-017 | Jackspeed por columna | Despachado |
 
 ## Lo que sigue despues
 
@@ -59,8 +59,8 @@ centrados en cero. El motor esta bien sincronizado.
   "no provee el export". Arreglo de fondo pendiente: alias de Vite a `src`.
 
 - **Estrellas sin calibrar:** la escala lineal infla los mapas densos (los mas
-  pesados dan 15 a 22). Jackspeed casi nunca se activa en mapas reales por una
-  definicion demasiado estrecha (T-017). La UI marca las estrellas como
+  pesados dan 15 a 22). Jackspeed ya se activa (T-017) pero esta subvaluado:
+  su escala es la de stream y un jack de un dedo es mas dificil a igual nps. La UI marca las estrellas como
   provisionales hasta T-015.
 - **Dificultades no 4K se omiten en silencio al importar:** un `.osz` con 4K y 7K
   (FREEDOM DiVE) importa bien sus 4K, pero no avisa que salto las demas.
