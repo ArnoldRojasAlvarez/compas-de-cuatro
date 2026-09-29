@@ -9,7 +9,7 @@ Estado corto y siempre al dia. **Si sos una sesion NUEVA, empeza por
 ## Donde esta todo
 
 - `main`: limpio, verde, 394 tests + e2e de sincronia.
-- Nada en curso. Proximo: T-015 (calibracion), que necesita datos de Arnold.
+- En curso: T-015 y T-016 en paralelo. Ver tabla.
 
 ## Hecho
 
@@ -37,7 +37,9 @@ centrados en cero. El motor esta bien sincronizado.
 
 | Ticket | Que es | Estado |
 |---|---|---|
-| Ninguno | | |
+| T-015 | Herramienta de calibracion (`#calibracion`) | Despachado |
+| T-016 | Motor v2: stamina sostenida y exponente de estrellas | Despachado |
+| T-017 | Jackspeed por columna | Escrito, espera a T-016 |
 
 ## Lo que sigue despues
 
@@ -56,9 +58,10 @@ centrados en cero. El motor esta bien sincronizado.
   (que compila) antes de `npm run dev`, o la app no carga con un error de
   "no provee el export". Arreglo de fondo pendiente: alias de Vite a `src`.
 
-- **Estrellas sin calibrar, con sesgo conocido:** la escala provisional
-  subestima los jacks (12 golpes/s en un dedo frente a 3 por dedo en un
-  stream). Lo corrige T-015. La UI las marca como provisionales.
+- **Estrellas sin calibrar:** la escala lineal infla los mapas densos (los mas
+  pesados dan 15 a 22). Jackspeed casi nunca se activa en mapas reales por una
+  definicion demasiado estrecha (T-017). La UI marca las estrellas como
+  provisionales hasta T-015.
 - **Dificultades no 4K se omiten en silencio al importar:** un `.osz` con 4K y 7K
   (FREEDOM DiVE) importa bien sus 4K, pero no avisa que salto las demas.
 - **Ajustes en ventanas angostas:** debajo de ~560 px el boton "+1" se cae a

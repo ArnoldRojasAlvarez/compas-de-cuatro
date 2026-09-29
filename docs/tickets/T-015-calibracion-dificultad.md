@@ -65,8 +65,8 @@ La revision de T-013 ya encontro un sesgo antes de tener datos: la escala
 provisional ("a igual notas por segundo, igual estrella") subestima los jacks,
 porque un jack concentra todos los golpes en un dedo. Por eso los mapas de
 calibracion tienen que incluir **varios mapas de jacks y de chordjacks** con SR
-conocido, y lo primero a revisar en el informe son `ESCALA_jackspeed` y
-`ESCALA_chordjack`. Al cerrar la calibracion, poner `MODELO_CALIBRADO = true` y
+conocido, y lo primero a revisar en el informe es `ESCALA_jackspeed` (la parte
+de chordjack quedo en duda con la segunda tanda de datos, ver abajo). Al cerrar la calibracion, poner `MODELO_CALIBRADO = true` y
 subir `VERSION_MODELO_DIFICULTAD`.
 
 ## Primeros datos reales (24 de setiembre, antes de calibrar)
@@ -113,6 +113,23 @@ Lo que dicen:
    tiene stamina baja, y una maraton de jumpstream la tiene alta.
 4. **Faltan mapas de jacks.** Ninguno de los tres tiene jacks relevantes (jack
    menor a 1 en todos), asi que el sesgo de jacks no se puede medir todavia.
+
+## Segunda tanda de datos (28 de setiembre): jacks y chordjacks
+
+Arnold aporto Jacks Practice (escalera Lv.1 a Lv.5), Tachyon Anime Chordjacks 2
+(40 dificultades, con variantes de velocidad 1.1 a 1.4) y Las Avispas (1.0x a
+1.3x). Resultados con el motor de T-014:
+
+- **Todas las variantes de velocidad salen en orden** (cada una mas rapida,
+  estrictamente mas dificil) y la escalera de Jacks Practice tambien. Las
+  variantes de velocidad son verdad de referencia gratis: sirven para validar
+  sin necesitar el SR de osu!.
+- **Jackspeed da menos de 0.8 en todos**, incluido Jacks Practice. Es un defecto
+  de definicion, no de calibracion: ver T-017.
+- **Correccion a lo dicho arriba:** los chordjacks no parecen subestimados. Los
+  mas densos dan entre 18 y 22 (Keikan no Senritsu 1.2: 22.18), igual de
+  inflados que todo lo de arriba. El sesgo que se sostiene es el de los jacks de
+  un dedo (jackspeed). El SR de osu! lo confirmara o no.
 
 ## Meta de la calibracion (no de este ticket)
 
