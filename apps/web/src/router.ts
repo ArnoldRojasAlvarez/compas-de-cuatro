@@ -7,6 +7,7 @@
 //   menu  ->  song-select  ->  juego  ->  resultados  ->  song-select
 //     |
 //     +----> ajustes  ->  menu
+//     +----> mapeador ->  menu | song-select
 //
 // "juego" y "resultados" no son pantallas de este router: song-select.ts
 // arranca el juego llamando a runGame directo (game.ts) y vuelve a
@@ -26,17 +27,21 @@ import { mostrarMenu } from './menu.js';
 import { mostrarSongSelect } from './song-select.js';
 import { mostrarAjustes } from './ajustes.js';
 import { mostrarCalibracion } from './calibracion.js';
+import { mostrarMapeador } from './mapeador.js';
 
 /** Arranca el router sobre `contenedor` (siempre `#app`) y muestra el menu, la pantalla raiz. */
 export function iniciarRouter(contenedor: HTMLElement): void {
   function aMenu(): void {
-    mostrarMenu(contenedor, { aJugar: aSongSelect, aAjustes });
+    mostrarMenu(contenedor, { aJugar: aSongSelect, aAjustes, aMapeador });
   }
   function aSongSelect(): void {
     mostrarSongSelect(contenedor, { aMenu });
   }
   function aAjustes(): void {
     mostrarAjustes(contenedor, { aMenu });
+  }
+  function aMapeador(): void {
+    mostrarMapeador(contenedor, { aMenu, aSongSelect });
   }
 
   // T-015: `#calibracion` es una herramienta de desarrollo, fuera de la

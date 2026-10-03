@@ -16,6 +16,8 @@ export interface OpcionesMenu {
   aJugar: () => void;
   /** Ir a ajustes. */
   aAjustes: () => void;
+  /** Ir al mapeador (editor de mapas, manual y automatico). */
+  aMapeador: () => void;
 }
 
 /**
@@ -87,6 +89,17 @@ export function mostrarMenu(contenedor: HTMLElement, opciones: OpcionesMenu): vo
     opciones.aAjustes();
   });
   accesos.appendChild(botonAjustes);
+
+  const botonMapeador = document.createElement('button');
+  botonMapeador.type = 'button';
+  botonMapeador.className = 'tetra-menu-boton';
+  botonMapeador.textContent = 'Mapeador';
+  botonMapeador.addEventListener('click', () => {
+    logo?.detener();
+    opciones.aMapeador();
+  });
+  // Entre Jugar y Ajustes: crear es parte del juego, ajustar no.
+  accesos.insertBefore(botonMapeador, botonAjustes);
 
   menu.appendChild(accesos);
 

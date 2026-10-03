@@ -1,0 +1,284 @@
+/* Mapeador (mapeador.ts): editor de mapas manual y automatico. Panel de
+   controles a la izquierda en tarjetas, escena con el canvas a la derecha.
+   Todo sale de tokens.css; los inputs de texto, numeros y selects heredan
+   el estilo base de style.css. */
+
+.tetra-mapeador {
+  align-self: stretch;
+  display: grid;
+  grid-template-columns: minmax(280px, 340px) minmax(0, 1fr);
+  gap: var(--espacio-4);
+  width: 100%;
+  box-sizing: border-box;
+  height: calc(100vh - var(--alto-header, 32px));
+  padding: var(--espacio-4);
+  text-align: left;
+}
+
+/* -- Panel ------------------------------------------------------------ */
+
+.tetra-mp-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espacio-3);
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: var(--espacio-2);
+  scrollbar-width: thin;
+  scrollbar-color: var(--linea) transparent;
+}
+
+.tetra-mp-cabecera {
+  display: flex;
+  align-items: center;
+  gap: var(--espacio-3);
+}
+
+.tetra-mp-titulo {
+  margin: 0;
+  font-family: var(--fuente-display);
+  font-size: var(--tipo-lg);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.tetra-mp-tarjeta {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espacio-2);
+  padding: var(--espacio-3) var(--espacio-4);
+  background: var(--superficie);
+  border: 1px solid var(--linea);
+  border-radius: var(--radio-panel);
+}
+
+.tetra-mp-tarjeta-titulo {
+  margin: 0 0 var(--espacio-1);
+  font-family: var(--fuente-cuerpo);
+  font-size: var(--tipo-xs);
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--acento);
+}
+
+.tetra-mp-campo {
+  display: grid;
+  grid-template-columns: 96px minmax(0, 1fr);
+  align-items: center;
+  gap: var(--espacio-2);
+}
+
+.tetra-mp-etiqueta {
+  font-size: var(--tipo-xs);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--tinta-3);
+}
+
+.tetra-mp-campo input[type='text'],
+.tetra-mp-campo input[type='number'],
+.tetra-mp-campo select {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.tetra-mp-fila {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--espacio-2);
+}
+
+.tetra-mp-fila > button {
+  flex: 1 1 auto;
+}
+
+.tetra-mp-fila-rango {
+  flex-wrap: nowrap;
+  align-items: center;
+}
+
+.tetra-mp-fila-rango input[type='range'] {
+  flex: 1 1 auto;
+}
+
+.tetra-mp-valor {
+  min-width: 4ch;
+  font-family: var(--fuente-datos);
+  font-variant-numeric: tabular-nums;
+  font-size: var(--tipo-xs);
+  color: var(--tinta-2);
+  text-align: right;
+}
+
+.tetra-mp-casilla {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--espacio-2);
+  font-size: var(--tipo-sm);
+  color: var(--tinta-2);
+  cursor: pointer;
+}
+
+.tetra-mp-casilla input {
+  accent-color: var(--acento);
+}
+
+.tetra-mp-zona {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espacio-2);
+  padding: var(--espacio-3);
+  border: 1px dashed var(--linea);
+  border-radius: var(--radio-control);
+  background: var(--fondo);
+}
+
+.tetra-mp-archivo-nombre {
+  font-family: var(--fuente-datos);
+  font-size: var(--tipo-xs);
+  color: var(--tinta-2);
+  overflow-wrap: anywhere;
+}
+
+.tetra-mp-archivo {
+  font-family: var(--fuente-cuerpo);
+  font-size: var(--tipo-xs);
+  color: var(--tinta-2);
+}
+
+.tetra-mp-archivo::file-selector-button {
+  margin-right: var(--espacio-2);
+  padding: var(--espacio-1) var(--espacio-3);
+  font-family: var(--fuente-cuerpo);
+  font-size: var(--tipo-xs);
+  font-weight: 500;
+  color: var(--tinta);
+  background: var(--superficie-2);
+  border: 1px solid var(--linea);
+  border-radius: var(--radio-control);
+  cursor: pointer;
+}
+
+.tetra-mp-archivo::file-selector-button:hover {
+  background: var(--linea);
+}
+
+.tetra-mp-estado {
+  padding: var(--espacio-3);
+  font-size: var(--tipo-sm);
+  line-height: 1.45;
+  color: var(--tinta-2);
+  background: var(--superficie);
+  border: 1px solid var(--linea);
+  border-left: 3px solid var(--tinta-3);
+  border-radius: var(--radio-control);
+}
+
+.tetra-mp-estado[data-tipo='ok'] {
+  border-left-color: var(--j-200);
+  color: var(--tinta);
+}
+
+.tetra-mp-estado[data-tipo='error'] {
+  border-left-color: var(--j-miss);
+  color: var(--tinta);
+}
+
+.tetra-mp-estado button {
+  margin-top: var(--espacio-2);
+}
+
+/* -- Escena ----------------------------------------------------------- */
+
+.tetra-mp-escena {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espacio-2);
+  min-width: 0;
+  min-height: 0;
+}
+
+.tetra-mp-barra {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--espacio-2) var(--espacio-4);
+  padding: var(--espacio-2) var(--espacio-3);
+  background: var(--superficie);
+  border: 1px solid var(--linea);
+  border-radius: var(--radio-panel);
+}
+
+.tetra-mp-play {
+  min-width: 112px;
+}
+
+.tetra-mp-zoom {
+  width: 110px;
+  accent-color: var(--acento);
+}
+
+.tetra-mp-lectura {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-left: auto;
+  text-align: right;
+}
+
+.tetra-mp-tiempo {
+  font-family: var(--fuente-datos);
+  font-variant-numeric: tabular-nums;
+  font-size: var(--tipo-sm);
+  color: var(--tinta);
+}
+
+.tetra-mp-notas {
+  font-family: var(--fuente-datos);
+  font-size: var(--tipo-xs);
+  color: var(--tinta-3);
+}
+
+.tetra-mp-lienzo {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 240px;
+  overflow: hidden;
+  background: var(--fondo);
+  border: 1px solid var(--linea);
+  border-radius: var(--radio-panel);
+}
+
+.tetra-mp-canvas {
+  position: absolute;
+  inset: 0;
+  display: block;
+  cursor: crosshair;
+}
+
+.tetra-mp-posicion {
+  width: 100%;
+  accent-color: var(--acento);
+}
+
+.tetra-mp-ayuda {
+  font-size: var(--tipo-xs);
+  line-height: 1.5;
+  color: var(--tinta-3);
+}
+
+/* -- Pantallas angostas: el panel pasa arriba -------------------------- */
+
+@media (max-width: 860px) {
+  .tetra-mapeador {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto minmax(420px, 1fr);
+    height: auto;
+    min-height: calc(100vh - var(--alto-header, 32px));
+  }
+
+  .tetra-mp-panel {
+    max-height: 46vh;
+  }
+}
