@@ -1,0 +1,68 @@
+/* Menu principal (menu.ts). Movido desde style.css sin cambios (pasada grafica, T-019 a T-024): cada pantalla tiene su CSS propio para que varios tickets puedan trabajar en paralelo sin chocar en un solo archivo. */
+
+/* ---------------------------------------------------------------------- */
+/* T-010: el menu principal (ver src/menu.ts). Oscuro, espacioso, alineado */
+/* a una grilla (docs/DISENO.md, "Layout y principios"): sin scroll, todo  */
+/* visible apenas carga.                                                  */
+/* ---------------------------------------------------------------------- */
+
+.tetra-menu {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--espacio-4);
+  width: min(92vw, 560px);
+  /* Vertical mas ajustado que horizontal a proposito: lo que limita "sin
+     scroll" (ticket, criterios de aceptacion) es la altura de la ventana,
+     no el ancho. */
+  padding: var(--espacio-4) 0;
+}
+
+.tetra-menu-encabezado {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--espacio-2);
+  text-align: center;
+}
+
+.tetra-menu-logo {
+  display: flex;
+  justify-content: center;
+}
+
+.tetra-logo {
+  display: block;
+}
+
+.tetra-menu-titulo {
+  margin: 0;
+  font-family: var(--fuente-display);
+  font-weight: 600;
+  font-size: var(--tipo-2xl);
+  letter-spacing: 0.02em;
+  color: var(--tinta);
+  text-wrap: balance;
+}
+
+.tetra-menu-lema {
+  margin: 0;
+  max-width: 40ch;
+  font-size: var(--tipo-sm);
+  color: var(--tinta-2);
+  text-wrap: balance;
+}
+
+.tetra-menu-accesos {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espacio-2);
+  width: min(100%, 280px);
+}
+
+.tetra-menu-boton {
+  width: 100%;
+  padding: var(--espacio-3) var(--espacio-4);
+  font-size: var(--tipo-base);
+  text-align: center;
+}

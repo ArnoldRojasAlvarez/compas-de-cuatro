@@ -1,0 +1,47 @@
+/* Pantalla de resultados (results.ts). Movido desde style.css sin cambios (pasada grafica, T-019 a T-024): cada pantalla tiene su CSS propio para que varios tickets puedan trabajar en paralelo sin chocar en un solo archivo. */
+
+.tetra-resultados {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--espacio-2);
+  padding: var(--espacio-6);
+}
+
+.tetra-resultados-resumen {
+  display: flex;
+  gap: var(--espacio-6);
+  font-family: var(--fuente-datos);
+  font-size: var(--tipo-lg);
+}
+
+.tetra-resultados-conteos {
+  display: grid;
+  grid-template-columns: repeat(3, auto);
+  gap: var(--espacio-1) var(--espacio-6);
+  font-family: var(--fuente-datos);
+  font-size: var(--tipo-sm);
+}
+
+.tetra-resultados-grafico {
+  border: 1px solid var(--linea);
+}
+
+/* T-007: estadisticas cuantificadas y boton de correccion de offset en la
+   pantalla de resultados (ver src/results.ts). */
+
+.tetra-resultados-estadisticas {
+  display: flex;
+  gap: var(--espacio-6);
+  font-family: var(--fuente-datos);
+  font-size: var(--tipo-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+.tetra-resultados-corregir {
+  margin-top: var(--espacio-1);
+}
+
+.tetra-resultados-volver-song-select {
+  margin-top: var(--espacio-4);
+}

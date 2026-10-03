@@ -1,0 +1,19 @@
+/* HUD de la partida (game.ts). Movido desde style.css sin cambios (pasada grafica, T-019 a T-024): cada pantalla tiene su CSS propio para que varios tickets puedan trabajar en paralelo sin chocar en un solo archivo. */
+
+/* ---------------------------------------------------------------------- */
+/* HUD y resultados (T-004, T-007)                                        */
+/* ---------------------------------------------------------------------- */
+
+.tetra-lienzo canvas {
+  display: block;
+  background: var(--superficie);
+  border: 1px solid var(--linea);
+}
+
+.tetra-hud {
+  display: flex;
+  gap: var(--espacio-6);
+  font-family: var(--fuente-datos);
+  font-size: var(--tipo-sm);
+  font-variant-numeric: tabular-nums;
+}
