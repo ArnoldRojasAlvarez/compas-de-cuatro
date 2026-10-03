@@ -1,8 +1,14 @@
-/* HUD de la partida (game.ts). Movido desde style.css sin cambios (pasada grafica, T-019 a T-024): cada pantalla tiene su CSS propio para que varios tickets puedan trabajar en paralelo sin chocar en un solo archivo. */
+/* HUD de la partida (game.ts, T-019). Se lee como un instrumento de medicion
+   (docs/DISENO.md): datos en JetBrains Mono con tabular-nums, una sola cosa
+   que brilla (el combo), acento teal, ambar de apoyo. Solo tokens de
+   tokens.css. */
 
-/* ---------------------------------------------------------------------- */
-/* HUD y resultados (T-004, T-007)                                        */
-/* ---------------------------------------------------------------------- */
+/* Envoltorio de la partida: el lienzo de Pixi define su tamano, y el HUD se
+   superpone con posiciones absolutas relativas a esta caja. */
+.tetra-partida {
+  position: relative;
+  width: fit-content;
+}
 
 .tetra-lienzo canvas {
   display: block;
@@ -10,10 +16,196 @@
   border: 1px solid var(--linea);
 }
 
+/* Capa del HUD: cubre la pista pero deja pasar los clics (y el foco) de todo
+   lo que hay debajo. Los hijos se colocan solos, dentro o al costado de la
+   pista. */
 .tetra-hud {
-  display: flex;
-  gap: var(--espacio-6);
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
   font-family: var(--fuente-datos);
   font-size: var(--tipo-sm);
   font-variant-numeric: tabular-nums;
+  color: var(--tinta);
+}
+
+/* -- Combo: grande, centrado sobre la pista, en el tercio superior-medio -- */
+
+.tetra-combo {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 26%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--espacio-1);
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.tetra-combo-valor {
+  display: block;
+  font-size: var(--tipo-3xl);
+  font-weight: 500;
+  line-height: 1;
+  color: var(--acento);
+  text-shadow: 0 0 var(--espacio-5) color-mix(in srgb, var(--acento) 45%, transparent);
+  transform-origin: center;
+  will-change: transform;
+}
+
+.tetra-combo-etiqueta {
+  font-size: var(--tipo-xs);
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: var(--tinta-3);
+}
+
+/* Destello al cortarse el combo: el ultimo numero se tine de --j-miss y se
+   apaga. La clase se agrega solo en el frame en que se corta y se saca sola
+   al terminar la animacion (game.ts). */
+.tetra-combo--roto {
+  animation: tetra-combo-roto 0.35s ease-out;
+}
+
+.tetra-combo--roto .tetra-combo-valor {
+  color: var(--j-miss);
+  text-shadow: 0 0 var(--espacio-5) color-mix(in srgb, var(--j-miss) 45%, transparent);
+}
+
+@keyframes tetra-combo-roto {
+  from {
+    opacity: 0.9;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+/* -- Precision, score y combo maximo: arriba a la derecha, fuera del lienzo -- */
+
+.tetra-hud-datos {
+  position: absolute;
+  top: 0;
+  left: calc(100% + var(--espacio-5));
+  display: flex;
+  flex-direction: column;
+  gap: var(--espacio-4);
+  min-width: 10ch;
+  white-space: nowrap;
+}
+
+.tetra-dato {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espacio-1);
+}
+
+.tetra-dato-etiqueta {
+  font-size: var(--tipo-xs);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--tinta-3);
+}
+
+.tetra-dato-valor {
+  line-height: 1.1;
+}
+
+.tetra-dato--precision .tetra-dato-valor {
+  font-size: var(--tipo-xl);
+  font-weight: 500;
+  color: var(--tinta);
+}
+
+.tetra-dato--score .tetra-dato-valor {
+  font-size: var(--tipo-lg);
+  color: var(--tinta-2);
+}
+
+.tetra-dato--combo-max .tetra-dato-valor {
+  font-size: var(--tipo-sm);
+  color: var(--tinta-3);
+}
+
+/* -- Barra de vida: vertical, fina, pegada al borde derecho de la pista -- */
+
+.tetra-vida {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: calc(100% + var(--espacio-1));
+  width: var(--espacio-1);
+  background: var(--superficie-2);
+  overflow: hidden;
+}
+
+.tetra-vida-relleno {
+  width: 100%;
+  height: 100%;
+  background: var(--acento);
+  transform: scaleY(1);
+  transform-origin: bottom;
+  transition:
+    transform 0.12s ease-out,
+    background-color 0.2s ease;
+  will-change: transform;
+}
+
+.tetra-vida[data-nivel='baja'] .tetra-vida-relleno {
+  background: var(--acento-2);
+}
+
+.tetra-vida[data-nivel='critica'] .tetra-vida-relleno {
+  background: var(--j-miss);
+}
+
+/* -- Progreso de la cancion: barra fina arriba de la pista, del ancho de la pista -- */
+
+.tetra-progreso {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: calc(100% + var(--espacio-2));
+  height: 3px;
+  background: var(--superficie-2);
+  overflow: hidden;
+}
+
+.tetra-progreso-relleno {
+  width: 100%;
+  height: 100%;
+  background: color-mix(in srgb, var(--acento) 45%, transparent);
+  transform: scaleX(0);
+  transform-origin: left;
+  will-change: transform;
+}
+
+/* -- FPS / ms (interruptor de ajustes): chico y tenue, en una esquina -- */
+
+.tetra-fps {
+  position: absolute;
+  left: calc(100% + var(--espacio-5));
+  bottom: 0;
+  font-size: var(--tipo-xs);
+  color: var(--tinta-3);
+  white-space: nowrap;
+}
+
+/* Sin movimiento: el numero del combo cambia sin pulso (el !important gana al
+   transform inline que escribe game.ts), y no hay destello, ni transiciones. */
+@media (prefers-reduced-motion: reduce) {
+  .tetra-combo-valor {
+    transform: none !important;
+  }
+
+  .tetra-combo,
+  .tetra-vida-relleno {
+    transition: none;
+  }
+
+  .tetra-combo--roto {
+    animation: none;
+  }
 }

@@ -22,6 +22,14 @@ import { leerKeyMap } from './keymap.js';
 import { leerMostrarFps } from './graficos.js';
 import { CLASE_EN_JUEGO, EVENTO_TIEMPO_JUGADO } from './header.js';
 import { sumarTiempoJugado } from './tiempo-jugado.js';
+import {
+  escalaPulsoCombo,
+  formatearPrecision,
+  formatearScore,
+  fraccionProgreso,
+  nivelDeVida,
+  type NivelDeVida,
+} from './hud-logica.js';
 
 // scrollDuration no es fijo desde T-008: sale de la velocidad guardada por
 // el jugador (ver apps/web/src/velocidad.ts) y se calcula una sola vez al
@@ -72,9 +80,82 @@ declare global {
 }
 
 /**
- * Ensambla el HUD (score, combo, precision, fps/ms) como DOM plano. Nada de
- * React aca (ver CLAUDE.md, regla 4): un re-render de React a mitad de un
- * stream es un frame perdido, y este HUD se actualiza una vez por frame.
+ * T-019: combo minimo para que el combo se vea. Con 0 o 1 no hay racha que
+ * mostrar.
+ */
+const COMBO_MINIMO_VISIBLE = 2;
+
+/** Clase del destello al cortarse el combo (ver hud.css). */
+const CLASE_COMBO_ROTO = 'tetra-combo--roto';
+
+/**
+ * Ultimo valor escrito en el DOM para cada dato del HUD. `actualizarHud` lo
+ * consulta antes de tocar `textContent` o `style`: un valor que no cambio no
+ * se vuelve a escribir (el HUD corre dentro del loop de juego, una vez por
+ * frame). Los valores iniciales coinciden con lo que `crearHud` deja armado
+ * en el DOM, asi el primer frame tampoco escribe de mas.
+ */
+interface CacheHud {
+  /** Ultimo combo visto en el estado (para detectar subida y corte). */
+  comboVisto: number;
+  /** Ultimo combo escrito en el texto (no se reescribe al volver a 0: ver actualizarHud). */
+  comboEscrito: number;
+  comboVisible: boolean;
+  /** `t` de reloj de juego del ultimo aumento del combo. */
+  tSubida: number;
+  escalaCombo: number;
+  score: number;
+  precision: number;
+  comboMax: number;
+  hp: number;
+  nivelVida: NivelDeVida;
+  progreso: number;
+  fps: number;
+  decimasMs: number;
+}
+
+interface HudPartida {
+  comboRaiz: HTMLElement;
+  comboValor: HTMLElement;
+  score: HTMLElement;
+  precision: HTMLElement;
+  comboMax: HTMLElement;
+  vida: HTMLElement;
+  vidaRelleno: HTMLElement;
+  progresoRelleno: HTMLElement;
+  fpsMs: HTMLElement | null;
+  /** Se lee una sola vez al armar el HUD (prefers-reduced-motion). */
+  reducirMovimiento: boolean;
+  cache: CacheHud;
+}
+
+function crearElemento(etiqueta: string, clase: string, texto?: string): HTMLElement {
+  const el = document.createElement(etiqueta);
+  el.className = clase;
+  if (texto !== undefined) el.textContent = texto;
+  return el;
+}
+
+/** Un dato con etiqueta chica arriba y valor abajo; devuelve fila y valor. */
+function crearDato(
+  modificador: string,
+  etiqueta: string,
+  inicial: string,
+): { fila: HTMLElement; valor: HTMLElement } {
+  const fila = crearElemento('div', `tetra-dato tetra-dato--${modificador}`);
+  const valor = crearElemento('div', 'tetra-dato-valor', inicial);
+  fila.append(crearElemento('div', 'tetra-dato-etiqueta', etiqueta), valor);
+  return { fila, valor };
+}
+
+/**
+ * Ensambla el HUD de la partida como DOM plano superpuesto a la pista: combo
+ * grande sobre la pista, precision / score / combo maximo y vida al costado,
+ * progreso de la cancion arriba, y FPS/ms opcional. Nada de React aca (ver
+ * CLAUDE.md, regla 4): un re-render de React a mitad de un stream es un frame
+ * perdido, y este HUD se actualiza una vez por frame. Todos los elementos se
+ * crean y se guardan aca, una sola vez: `actualizarHud` no hace
+ * `querySelector` ni crea nodos.
  *
  * T-012 "Parte C": `mostrarFps` decide si el contador de FPS/ms se agrega
  * al DOM. Se lee una sola vez al armar el HUD (igual que el offset y la
@@ -84,47 +165,175 @@ declare global {
  * asi tampoco se paga el costo (minimo, pero real) de formatear el string
  * cada frame para un elemento que nadie va a ver.
  */
-function crearHud(
-  contenedor: HTMLElement,
-  mostrarFps: boolean,
-): {
-  score: HTMLElement;
-  combo: HTMLElement;
-  precision: HTMLElement;
-  fpsMs: HTMLElement | null;
-} {
-  const hud = document.createElement('div');
-  hud.className = 'tetra-hud';
+function crearHud(envoltorio: HTMLElement, mostrarFps: boolean): HudPartida {
+  const hud = crearElemento('div', 'tetra-hud');
 
-  const score = document.createElement('div');
-  const combo = document.createElement('div');
-  const precision = document.createElement('div');
-  const fpsMs = mostrarFps ? document.createElement('div') : null;
+  // Progreso: barra fina arriba de la pista.
+  const progreso = crearElemento('div', 'tetra-progreso');
+  const progresoRelleno = crearElemento('div', 'tetra-progreso-relleno');
+  progreso.appendChild(progresoRelleno);
 
-  hud.append(score, combo, precision);
-  if (fpsMs) hud.append(fpsMs);
-  contenedor.appendChild(hud);
+  // Combo: oculto hasta COMBO_MINIMO_VISIBLE (opacity 0 por CSS).
+  const comboRaiz = crearElemento('div', 'tetra-combo');
+  const comboValor = crearElemento('span', 'tetra-combo-valor', '0');
+  comboRaiz.append(comboValor, crearElemento('span', 'tetra-combo-etiqueta', 'Combo'));
 
-  return { score, combo, precision, fpsMs };
+  // Precision, score y combo maximo: columna a la derecha de la pista.
+  const precision = crearDato('precision', 'Precision', formatearPrecision(0));
+  const score = crearDato('score', 'Score', formatearScore(0));
+  const comboMax = crearDato('combo-max', 'Combo max', '0');
+  const datos = crearElemento('div', 'tetra-hud-datos');
+  datos.append(precision.fila, score.fila, comboMax.fila);
+
+  // Vida: barra vertical pegada al borde derecho de la pista.
+  const vida = crearElemento('div', 'tetra-vida');
+  vida.dataset.nivel = 'ok';
+  const vidaRelleno = crearElemento('div', 'tetra-vida-relleno');
+  vida.appendChild(vidaRelleno);
+
+  hud.append(progreso, comboRaiz, datos, vida);
+
+  const fpsMs = mostrarFps ? crearElemento('div', 'tetra-fps') : null;
+  if (fpsMs) hud.appendChild(fpsMs);
+  envoltorio.appendChild(hud);
+
+  // El destello del combo se limpia solo al terminar su animacion: un
+  // listener fijo, no un temporizador.
+  comboRaiz.addEventListener('animationend', () => {
+    comboRaiz.classList.remove(CLASE_COMBO_ROTO);
+  });
+
+  return {
+    comboRaiz,
+    comboValor,
+    score: score.valor,
+    precision: precision.valor,
+    comboMax: comboMax.valor,
+    vida,
+    vidaRelleno,
+    progresoRelleno,
+    fpsMs,
+    reducirMovimiento: window.matchMedia('(prefers-reduced-motion: reduce)').matches,
+    cache: {
+      comboVisto: 0,
+      comboEscrito: 0,
+      comboVisible: false,
+      tSubida: Number.NEGATIVE_INFINITY,
+      escalaCombo: 1,
+      score: 0,
+      precision: 0,
+      comboMax: 0,
+      hp: 1,
+      nivelVida: 'ok',
+      progreso: 0,
+      fps: -1,
+      decimasMs: -1,
+    },
+  };
 }
 
+/**
+ * Pasa el estado de la partida al DOM, escribiendo solo lo que cambio desde
+ * el frame anterior (ver `CacheHud`). `t` es el tiempo de este frame, de
+ * `clock.now()`: el pulso del combo y el progreso se miden con el, nunca con
+ * `performance.now()` ni con el delta de rAF (ver CLAUDE.md, "El reloj es el
+ * audio"). `duracion` es `clock.duration`.
+ */
 function actualizarHud(
-  hud: ReturnType<typeof crearHud>,
+  hud: HudPartida,
   estado: ScoreState,
+  t: number,
+  duracion: number,
   msPorFrame: number,
 ): void {
-  hud.score.textContent = `Score: ${estado.score}`;
-  hud.combo.textContent = `Combo: ${estado.combo} (max ${estado.maxCombo})`;
-  hud.precision.textContent = `Precision: ${(estado.accuracy * 100).toFixed(2)}%`;
+  const cache = hud.cache;
+
+  // Combo: cambia pocas veces por segundo.
+  const combo = estado.combo;
+  if (combo !== cache.comboVisto) {
+    if (combo > cache.comboVisto) {
+      cache.tSubida = t;
+    } else if (
+      combo === 0 &&
+      cache.comboVisto >= COMBO_MINIMO_VISIBLE &&
+      !hud.reducirMovimiento
+    ) {
+      hud.comboRaiz.classList.add(CLASE_COMBO_ROTO);
+    }
+    cache.comboVisto = combo;
+    // Al cortarse (combo 0) el texto se deja como estaba: el destello de
+    // corte muestra el ultimo numero que se tenia, y el elemento ya esta
+    // oculto por opacidad. Se reescribe en cuanto vuelve a subir.
+    if (combo > 0 && combo !== cache.comboEscrito) {
+      hud.comboValor.textContent = String(combo);
+      cache.comboEscrito = combo;
+    }
+    const visible = combo >= COMBO_MINIMO_VISIBLE;
+    if (visible !== cache.comboVisible) {
+      cache.comboVisible = visible;
+      hud.comboRaiz.style.opacity = visible ? '1' : '0';
+    }
+  }
+
+  // Pulso del combo: la escala depende de t, asi que se evalua cada frame,
+  // pero solo se escribe mientras cambia (120 ms por subida) y no en reposo.
+  const escala = hud.reducirMovimiento ? 1 : escalaPulsoCombo(t - cache.tSubida);
+  if (escala !== cache.escalaCombo) {
+    cache.escalaCombo = escala;
+    hud.comboValor.style.transform =
+      escala === 1 ? 'none' : `scale(${escala.toFixed(3)})`;
+  }
+
+  if (estado.score !== cache.score) {
+    cache.score = estado.score;
+    hud.score.textContent = formatearScore(estado.score);
+  }
+  if (estado.accuracy !== cache.precision) {
+    cache.precision = estado.accuracy;
+    hud.precision.textContent = formatearPrecision(estado.accuracy);
+  }
+  if (estado.maxCombo !== cache.comboMax) {
+    cache.comboMax = estado.maxCombo;
+    hud.comboMax.textContent = String(estado.maxCombo);
+  }
+
+  // Vida: scaleY con origen abajo (no `height`, para no forzar layout). El
+  // nivel de alerta solo se reescribe cuando cambia de nivel.
+  const hp = Math.min(1, Math.max(0, estado.hp));
+  if (hp !== cache.hp) {
+    cache.hp = hp;
+    hud.vidaRelleno.style.transform = `scaleY(${hp})`;
+    const nivel = nivelDeVida(hp);
+    if (nivel !== cache.nivelVida) {
+      cache.nivelVida = nivel;
+      hud.vida.dataset.nivel = nivel;
+    }
+  }
+
+  // Progreso: se cuantiza a milesimas. A 180 s de cancion una milesima son
+  // 180 ms, muy por debajo de un pixel de una barra de ~440 px, y evita
+  // reescribir el style en cada frame.
+  const progreso = Math.round(fraccionProgreso(t, duracion) * 1000) / 1000;
+  if (progreso !== cache.progreso) {
+    cache.progreso = progreso;
+    hud.progresoRelleno.style.transform = `scaleX(${progreso})`;
+  }
+
   if (!hud.fpsMs) return; // T-012 "Parte C": el interruptor de FPS esta apagado.
   // fps y ms salen de la diferencia entre el t de este frame y el anterior,
   // los dos leidos de clock.now(): ni performance.now() ni el delta de rAF
   // entran en este calculo (ver CLAUDE.md, "El reloj es el audio"). Es una
   // consecuencia practica de la misma regla: como el juego ya lee el reloj
   // de audio cada frame para todo lo demas, ese mismo valor sirve tambien
-  // para el contador de fps, sin necesidad de otra fuente de tiempo.
-  const fps = msPorFrame > 0 ? 1000 / msPorFrame : 0;
-  hud.fpsMs.textContent = `${fps.toFixed(0)} fps / ${msPorFrame.toFixed(1)} ms`;
+  // para el contador de fps, sin necesidad de otra fuente de tiempo. Se
+  // comparan enteros (fps y decimas de ms) antes de armar el string.
+  const fps = msPorFrame > 0 ? Math.round(1000 / msPorFrame) : 0;
+  const decimasMs = Math.round(msPorFrame * 10);
+  if (fps !== cache.fps || decimasMs !== cache.decimasMs) {
+    cache.fps = fps;
+    cache.decimasMs = decimasMs;
+    hud.fpsMs.textContent = `${fps} fps / ${(decimasMs / 10).toFixed(1)} ms`;
+  }
 }
 
 /**
@@ -164,10 +373,15 @@ export function runGame(
       scrollDuration: velocidadAScrollDuration(leerVelocidad()),
     };
 
+    // T-019: envoltorio relativo que contiene el lienzo de Pixi y el HUD
+    // superpuesto (ver hud.css, `.tetra-partida`).
+    const partida = document.createElement('div');
+    partida.className = 'tetra-partida';
     const lienzo = document.createElement('div');
     lienzo.className = 'tetra-lienzo';
-    contenedor.appendChild(lienzo);
-    const hud = crearHud(contenedor, leerMostrarFps());
+    partida.appendChild(lienzo);
+    const hud = crearHud(partida, leerMostrarFps());
+    contenedor.appendChild(partida);
 
     // Contexto de audio dedicado a la reproduccion y al reloj de juego. El
     // contexto usado para decodificar el archivo (en main.ts) es otro: son
@@ -355,7 +569,7 @@ export function runGame(
           playfield.render(t);
 
           // 5. El HUD.
-          actualizarHud(hud, engine.state, t - ultimoT);
+          actualizarHud(hud, engine.state, t, clock.duration, t - ultimoT);
           ultimoT = t;
 
           if (engine.finished || t >= clock.duration) {
