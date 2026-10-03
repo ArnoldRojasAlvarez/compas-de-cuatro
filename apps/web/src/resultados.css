@@ -1,47 +1,332 @@
-/* Pantalla de resultados (results.ts). Movido desde style.css sin cambios (pasada grafica, T-019 a T-024): cada pantalla tiene su CSS propio para que varios tickets puedan trabajar en paralelo sin chocar en un solo archivo. */
+/* Pantalla de resultados (results.ts). T-021: rango en grande, precision como
+   dato estrella, conteos con barra y grafico de desviacion. Una sola cosa
+   brilla: la letra de rango (docs/DISENO.md, "Layout y principios"). El resto
+   va en neutros y en los colores de juicio, que son la paleta de datos. */
 
 .tetra-resultados {
+  --color-juicio: var(--tinta-2);
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 800px;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: var(--espacio-2);
-  padding: var(--espacio-6);
+  align-items: stretch;
+  gap: var(--espacio-5);
+  padding: var(--espacio-5) var(--espacio-4);
 }
 
-.tetra-resultados-resumen {
-  display: flex;
-  gap: var(--espacio-6);
+/* Aparicion escalonada: cada bloque entra con un fundido y un desplazamiento
+   corto, uno detras de otro (--orden lo pone results.ts). Sin movimiento si
+   el usuario lo pidio. */
+.tetra-resultados > * {
+  animation: tetra-resultados-entrada 0.45s ease-out both;
+  animation-delay: calc(var(--orden, 0) * 70ms);
+}
+
+@keyframes tetra-resultados-entrada {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tetra-resultados > * {
+    animation: none;
+  }
+}
+
+.tetra-resultados-titulo {
+  margin: 0;
+  font-family: var(--fuente-display);
+  font-size: var(--tipo-xl);
+  font-weight: 600;
+  color: var(--tinta);
+  text-wrap: balance;
+}
+
+/* -- Etiquetas y valores, compartidos por todas las celdas de dato -- */
+
+.tetra-resultados-etiqueta {
+  font-family: var(--fuente-cuerpo);
+  font-size: var(--tipo-xs);
+  font-weight: 500;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--tinta-3);
+}
+
+.tetra-resultados-valor {
   font-family: var(--fuente-datos);
-  font-size: var(--tipo-lg);
+  font-size: var(--tipo-xl);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  color: var(--tinta);
+}
+
+.tetra-resultados-nota {
+  font-family: var(--fuente-cuerpo);
+  font-size: var(--tipo-xs);
+  color: var(--tinta-3);
+}
+
+.tetra-resultados-celda {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espacio-1);
+  min-width: 0;
+}
+
+/* -- Bloque principal: rango a la izquierda, datos a la derecha -- */
+
+.tetra-resultados-principal {
+  display: grid;
+  grid-template-columns: 1fr;
+  align-items: center;
+  gap: var(--espacio-4);
+  padding: var(--espacio-5);
+  background: var(--superficie);
+  border: 1px solid var(--linea);
+  border-radius: var(--radio-panel);
+}
+
+.tetra-resultados-rango {
+  font-family: var(--fuente-display);
+  font-size: 8rem;
+  font-weight: 700;
+  line-height: 1;
+  text-align: center;
+  color: var(--tinta);
+  text-shadow: 0 0 48px color-mix(in srgb, currentColor 30%, transparent);
+}
+
+.tetra-resultados-rango-S {
+  color: var(--acento);
+}
+
+.tetra-resultados-rango-A {
+  color: var(--j-200);
+}
+
+.tetra-resultados-rango-B {
+  color: var(--j-100);
+}
+
+.tetra-resultados-rango-C {
+  color: var(--j-50);
+}
+
+.tetra-resultados-rango-D {
+  color: var(--j-miss);
+}
+
+.tetra-resultados-datos {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espacio-4);
+  min-width: 0;
+}
+
+.tetra-resultados-precision {
+  font-family: var(--fuente-datos);
+  font-size: var(--tipo-3xl);
+  font-weight: 500;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+  color: var(--tinta);
+}
+
+.tetra-resultados-secundarios {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--espacio-2) var(--espacio-6);
+}
+
+/* -- Detalle: conteos por juicio y estadisticas -- */
+
+.tetra-resultados-detalle {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--espacio-5);
 }
 
 .tetra-resultados-conteos {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espacio-2);
+}
+
+.tetra-resultados-fila {
   display: grid;
-  grid-template-columns: repeat(3, auto);
-  gap: var(--espacio-1) var(--espacio-6);
+  grid-template-columns: 4.5rem 1fr 3.5rem;
+  align-items: center;
+  gap: var(--espacio-3);
   font-family: var(--fuente-datos);
   font-size: var(--tipo-sm);
 }
 
-.tetra-resultados-grafico {
-  border: 1px solid var(--linea);
+.tetra-resultados-fila-nombre {
+  color: var(--tinta-2);
 }
 
-/* T-007: estadisticas cuantificadas y boton de correccion de offset en la
-   pantalla de resultados (ver src/results.ts). */
+.tetra-resultados-fila-pista {
+  display: block;
+  height: 8px;
+  overflow: hidden;
+  background: var(--superficie-2);
+  border-radius: 2px;
+}
+
+.tetra-resultados-fila-relleno {
+  display: block;
+  height: 100%;
+  min-width: 2px;
+  background: var(--color-juicio);
+  border-radius: 2px;
+}
+
+.tetra-resultados-fila-cantidad {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  color: var(--tinta);
+}
+
+.tetra-resultados-juicio-max {
+  --color-juicio: var(--j-max);
+}
+
+.tetra-resultados-juicio-perfect {
+  --color-juicio: var(--j-300);
+}
+
+.tetra-resultados-juicio-great {
+  --color-juicio: var(--j-200);
+}
+
+.tetra-resultados-juicio-good {
+  --color-juicio: var(--j-100);
+}
+
+.tetra-resultados-juicio-bad {
+  --color-juicio: var(--j-50);
+}
+
+.tetra-resultados-juicio-miss {
+  --color-juicio: var(--j-miss);
+}
+
+/* T-007: estadisticas cuantificadas (src/results.ts). Cuatro celdas de dato. */
 
 .tetra-resultados-estadisticas {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-content: start;
+  gap: var(--espacio-4);
+  padding: var(--espacio-4);
+  background: var(--superficie);
+  border: 1px solid var(--linea);
+  border-radius: var(--radio-panel);
+}
+
+.tetra-resultados-estadisticas .tetra-resultados-valor {
+  font-size: var(--tipo-lg);
+}
+
+/* -- Grafico de desviacion -- */
+
+.tetra-resultados-seccion-grafico {
   display: flex;
-  gap: var(--espacio-6);
-  font-family: var(--fuente-datos);
-  font-size: var(--tipo-sm);
-  font-variant-numeric: tabular-nums;
+  flex-direction: column;
+  gap: var(--espacio-2);
+}
+
+.tetra-resultados-subtitulo {
+  margin: 0;
+  font-family: var(--fuente-cuerpo);
+  font-size: var(--tipo-xs);
+  font-weight: 500;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--tinta-3);
+}
+
+.tetra-resultados-grafico-caja {
+  width: 100%;
+}
+
+/* El ancho y la proporcion exactos los fija results.ts al dibujar; esto solo
+   deja que se encoja parejo si la ventana se achica despues. */
+.tetra-resultados-grafico {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  border: 1px solid var(--linea);
+  border-radius: var(--radio-control);
 }
 
 .tetra-resultados-corregir {
-  margin-top: var(--espacio-1);
+  align-self: flex-start;
 }
 
-.tetra-resultados-volver-song-select {
-  margin-top: var(--espacio-4);
+/* Boton de volver (lo agrega song-select.ts a #app, como hermano del panel):
+   es la accion principal de la pantalla, asi que lleva el acento. Se
+   alinea con la columna del panel y hereda el ancho maximo de 800px. */
+#app .tetra-resultados-volver-song-select {
+  align-self: center;
+  box-sizing: border-box;
+  width: calc(100% - var(--espacio-4) * 2);
+  max-width: calc(800px - var(--espacio-4) * 2);
+  margin: 0 0 var(--espacio-6);
+  padding: var(--espacio-3) var(--espacio-5);
+  font-size: var(--tipo-base);
+  font-weight: 600;
+  color: var(--fondo);
+  background: var(--acento);
+  border-color: var(--acento);
+}
+
+#app .tetra-resultados-volver-song-select:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--acento) 85%, white);
+  border-color: color-mix(in srgb, var(--acento) 85%, white);
+}
+
+/* Ancho >= 720px: rango y datos lado a lado; conteos y estadisticas lado a lado. */
+@media (min-width: 720px) {
+  .tetra-resultados {
+    padding: var(--espacio-5);
+  }
+
+  .tetra-resultados-principal {
+    grid-template-columns: auto 1fr;
+    gap: var(--espacio-7);
+  }
+
+  .tetra-resultados-rango {
+    min-width: 0.8em;
+  }
+
+  .tetra-resultados-detalle {
+    grid-template-columns: 1fr 1fr;
+    align-items: start;
+  }
+
+  #app .tetra-resultados-volver-song-select {
+    width: auto;
+    min-width: 280px;
+  }
+}
+
+/* Angosto (375px): el rango baja un poco para no comerse la pantalla. */
+@media (max-width: 479px) {
+  .tetra-resultados-rango {
+    font-size: 6rem;
+  }
+
+  .tetra-resultados-precision {
+    font-size: var(--tipo-2xl);
+  }
 }
