@@ -8,7 +8,7 @@ Estado corto y siempre al dia. **Si sos una sesion NUEVA, empeza por
 
 ## Donde esta todo
 
-- `main`: limpio, verde, 443 tests + e2e de sincronia.
+- `main`: limpio, verde, 579 tests + e2e de sincronia.
 - En curso: nada.
 
 ## Hecho
@@ -34,6 +34,12 @@ Estado corto y siempre al dia. **Si sos una sesion NUEVA, empeza por
 | T-018 | Calibracion v1 con 54 SR de osu! lazer: Spearman 0.962, error medio 0.21 estrellas (version 4) |
 | Header | Header persistente con hora y tiempo jugado acumulado (suma el tiempo de cancion real, oculto en partida) |
 | T-015 | Herramienta `#calibracion`: SR de osu! por dificultad, Spearman, ajuste log-log, export JSON |
+| T-019 | HUD de partida: combo con pulso (reloj de juego), precision y score en mono, barra de vida y de progreso, FPS opcional; solo escribe al DOM si cambia |
+| T-020 | Pista con paleta propia: fondo con gradiente, carriles, notas tinta/teal, flash por columna, un juicio reutilizado (sin `new Text` por golpe) |
+| T-021 | Resultados: rango S/A/B/C/D, precision destacada, barras por juicio, grafico nitido con puntos por juicio |
+| T-022 | Song select: tarjetas con portada (object URLs cacheados y revocados), estrellas por nivel, perfil legible, estado vacio |
+| T-023 | Ajustes en cuatro tarjetas numeradas, controles de 36px, teclas como keycaps |
+| T-024 | Fondo con halo y rejilla de cuatro columnas, transicion de entrada por pantalla, microinteracciones, header sin trabajo por frame |
 
 La prueba de feel de Arnold ya se hizo: en una cancion real sus golpes salieron
 centrados en cero. El motor esta bien sincronizado.
