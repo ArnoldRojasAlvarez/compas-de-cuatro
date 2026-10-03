@@ -30,25 +30,106 @@ import {
 } from './velocidad.js';
 
 /**
- * Envuelve `titulo` + `hijos` en un `<section>` con su `<h2>` (ver el
- * ticket, "Parte D": "Ajustes queda organizado en secciones con titulo").
- * `claseModificador` da a cada seccion su propia clase (por ejemplo
- * `tetra-ajustes-seccion-teclas`) para que style.css pueda ajustar el
- * layout interno de cada una sin depender del orden de los hijos.
+ * Envuelve `hijos` en una tarjeta `<section>` con su cabecera: indice
+ * numerico en mono (`01` a `04`, el cuatro de la marca) y `<h2>` con el
+ * titulo (T-023). `claseModificador` da a cada tarjeta su propia clase (por
+ * ejemplo `tetra-ajustes-seccion-teclas`) para que ajustes.css pueda
+ * ajustar el layout interno de cada una sin depender del orden de los hijos.
  */
-function crearSeccion(titulo: string, claseModificador: string, ...hijos: HTMLElement[]): HTMLElement {
+function crearSeccion(
+  indice: number,
+  titulo: string,
+  claseModificador: string,
+  ...hijos: HTMLElement[]
+): HTMLElement {
   const seccion = document.createElement('section');
   seccion.className = `tetra-ajustes-seccion tetra-ajustes-seccion-${claseModificador}`;
+
+  const cabecera = document.createElement('div');
+  cabecera.className = 'tetra-ajustes-seccion-cabecera';
+
+  const numero = document.createElement('span');
+  numero.className = 'tetra-ajustes-seccion-indice';
+  numero.setAttribute('aria-hidden', 'true');
+  numero.textContent = String(indice).padStart(2, '0');
+  cabecera.appendChild(numero);
 
   const encabezado = document.createElement('h2');
   encabezado.className = 'tetra-ajustes-seccion-titulo';
   encabezado.textContent = titulo;
-  seccion.appendChild(encabezado);
+  cabecera.appendChild(encabezado);
+
+  seccion.appendChild(cabecera);
 
   for (const hijo of hijos) {
     seccion.appendChild(hijo);
   }
   return seccion;
+}
+
+interface OpcionesFila {
+  /** Nombre del ajuste (a la izquierda, en `--tinta`). Sin nombre, la fila es solo control. */
+  nombre?: string;
+  /** `id` del control al que apunta el `<label>` del nombre. Sin `id`, el nombre es un `<span>`. */
+  idControl?: string;
+  /** Parrafos de ayuda, debajo del nombre (en `--tinta-2`, chica). */
+  ayudas?: HTMLElement[];
+  /** Lo que va a la derecha de la fila. */
+  controles: HTMLElement[];
+  /** El control ocupa todo el ancho debajo del texto (teclas, skin) en vez de ir a la derecha. */
+  apilada?: boolean;
+}
+
+/**
+ * Fila de ajuste consistente (T-023): texto a la izquierda (nombre y ayuda)
+ * y control(es) a la derecha, con el mismo alto de control en todas.
+ */
+function crearFila(opciones: OpcionesFila): HTMLElement {
+  const fila = document.createElement('div');
+  fila.className = opciones.apilada
+    ? 'tetra-ajustes-fila tetra-ajustes-fila-apilada'
+    : 'tetra-ajustes-fila';
+
+  const ayudas = opciones.ayudas ?? [];
+  if (opciones.nombre !== undefined || ayudas.length > 0) {
+    const texto = document.createElement('div');
+    texto.className = 'tetra-ajustes-fila-texto';
+    if (opciones.nombre !== undefined) {
+      const nombre = document.createElement(opciones.idControl !== undefined ? 'label' : 'span');
+      nombre.className = 'tetra-ajustes-fila-nombre';
+      nombre.textContent = opciones.nombre;
+      if (nombre instanceof HTMLLabelElement && opciones.idControl !== undefined) {
+        nombre.htmlFor = opciones.idControl;
+      }
+      texto.appendChild(nombre);
+    }
+    for (const ayuda of ayudas) {
+      texto.appendChild(ayuda);
+    }
+    fila.appendChild(texto);
+  }
+
+  const controles = document.createElement('div');
+  controles.className = 'tetra-ajustes-fila-control';
+  for (const control of opciones.controles) {
+    controles.appendChild(control);
+  }
+  fila.appendChild(controles);
+  return fila;
+}
+
+/** Botones de mas y menos pegados al input numerico: un solo control segmentado. */
+function crearSegmentado(
+  botonMenos: HTMLElement,
+  entrada: HTMLElement,
+  botonMas: HTMLElement,
+): HTMLElement {
+  const grupo = document.createElement('div');
+  grupo.className = 'tetra-ajustes-segmentado';
+  grupo.appendChild(botonMenos);
+  grupo.appendChild(entrada);
+  grupo.appendChild(botonMas);
+  return grupo;
 }
 
 const PASO_OFFSET_MS = 1;
@@ -66,30 +147,20 @@ const PASO_OFFSET_MS = 1;
  * hace justo eso a partir de la media medida.
  */
 function crearControlDeOffset(): HTMLElement {
-  const seccion = document.createElement('div');
-  seccion.className = 'tetra-ajustes-offset tetra-ajustes-control';
-
-  const etiqueta = document.createElement('label');
-  etiqueta.textContent = 'Offset (ms):';
-  etiqueta.htmlFor = 'tetra-offset-valor';
-  seccion.appendChild(etiqueta);
-
   const botonMenos = document.createElement('button');
   botonMenos.type = 'button';
   botonMenos.textContent = `-${PASO_OFFSET_MS} ms`;
-  seccion.appendChild(botonMenos);
 
   const entrada = document.createElement('input');
   entrada.type = 'number';
   entrada.id = 'tetra-offset-valor';
+  entrada.className = 'tetra-ajustes-numero';
   entrada.step = String(PASO_OFFSET_MS);
   entrada.value = String(leerOffset());
-  seccion.appendChild(entrada);
 
   const botonMas = document.createElement('button');
   botonMas.type = 'button';
   botonMas.textContent = `+${PASO_OFFSET_MS} ms`;
-  seccion.appendChild(botonMas);
 
   const ayuda = document.createElement('p');
   ayuda.className = 'tetra-ajustes-ayuda';
@@ -112,11 +183,12 @@ function crearControlDeOffset(): HTMLElement {
     fijarOffset(Number.isFinite(valor) ? valor : 0);
   });
 
-  const envoltorio = document.createElement('div');
-  envoltorio.className = 'tetra-ajustes-fila';
-  envoltorio.appendChild(seccion);
-  envoltorio.appendChild(ayuda);
-  return envoltorio;
+  return crearFila({
+    nombre: 'Offset (ms)',
+    idControl: 'tetra-offset-valor',
+    ayudas: [ayuda],
+    controles: [crearSegmentado(botonMenos, entrada, botonMas)],
+  });
 }
 
 const PASO_VELOCIDAD = 1;
@@ -130,32 +202,22 @@ const PASO_VELOCIDAD = 1;
  * recien al arrancar la partida, con `velocidadAScrollDuration`.
  */
 function crearControlDeVelocidad(): HTMLElement {
-  const seccion = document.createElement('div');
-  seccion.className = 'tetra-ajustes-velocidad tetra-ajustes-control';
-
-  const etiqueta = document.createElement('label');
-  etiqueta.textContent = 'Velocidad:';
-  etiqueta.htmlFor = 'tetra-velocidad-valor';
-  seccion.appendChild(etiqueta);
-
   const botonMenos = document.createElement('button');
   botonMenos.type = 'button';
   botonMenos.textContent = `-${PASO_VELOCIDAD}`;
-  seccion.appendChild(botonMenos);
 
   const entrada = document.createElement('input');
   entrada.type = 'number';
   entrada.id = 'tetra-velocidad-valor';
+  entrada.className = 'tetra-ajustes-numero';
   entrada.step = String(PASO_VELOCIDAD);
   entrada.min = String(VELOCIDAD_MIN);
   entrada.max = String(VELOCIDAD_MAX);
   entrada.value = String(leerVelocidad());
-  seccion.appendChild(entrada);
 
   const botonMas = document.createElement('button');
   botonMas.type = 'button';
   botonMas.textContent = `+${PASO_VELOCIDAD}`;
-  seccion.appendChild(botonMas);
 
   const ayuda = document.createElement('p');
   ayuda.className = 'tetra-ajustes-ayuda';
@@ -185,11 +247,12 @@ function crearControlDeVelocidad(): HTMLElement {
     fijarVelocidad(Number.isFinite(valor) ? valor : VELOCIDAD_MIN);
   });
 
-  const envoltorio = document.createElement('div');
-  envoltorio.className = 'tetra-ajustes-fila';
-  envoltorio.appendChild(seccion);
-  envoltorio.appendChild(ayuda);
-  return envoltorio;
+  return crearFila({
+    nombre: 'Velocidad',
+    idControl: 'tetra-velocidad-valor',
+    ayudas: [ayuda],
+    controles: [crearSegmentado(botonMenos, entrada, botonMas)],
+  });
 }
 
 const NOMBRES_COLUMNA = ['Columna 1', 'Columna 2', 'Columna 3', 'Columna 4'] as const;
@@ -210,23 +273,25 @@ const NOMBRES_COLUMNA = ['Columna 1', 'Columna 2', 'Columna 3', 'Columna 4'] as 
  * jugador entra a ajustes y nunca se limpiaria solo.
  */
 function crearControlDeTeclas(onError: (mensaje: string) => void): HTMLElement {
-  const seccion = document.createElement('div');
-  seccion.className = 'tetra-ajustes-teclas';
-
   const grilla = document.createElement('div');
   grilla.className = 'tetra-ajustes-teclas-grilla';
-  seccion.appendChild(grilla);
 
   let mapa: KeyMap = leerKeyMap();
   let columnaCapturando: number | null = null;
 
-  const botones: HTMLButtonElement[] = NOMBRES_COLUMNA.map((nombre, indice) => {
+  const botones: HTMLButtonElement[] = NOMBRES_COLUMNA.map((_nombre, indice) => {
     const casillero = document.createElement('div');
-    casillero.className = 'tetra-tecla-casillero';
+    // Columnas 1 y 2 (las interiores) con detalle en acento y 0 y 3 en
+    // tinta, igual que la pista (T-020).
+    const interior = indice === 1 || indice === 2;
+    casillero.className = interior
+      ? 'tetra-tecla-casillero tetra-tecla-casillero-interior'
+      : 'tetra-tecla-casillero';
 
     const etiqueta = document.createElement('span');
     etiqueta.className = 'tetra-tecla-etiqueta';
-    etiqueta.textContent = nombre;
+    etiqueta.setAttribute('aria-hidden', 'true');
+    etiqueta.textContent = `Col. ${indice + 1}`;
     casillero.appendChild(etiqueta);
 
     const boton = document.createElement('button');
@@ -246,7 +311,12 @@ function crearControlDeTeclas(onError: (mensaje: string) => void): HTMLElement {
       // 4 elementos que `mapa` (ver el `.map` que arma `botones` arriba),
       // pero noUncheckedIndexedAccess no puede probarlo con un indice que
       // no es un literal.
-      boton.textContent = capturandoEsta ? 'Pulsa una tecla...' : nombreLegibleDeCodigo(mapa[indice]!);
+      const nombreTecla = nombreLegibleDeCodigo(mapa[indice]!);
+      boton.textContent = capturandoEsta ? 'Pulsa una tecla...' : nombreTecla;
+      boton.setAttribute(
+        'aria-label',
+        `${NOMBRES_COLUMNA[indice]}: ${capturandoEsta ? 'pulsa una tecla' : nombreTecla}`,
+      );
       boton.classList.toggle('tetra-tecla-boton-capturando', capturandoEsta);
       // Mientras se captura una columna, las otras tres quedan inhabilitadas:
       // evita que dos casilleros entren en modo captura a la vez, lo que
@@ -316,19 +386,19 @@ function crearControlDeTeclas(onError: (mensaje: string) => void): HTMLElement {
     onError('');
     actualizarBotones();
   });
-  seccion.appendChild(botonReset);
 
   const ayuda = document.createElement('p');
   ayuda.className = 'tetra-ajustes-ayuda';
   ayuda.textContent = 'Clic en una columna y pulsa la tecla nueva. Escape cancela sin guardar.';
-  seccion.appendChild(ayuda);
 
   actualizarBotones();
 
-  const envoltorio = document.createElement('div');
-  envoltorio.className = 'tetra-ajustes-fila';
-  envoltorio.appendChild(seccion);
-  return envoltorio;
+  const pie = document.createElement('div');
+  pie.className = 'tetra-ajustes-teclas-pie';
+  pie.appendChild(ayuda);
+  pie.appendChild(botonReset);
+
+  return crearFila({ controles: [grilla, pie], apilada: true });
 }
 
 /**
@@ -343,20 +413,23 @@ function crearControlDeFps(): HTMLElement {
 
   const casilla = document.createElement('input');
   casilla.type = 'checkbox';
+  casilla.id = 'tetra-fps-casilla';
   casilla.checked = leerMostrarFps();
   casilla.addEventListener('change', () => {
     guardarMostrarFps(casilla.checked);
   });
   etiqueta.appendChild(casilla);
 
-  const texto = document.createElement('span');
-  texto.textContent = 'Mostrar FPS y ms';
-  etiqueta.appendChild(texto);
+  const ayuda = document.createElement('p');
+  ayuda.className = 'tetra-ajustes-ayuda';
+  ayuda.textContent = 'Muestra los cuadros por segundo y los ms por cuadro durante la partida.';
 
-  const envoltorio = document.createElement('div');
-  envoltorio.className = 'tetra-ajustes-fila';
-  envoltorio.appendChild(etiqueta);
-  return envoltorio;
+  return crearFila({
+    nombre: 'Mostrar FPS y ms',
+    idControl: casilla.id,
+    ayudas: [ayuda],
+    controles: [etiqueta],
+  });
 }
 
 /** Valor de `<option>` para "sin skin, rectangulos" (el default): no puede ser un SkinId real (crypto.randomUUID() nunca da string vacio). */
@@ -374,36 +447,40 @@ const OPCION_SIN_SKIN = '';
  * del navegador era justo lo que Arnold señalo que desentonaba.
  */
 function crearControlDeSkin(onError: (mensaje: string) => void): HTMLElement {
-  const seccion = document.createElement('div');
-  seccion.className = 'tetra-ajustes-skin tetra-ajustes-control';
-
-  const etiqueta = document.createElement('label');
-  etiqueta.textContent = 'Skin:';
-  etiqueta.htmlFor = 'tetra-skin-select';
-  seccion.appendChild(etiqueta);
-
   const select = document.createElement('select');
   select.id = 'tetra-skin-select';
-  seccion.appendChild(select);
 
   const entradaArchivo = document.createElement('input');
   entradaArchivo.type = 'file';
   entradaArchivo.accept = '.osk';
   entradaArchivo.id = 'tetra-skin-archivo';
   entradaArchivo.className = 'tetra-input-archivo-oculto';
-  seccion.appendChild(entradaArchivo);
 
   const botonImportar = document.createElement('button');
   botonImportar.type = 'button';
   botonImportar.textContent = 'Importar .osk...';
   botonImportar.addEventListener('click', () => entradaArchivo.click());
-  seccion.appendChild(botonImportar);
 
   const ayuda = document.createElement('p');
   ayuda.className = 'tetra-ajustes-ayuda';
   ayuda.textContent =
     'Opcional: importar un archivo .osk de skin de osu!mania. Sin skin (o si le ' +
     'falta alguna imagen), se ven los rectangulos de siempre.';
+
+  // Nombre de la skin activa, visible debajo de la ayuda (T-023). Se lee
+  // del <select>, que es lo que el jugador ve elegido.
+  const activa = document.createElement('p');
+  activa.className = 'tetra-ajustes-ayuda tetra-ajustes-skin-activa';
+
+  function actualizarActiva(): void {
+    const nombre = select.selectedOptions[0]?.textContent ?? '';
+    activa.textContent = nombre === '' ? '' : 'Activa: ';
+    if (nombre === '') return;
+    const valor = document.createElement('span');
+    valor.className = 'tetra-ajustes-valor';
+    valor.textContent = nombre;
+    activa.appendChild(valor);
+  }
 
   // Repuebla el <select> con "sin skin" + las skins guardadas, y deja
   // seleccionada la que esta activa. Se llama al armar el control y de
@@ -412,7 +489,7 @@ function crearControlDeSkin(onError: (mensaje: string) => void): HTMLElement {
   // notificaciones de cambio.
   async function refrescarLista(): Promise<void> {
     const skins: SkinGuardada[] = await listarSkins();
-    const activa = leerSkinActiva();
+    const idActiva = leerSkinActiva();
 
     select.innerHTML = '';
     const opcionSinSkin = document.createElement('option');
@@ -431,12 +508,14 @@ function crearControlDeSkin(onError: (mensaje: string) => void): HTMLElement {
     // ejemplo, se borro la base de IndexedDB a mano entre una carga y la
     // otra), el <select> cae solo a la primera opcion ("sin skin"): no
     // hace falta un caso aparte para eso.
-    select.value = activa ?? OPCION_SIN_SKIN;
+    select.value = idActiva ?? OPCION_SIN_SKIN;
+    actualizarActiva();
   }
   void refrescarLista();
 
   select.addEventListener('change', () => {
     guardarSkinActiva(select.value === OPCION_SIN_SKIN ? null : select.value);
+    actualizarActiva();
   });
 
   entradaArchivo.addEventListener('change', () => {
@@ -449,17 +528,26 @@ function crearControlDeSkin(onError: (mensaje: string) => void): HTMLElement {
         await refrescarLista();
         select.value = id;
         guardarSkinActiva(id);
+        actualizarActiva();
       } catch (error) {
         onError(mensajeDeErrorDeCarga(error));
       }
     })();
   });
 
-  const envoltorio = document.createElement('div');
-  envoltorio.className = 'tetra-ajustes-fila';
-  envoltorio.appendChild(seccion);
-  envoltorio.appendChild(ayuda);
-  return envoltorio;
+  const controles = document.createElement('div');
+  controles.className = 'tetra-ajustes-skin-controles';
+  controles.appendChild(select);
+  controles.appendChild(botonImportar);
+  controles.appendChild(entradaArchivo);
+
+  return crearFila({
+    nombre: 'Skin',
+    idControl: select.id,
+    ayudas: [ayuda, activa],
+    controles: [controles],
+    apilada: true,
+  });
 }
 
 /** Gancho de navegacion que le pasa el router (ver router.ts). */
@@ -472,6 +560,7 @@ export interface OpcionesAjustes {
  * Muestra la pantalla de ajustes dentro de `contenedor`, reemplazando lo
  * que hubiera. T-012 la organiza en secciones (ver el ticket, "Parte D"):
  * Juego (offset, velocidad), Teclas, Graficos (FPS), Apariencia (skin).
+ * T-023 las presenta como cuatro tarjetas numeradas en una rejilla.
  */
 export function mostrarAjustes(contenedor: HTMLElement, opciones: OpcionesAjustes): void {
   contenedor.innerHTML = '';
@@ -482,6 +571,10 @@ export function mostrarAjustes(contenedor: HTMLElement, opciones: OpcionesAjuste
   const encabezado = document.createElement('div');
   encabezado.className = 'tetra-ajustes-encabezado';
 
+  const titulo = document.createElement('h1');
+  titulo.textContent = 'Ajustes';
+  encabezado.appendChild(titulo);
+
   const botonVolver = document.createElement('button');
   botonVolver.type = 'button';
   botonVolver.className = 'tetra-boton-volver';
@@ -489,25 +582,28 @@ export function mostrarAjustes(contenedor: HTMLElement, opciones: OpcionesAjuste
   botonVolver.addEventListener('click', () => opciones.aMenu());
   encabezado.appendChild(botonVolver);
 
-  const titulo = document.createElement('h1');
-  titulo.textContent = 'Ajustes';
-  encabezado.appendChild(titulo);
-
   panel.appendChild(encabezado);
 
   const mensajeError = document.createElement('p');
   mensajeError.className = 'tetra-ajustes-error';
+  mensajeError.setAttribute('role', 'alert');
   function mostrarError(mensaje: string): void {
     mensajeError.textContent = mensaje;
   }
 
-  panel.appendChild(
-    crearSeccion('Juego', 'juego', crearControlDeOffset(), crearControlDeVelocidad()),
-  );
-  panel.appendChild(crearSeccion('Teclas', 'teclas', crearControlDeTeclas(mostrarError)));
-  panel.appendChild(crearSeccion('Graficos', 'graficos', crearControlDeFps()));
-  panel.appendChild(crearSeccion('Apariencia', 'apariencia', crearControlDeSkin(mostrarError)));
+  // El mensaje de error va arriba de las tarjetas: asi se ve sin importar
+  // cuanto haya que bajar para llegar a la tarjeta que lo causo.
   panel.appendChild(mensajeError);
+
+  const rejilla = document.createElement('div');
+  rejilla.className = 'tetra-ajustes-rejilla';
+  rejilla.appendChild(
+    crearSeccion(1, 'Juego', 'juego', crearControlDeOffset(), crearControlDeVelocidad()),
+  );
+  rejilla.appendChild(crearSeccion(2, 'Teclas', 'teclas', crearControlDeTeclas(mostrarError)));
+  rejilla.appendChild(crearSeccion(3, 'Graficos', 'graficos', crearControlDeFps()));
+  rejilla.appendChild(crearSeccion(4, 'Apariencia', 'apariencia', crearControlDeSkin(mostrarError)));
+  panel.appendChild(rejilla);
 
   contenedor.appendChild(panel);
 }

@@ -1,21 +1,31 @@
-/* Ajustes (ajustes.ts). Movido desde style.css sin cambios (pasada grafica, T-019 a T-024): cada pantalla tiene su CSS propio para que varios tickets puedan trabajar en paralelo sin chocar en un solo archivo. */
+/* Ajustes (ajustes.ts). T-023: cuatro tarjetas numeradas (Juego, Teclas,
+   Graficos, Apariencia) en rejilla, filas de control consistentes y teclas
+   como keycaps.
 
-/* ---------------------------------------------------------------------- */
-/* T-012: ajustes (ver src/ajustes.ts). Reorganizado en secciones con      */
-/* titulo (ticket, "Parte D"): Juego, Teclas, Graficos, Apariencia.        */
-/* ---------------------------------------------------------------------- */
+   Los controles base (button, input, select) viven en style.css con
+   selectores `#app ...`, que pesan mas que cualquier selector de clase. Por
+   eso las reglas que tocan controles de esta pantalla empiezan con
+   `#app .tetra-ajustes`: es lo minimo que hace falta para ganarles sin
+   !important y sin editar style.css. */
 
 .tetra-ajustes {
+  --alto-control: 36px;
+
   display: flex;
   flex-direction: column;
-  gap: var(--espacio-5);
-  width: min(92vw, 560px);
+  gap: var(--espacio-4);
+  width: min(92vw, 960px);
   padding: var(--espacio-4) 0 var(--espacio-6);
 }
+
+/* ---------------------------------------------------------------------- */
+/* Encabezado: titulo en Sora a la izquierda, boton volver a la derecha    */
+/* ---------------------------------------------------------------------- */
 
 .tetra-ajustes-encabezado {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: var(--espacio-3);
 }
 
@@ -24,112 +34,347 @@
   font-family: var(--fuente-display);
   font-weight: 600;
   font-size: var(--tipo-xl);
+  text-wrap: balance;
+}
+
+/* ---------------------------------------------------------------------- */
+/* Rejilla de tarjetas: una columna en angosto, dos desde 900px            */
+/* ---------------------------------------------------------------------- */
+
+.tetra-ajustes-rejilla {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--espacio-4);
+}
+
+@media (min-width: 900px) {
+  .tetra-ajustes-rejilla {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--espacio-5);
+  }
 }
 
 .tetra-ajustes-seccion {
   display: flex;
   flex-direction: column;
-  gap: var(--espacio-3);
-  padding: var(--espacio-4);
+  gap: var(--espacio-4);
+  min-width: 0;
+  padding: var(--espacio-5);
   background: var(--superficie);
   border: 1px solid var(--linea);
   border-radius: var(--radio-panel);
+}
+
+.tetra-ajustes-seccion-cabecera {
+  display: flex;
+  align-items: baseline;
+  gap: var(--espacio-3);
+}
+
+.tetra-ajustes-seccion-indice {
+  font-family: var(--fuente-datos);
+  font-size: var(--tipo-sm);
+  font-variant-numeric: tabular-nums;
+  color: var(--tinta-2);
 }
 
 .tetra-ajustes-seccion-titulo {
   margin: 0;
   font-family: var(--fuente-display);
   font-weight: 600;
-  font-size: var(--tipo-sm);
-  letter-spacing: 0.06em;
+  font-size: var(--tipo-xs);
+  letter-spacing: 0.12em;
   text-transform: uppercase;
-  color: var(--tinta-2);
+  color: var(--tinta-3);
 }
+
+/* ---------------------------------------------------------------------- */
+/* Filas: texto a la izquierda, control a la derecha                       */
+/* ---------------------------------------------------------------------- */
 
 .tetra-ajustes-fila {
   display: flex;
-  flex-direction: column;
-  gap: var(--espacio-1);
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--espacio-3) var(--espacio-4);
 }
 
 .tetra-ajustes-fila + .tetra-ajustes-fila {
-  margin-top: var(--espacio-2);
-  padding-top: var(--espacio-2);
+  padding-top: var(--espacio-4);
   border-top: 1px solid var(--linea);
 }
 
-.tetra-ajustes-control {
+.tetra-ajustes-fila-texto {
   display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: var(--espacio-2);
+  flex: 1 1 200px;
+  flex-direction: column;
+  gap: var(--espacio-1);
+  min-width: 0;
+}
+
+.tetra-ajustes-fila-nombre {
   font-size: var(--tipo-sm);
+  font-weight: 500;
+  color: var(--tinta);
 }
 
-.tetra-ajustes-control label {
-  min-width: 90px;
-  color: var(--tinta-2);
+.tetra-ajustes-fila-control {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: var(--espacio-2);
 }
 
-.tetra-ajustes-offset input,
-.tetra-ajustes-velocidad input {
-  width: 64px;
-  text-align: right;
+/* Filas con control ancho (teclas, skin): el control baja debajo del texto
+   y ocupa todo el ancho de la tarjeta. */
+.tetra-ajustes-fila-apilada {
+  flex-direction: column;
+  align-items: stretch;
+  flex-wrap: nowrap;
 }
 
-.tetra-ajustes-skin select {
-  max-width: 220px;
+.tetra-ajustes-fila-apilada .tetra-ajustes-fila-texto {
+  flex: 0 0 auto;
+}
+
+.tetra-ajustes-fila-apilada .tetra-ajustes-fila-control {
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--espacio-3);
 }
 
 .tetra-ajustes-ayuda {
   margin: 0;
   font-size: var(--tipo-xs);
-  color: var(--tinta-3);
+  line-height: 1.45;
+  color: var(--tinta-2);
 }
 
-.tetra-ajustes-error {
-  min-height: 1.2em;
+.tetra-ajustes-ayuda:empty {
+  display: none;
+}
+
+.tetra-ajustes-valor {
+  font-family: var(--fuente-datos);
+  color: var(--tinta);
+}
+
+/* ---------------------------------------------------------------------- */
+/* Controles: mismo alto (36px) para botones, inputs y selects             */
+/* ---------------------------------------------------------------------- */
+
+#app .tetra-ajustes .tetra-ajustes-fila button,
+#app .tetra-ajustes .tetra-ajustes-fila select,
+#app .tetra-ajustes .tetra-ajustes-fila input[type='number'] {
+  box-sizing: border-box;
+  height: var(--alto-control);
+}
+
+#app .tetra-ajustes .tetra-ajustes-fila select {
+  min-width: 0;
+  padding: 0 var(--espacio-3);
+}
+
+/* Control segmentado: [ - ][ valor ][ + ] pegados, un solo control. */
+.tetra-ajustes-segmentado {
+  display: inline-flex;
+  align-items: stretch;
+}
+
+#app .tetra-ajustes .tetra-ajustes-segmentado button,
+#app .tetra-ajustes .tetra-ajustes-segmentado input {
+  position: relative;
+  min-width: 40px;
   margin: 0;
-  color: var(--j-miss);
+  padding: 0 var(--espacio-3);
+  font-family: var(--fuente-datos);
   font-size: var(--tipo-sm);
+  font-variant-numeric: tabular-nums;
+  border-radius: 0;
 }
 
-/* Remapeo de teclas */
+#app .tetra-ajustes .tetra-ajustes-segmentado input {
+  width: 72px;
+  margin-inline: -1px;
+  padding: 0 var(--espacio-2);
+  text-align: center;
+  background: var(--superficie);
+}
+
+#app .tetra-ajustes .tetra-ajustes-segmentado button:first-child {
+  border-radius: var(--radio-control) 0 0 var(--radio-control);
+}
+
+#app .tetra-ajustes .tetra-ajustes-segmentado button:last-child {
+  border-radius: 0 var(--radio-control) var(--radio-control) 0;
+}
+
+/* El anillo de foco tiene que quedar por encima de los vecinos pegados. */
+#app .tetra-ajustes .tetra-ajustes-segmentado button:focus-visible,
+#app .tetra-ajustes .tetra-ajustes-segmentado input:focus-visible {
+  z-index: 1;
+}
+
+/* ---------------------------------------------------------------------- */
+/* Teclas: cuatro keycaps                                                  */
+/* ---------------------------------------------------------------------- */
 
 .tetra-ajustes-teclas-grilla {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: var(--espacio-2);
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--espacio-3);
 }
 
 .tetra-tecla-casillero {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: var(--espacio-1);
+  align-items: stretch;
+  gap: var(--espacio-2);
+  min-width: 0;
 }
 
 .tetra-tecla-etiqueta {
-  font-size: var(--tipo-xs);
-  color: var(--tinta-3);
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-}
-
-.tetra-tecla-boton {
-  width: 100%;
-  padding: var(--espacio-3) var(--espacio-1);
   font-family: var(--fuente-datos);
-  font-size: var(--tipo-base);
-  text-align: center;
-}
-
-.tetra-tecla-boton-capturando {
-  border-color: var(--acento);
-  color: var(--acento);
-}
-
-.tetra-tecla-reset {
-  align-self: flex-start;
   font-size: var(--tipo-xs);
+  letter-spacing: 0.08em;
+  text-align: center;
+  text-transform: uppercase;
+  white-space: nowrap;
+  color: var(--tinta-3);
+}
+
+#app .tetra-ajustes .tetra-tecla-boton {
+  position: relative;
+  box-sizing: border-box;
+  width: 100%;
+  height: auto;
+  min-height: 64px;
+  padding: var(--espacio-2) var(--espacio-1);
+  font-family: var(--fuente-datos);
+  font-size: var(--tipo-lg);
+  font-weight: 500;
+  line-height: 1.2;
+  text-align: center;
+  overflow-wrap: anywhere;
+  background: var(--superficie-2);
+  border: 1px solid var(--linea);
+  border-bottom-width: 4px;
+  border-radius: var(--radio-control);
+  transition:
+    background-color 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease,
+    transform 0.08s ease;
+}
+
+/* Detalle superior de la tecla: tinta en las columnas de los bordes (0 y
+   3) y acento en las interiores (1 y 2), igual que la pista (T-020). */
+#app .tetra-ajustes .tetra-tecla-boton::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 30%;
+  right: 30%;
+  height: 3px;
+  background: var(--tinta);
+  border-radius: 0 0 2px 2px;
+}
+
+#app .tetra-ajustes .tetra-tecla-casillero-interior .tetra-tecla-boton::before {
+  background: var(--acento);
+}
+
+#app .tetra-ajustes .tetra-tecla-boton:active:not(:disabled) {
+  border-bottom-width: 2px;
+  transform: translateY(2px);
+}
+
+/* Modo captura: borde y texto en acento, con un pulso suave. */
+#app .tetra-ajustes .tetra-tecla-boton-capturando,
+#app .tetra-ajustes .tetra-tecla-boton-capturando:hover:not(:disabled) {
+  font-size: var(--tipo-xs);
+  color: var(--acento);
+  background: var(--superficie-2);
+  border-color: var(--acento);
+  animation: tetra-tecla-pulso 1.4s ease-out infinite;
+}
+
+@keyframes tetra-tecla-pulso {
+  from {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--acento) 45%, transparent);
+  }
+  to {
+    box-shadow: 0 0 0 8px color-mix(in srgb, var(--acento) 0%, transparent);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #app .tetra-ajustes .tetra-tecla-boton-capturando,
+  #app .tetra-ajustes .tetra-tecla-boton-capturando:hover:not(:disabled) {
+    animation: none;
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--acento) 30%, transparent);
+  }
+
+  #app .tetra-ajustes .tetra-tecla-boton {
+    transition: none;
+  }
+}
+
+.tetra-ajustes-teclas-pie {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--espacio-3);
+}
+
+.tetra-ajustes-teclas-pie .tetra-ajustes-ayuda {
+  flex: 1 1 200px;
+}
+
+/* ---------------------------------------------------------------------- */
+/* Interruptor de FPS: se mantiene .tetra-toggle de style.css              */
+/* ---------------------------------------------------------------------- */
+
+.tetra-ajustes .tetra-toggle {
+  gap: 0;
+}
+
+/* ---------------------------------------------------------------------- */
+/* Skin: selector y boton de importar en la misma fila                     */
+/* ---------------------------------------------------------------------- */
+
+.tetra-ajustes-skin-controles {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--espacio-2);
+}
+
+.tetra-ajustes-skin-controles select {
+  flex: 1 1 160px;
+}
+
+.tetra-ajustes-skin-controles button {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+/* ---------------------------------------------------------------------- */
+/* Mensaje de error                                                        */
+/* ---------------------------------------------------------------------- */
+
+.tetra-ajustes-error {
+  margin: 0;
+  padding: var(--espacio-3) var(--espacio-4);
+  font-size: var(--tipo-sm);
+  color: var(--tinta);
+  background: var(--superficie);
+  border-left: 3px solid var(--j-miss);
+  border-radius: 0 var(--radio-control) var(--radio-control) 0;
+}
+
+.tetra-ajustes-error:empty {
+  display: none;
 }
