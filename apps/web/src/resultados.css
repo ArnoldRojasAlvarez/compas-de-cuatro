@@ -330,3 +330,13 @@
     font-size: var(--tipo-2xl);
   }
 }
+
+/* El boton de volver queda pegado al borde inferior de la ventana: los
+   resultados son mas altos que 800px y sin esto el boton principal queda
+   bajo el pliegue. */
+#app .tetra-resultados-volver-song-select {
+  position: sticky;
+  bottom: var(--espacio-4);
+  z-index: 5;
+  box-shadow: 0 0 0 8px var(--fondo);
+}

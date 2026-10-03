@@ -9,11 +9,10 @@
 // temporizadores. El bucle de dibujo usa rAF solo para dibujar.
 
 import './mapeador.css';
-import type { AnalisisOnsets, Column, Grilla, NivelAuto, Note } from '@tetra/core';
+import type { AnalisisOnsets, Column, EstimacionTempo, Grilla, NivelAuto, Note } from '@tetra/core';
 import {
   DIVISORES,
   PRESETS_AUTO,
-  analizarOnsets,
   duracionPulso,
   escribirOsu,
   estimarTempo,
@@ -23,6 +22,7 @@ import {
 } from '@tetra/core';
 import { construirOsz, guardarCancionCreada } from '@tetra/storage';
 import { runGame } from './game.js';
+import { analizarAudio } from './mapeador-worker-cliente.js';
 import { leerKeyMap } from './keymap.js';
 import {
   agregarTap,
@@ -178,14 +178,6 @@ function formatoTiempo(ms: number): string {
   const s = Math.floor((total % 60000) / 1000);
   const mm = Math.floor(total % 1000);
   return `${m}:${String(s).padStart(2, '0')}.${String(mm).padStart(3, '0')}`;
-}
-
-function cederHilo(): Promise<void> {
-  // Deja que el navegador pinte el aviso "analizando" antes de un calculo largo. Un
-  // temporizador y no rAF: rAF no corre con la pestana oculta y el analisis quedaria
-  // esperando. No mide tiempo de juego.
-  // eslint-disable-next-line no-restricted-globals -- solo cede el hilo, no mide tiempo (CLAUDE.md, "El reloj es el audio").
-  return new Promise((resolver) => setTimeout(resolver, 30));
 }
 
 function descargar(nombre: string, datos: BlobPart, tipo: string): void {
@@ -673,9 +665,9 @@ export function mostrarMapeador(contenedor: HTMLElement, opciones: OpcionesMapea
       leerMeta();
       vista.tiempo = 0;
       aviso('Analizando los golpes del audio...');
-      await cederHilo();
-      sesion.analisis = analizarOnsets(mono, buffer.sampleRate);
-      detectarTempo(false);
+      const { analisis, tempo } = await analizarAudio(mono, buffer.sampleRate);
+      sesion.analisis = analisis;
+      aplicarTempo(tempo, false);
       sincronizarBotones();
       aviso(
         `Listo. ${sesion.analisis.onsets.length} golpes detectados. Ajusta BPM y offset, y pulsa "Generar" o mapea a mano.`,
@@ -688,7 +680,10 @@ export function mostrarMapeador(contenedor: HTMLElement, opciones: OpcionesMapea
 
   function detectarTempo(avisar: boolean): void {
     if (!sesion.analisis) return;
-    const t = estimarTempo(sesion.analisis);
+    aplicarTempo(estimarTempo(sesion.analisis), avisar);
+  }
+
+  function aplicarTempo(t: EstimacionTempo | null, avisar: boolean): void {
     if (!t) {
       if (avisar) aviso('No se pudo estimar el tempo: pon el BPM a mano o usa "Tap tempo".', 'error');
       return;
