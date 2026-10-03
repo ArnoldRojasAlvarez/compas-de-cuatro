@@ -168,6 +168,25 @@ export function estrellasDeCancion(cancion: CancionGuardada, obtenerEstrellas: O
   return maximo;
 }
 
+/** T-022: nivel de color de una estrella (en CSS, la clase `tetra-estrella-<nivel>`). */
+export type NivelEstrellas = 'facil' | 'normal' | 'dificil' | 'insano' | 'experto' | 'extremo';
+
+/**
+ * T-022: nivel de color de una estrella global. Cortes: menos de 2 es
+ * facil, menos de 3 normal, menos de 4 dificil, menos de 5 insano, menos de
+ * 6.5 experto, el resto extremo. NaN o negativo caen en 'facil' (todas las
+ * comparaciones con NaN dan false, asi que hay que mirarlo aparte, igual
+ * que un valor negativo, que "no puede" ser mas dificil que facil).
+ */
+export function nivelDeEstrellas(estrellas: number): NivelEstrellas {
+  if (!(estrellas >= 2)) return 'facil'; // incluye NaN y negativos
+  if (estrellas < 3) return 'normal';
+  if (estrellas < 4) return 'dificil';
+  if (estrellas < 5) return 'insano';
+  if (estrellas < 6.5) return 'experto';
+  return 'extremo';
+}
+
 /**
  * Filtra por rango de estrellas (ver el ticket, "filtrar por rango de
  * estrellas"). `minimo`/`maximo` en `null` quiere decir "sin cota de ese

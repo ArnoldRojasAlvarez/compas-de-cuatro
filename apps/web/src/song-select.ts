@@ -33,10 +33,10 @@ import {
   filtrarCanciones,
   filtrarPorRangoDeEstrellas,
   formatearDuracion,
+  nivelDeEstrellas,
   ordenarCanciones,
   type CriterioDeOrden,
 } from './song-select-logica.js';
-import { colorDeEstrella } from './dificultad-logica.js';
 import { crearClienteDificultad } from './dificultad-worker-cliente.js';
 
 /**
@@ -227,6 +227,44 @@ export function mostrarSongSelect(contenedor: HTMLElement, opciones: OpcionesSon
       });
   }
 
+  // -- T-022: portadas. `URL.createObjectURL` UNA vez por cancion (cache por
+  // SongId), nunca por render: renderizar() corre en cada tecla del buscador
+  // y en cada estrella que llega del worker, y crear un URL por render
+  // dejaria cientos de Blob URLs vivos. Se revocan todas al salir de la
+  // pantalla (volver al menu, jugar: ver `revocarPortadas()` en esos dos
+  // puntos de salida) y antes de recargar la biblioteca (ver
+  // `cargarCanciones`, donde los Blob de `estado.todas` se reemplazan por
+  // los recien leidos de IndexedDB). El resto de la pantalla (reproductor,
+  // worker) ya se apaga en esos mismos puntos, asi que ahi mismo vive la
+  // limpieza de las portadas. --
+  const urlsDePortada = new Map<SongId, string>();
+
+  /** URL de la portada de `cancion` (creada la primera vez que se pide), o undefined si el .osz no traia fondo. */
+  function urlDePortada(cancion: CancionGuardada): string | undefined {
+    if (!cancion.background) return undefined;
+    let url = urlsDePortada.get(cancion.id);
+    if (url === undefined) {
+      url = URL.createObjectURL(cancion.background);
+      urlsDePortada.set(cancion.id, url);
+    }
+    return url;
+  }
+
+  function revocarPortadas(): void {
+    for (const url of urlsDePortada.values()) URL.revokeObjectURL(url);
+    urlsDePortada.clear();
+  }
+
+  /** Marca `elemento` con la portada de `cancion` (variable CSS `--portada`, que el CSS pinta bajo el velo) o con la clase de "sin portada". */
+  function aplicarPortada(elemento: HTMLElement, cancion: CancionGuardada, claseSinPortada: string): void {
+    const url = urlDePortada(cancion);
+    if (url === undefined) {
+      elemento.classList.add(claseSinPortada);
+    } else {
+      elemento.style.setProperty('--portada', `url("${url}")`);
+    }
+  }
+
   // -- Cascara de la pantalla: se crea UNA vez. render() de mas abajo solo
   // toca el contenido de `listaEl` y `detalleEl`, nunca esto: si se
   // reconstruyera todo en cada tecla del buscador, el <input> perderia el
@@ -245,6 +283,7 @@ export function mostrarSongSelect(contenedor: HTMLElement, opciones: OpcionesSon
   botonVolver.addEventListener('click', () => {
     reproductor.destruir();
     clienteDificultad.destruir();
+    revocarPortadas();
     opciones.aMenu();
   });
   encabezado.appendChild(botonVolver);
@@ -457,6 +496,10 @@ export function mostrarSongSelect(contenedor: HTMLElement, opciones: OpcionesSon
 
   async function cargarCanciones(idAEnfocar?: SongId): Promise<void> {
     estado.todas = await listarCanciones();
+    // Los Blob de portada de la lectura anterior ya no se usan (esta lectura
+    // trae objetos nuevos): se revocan sus URLs antes del proximo render,
+    // que crea las nuevas bajo demanda.
+    revocarPortadas();
     solicitarDificultadesDeTodas();
     const visibles = listaVisible();
     const idElegido = idAEnfocar ?? estado.cancionEnfocadaId ?? visibles[0]?.id ?? null;
@@ -477,19 +520,21 @@ export function mostrarSongSelect(contenedor: HTMLElement, opciones: OpcionesSon
   const TITULO_ESTRELLA_PROVISIONAL =
     'Calibracion parcial: ajustada con 54 mapas de osu! de chordjack, jumpstream y stream. En otros estilos puede desviarse.';
 
-  /** Vuelca `overall` (si ya esta calculado) o un placeholder de "calculando" en `badge`, con color y marca de provisional. Ancho fijo por CSS (ver .tetra-estrella): no salta el layout al pasar de un estado al otro. */
+  /** Vuelca `overall` (si ya esta calculado) o un placeholder de "calculando" en `badge`, con la clase de nivel (color) y la marca de provisional. Ancho fijo por CSS (ver .tetra-estrella): no salta el layout al pasar de un estado al otro. */
   function aplicarEstrellaABadge(badge: HTMLElement, overall: number | undefined): void {
     if (overall === undefined) {
       badge.textContent = '···';
       badge.classList.add('tetra-estrella-calculando');
-      badge.style.removeProperty('color');
       badge.removeAttribute('title');
       return;
     }
     badge.textContent = `${overall.toFixed(1)}★`;
     badge.classList.remove('tetra-estrella-calculando');
-    badge.style.color = `var(${colorDeEstrella(overall)})`;
+    // T-022: el color lo pone el CSS por clase (tetra-estrella-<nivel>), ya
+    // no un style inline por elemento.
+    badge.classList.add(`tetra-estrella-${nivelDeEstrellas(overall)}`);
     if (!MODELO_CALIBRADO) {
+      badge.classList.add('tetra-estrella-provisional');
       badge.title = TITULO_ESTRELLA_PROVISIONAL;
     }
   }
@@ -529,15 +574,27 @@ export function mostrarSongSelect(contenedor: HTMLElement, opciones: OpcionesSon
     const chart = cancion?.dificultades[estado.dificultadEnfocadaIndice];
     if (!cancion || !chart) return;
 
+    // T-022: portada grande arriba (con el mismo velo que las tarjetas) y
+    // titulo y artista superpuestos abajo a la izquierda; el resto del
+    // detalle va en `contenido`, con su propio padding.
+    const portada = document.createElement('div');
+    portada.className = 'tetra-song-select-detalle-portada';
+    aplicarPortada(portada, cancion, 'tetra-song-select-detalle-portada-vacia');
+
     const tituloCancion = document.createElement('h2');
     tituloCancion.className = 'tetra-song-select-detalle-titulo';
     tituloCancion.textContent = cancion.titulo;
-    detalleEl.appendChild(tituloCancion);
+    portada.appendChild(tituloCancion);
 
     const artista = document.createElement('p');
     artista.className = 'tetra-song-select-detalle-artista';
     artista.textContent = cancion.artista;
-    detalleEl.appendChild(artista);
+    portada.appendChild(artista);
+    detalleEl.appendChild(portada);
+
+    const contenido = document.createElement('div');
+    contenido.className = 'tetra-song-select-detalle-contenido';
+    detalleEl.appendChild(contenido);
 
     const info = calcularInfoDeDificultad(chart);
 
@@ -549,24 +606,29 @@ export function mostrarSongSelect(contenedor: HTMLElement, opciones: OpcionesSon
     nombreDificultad.textContent = `${info.nombre} · mapeado por ${info.creador}`;
     filaDificultad.appendChild(nombreDificultad);
     filaDificultad.appendChild(crearBadgeEstrellaDeDificultad(chart));
-    detalleEl.appendChild(filaDificultad);
+    contenido.appendChild(filaDificultad);
 
     if (!MODELO_CALIBRADO) {
       const avisoProvisional = document.createElement('p');
       avisoProvisional.className = 'tetra-song-select-detalle-provisional';
       avisoProvisional.textContent = TITULO_ESTRELLA_PROVISIONAL;
-      detalleEl.appendChild(avisoProvisional);
+      contenido.appendChild(avisoProvisional);
     }
 
     const datos = document.createElement('dl');
     datos.className = 'tetra-song-select-datos';
 
     function fila(etiqueta: string, valor: string): void {
+      // T-022: cada dato es una celda (un <div> dentro del <dl> es HTML
+      // valido y agrupa su dt/dd para la grilla del CSS).
+      const celda = document.createElement('div');
+      celda.className = 'tetra-song-select-dato';
       const dt = document.createElement('dt');
       dt.textContent = etiqueta;
       const dd = document.createElement('dd');
       dd.textContent = valor;
-      datos.append(dt, dd);
+      celda.append(dt, dd);
+      datos.appendChild(celda);
     }
 
     fila('BPM', String(Math.round(info.bpm)));
@@ -576,7 +638,7 @@ export function mostrarSongSelect(contenedor: HTMLElement, opciones: OpcionesSon
     fila('Notas largas', String(info.notasLargas));
     fila('OD', info.overallDifficulty.toFixed(1));
     fila('HP', info.hpDrain.toFixed(1));
-    detalleEl.appendChild(datos);
+    contenido.appendChild(datos);
 
     // T-014, Parte C: el perfil de siete skillsets de la dificultad en
     // foco (ver el ticket, "en el panel de detalle"). Barras, no radar
@@ -584,14 +646,14 @@ export function mostrarSongSelect(contenedor: HTMLElement, opciones: OpcionesSon
     const tituloPerfil = document.createElement('h3');
     tituloPerfil.className = 'tetra-song-select-perfil-titulo';
     tituloPerfil.textContent = 'Perfil de skillsets';
-    detalleEl.appendChild(tituloPerfil);
+    contenido.appendChild(tituloPerfil);
 
     const resultadoDificultad = resultadosDificultad.get(chart);
     if (!resultadoDificultad) {
       const calculandoPerfil = document.createElement('p');
       calculandoPerfil.className = 'tetra-song-select-perfil-calculando';
       calculandoPerfil.textContent = 'Calculando...';
-      detalleEl.appendChild(calculandoPerfil);
+      contenido.appendChild(calculandoPerfil);
     } else {
       const vector = resultadoDificultad.vector;
       const maximoValor = Math.max(...SKILLSETS.map((k) => vector[k]));
@@ -627,7 +689,7 @@ export function mostrarSongSelect(contenedor: HTMLElement, opciones: OpcionesSon
 
         perfil.appendChild(filaSkillset);
       }
-      detalleEl.appendChild(perfil);
+      contenido.appendChild(perfil);
     }
 
     const botonJugar = document.createElement('button');
@@ -635,18 +697,42 @@ export function mostrarSongSelect(contenedor: HTMLElement, opciones: OpcionesSon
     botonJugar.className = 'tetra-song-select-jugar tetra-boton-primario';
     botonJugar.textContent = `Jugar ${info.nombre}`;
     botonJugar.addEventListener('click', () => void jugarDificultadEnfocada());
-    detalleEl.appendChild(botonJugar);
+    contenido.appendChild(botonJugar);
   }
 
   function renderizarLista(): void {
     listaEl.innerHTML = '';
     const visibles = listaVisible();
 
+    // T-022: con la biblioteca vacia la zona de soltar se resalta (es lo
+    // que el jugador tiene que usar), no solo el bloque de la lista.
+    zonaImportar.classList.toggle('tetra-song-select-zona-resaltada', estado.todas.length === 0);
+
     if (visibles.length === 0) {
       const li = document.createElement('li');
-      li.className = 'tetra-song-select-lista-vacia';
-      li.textContent =
-        estado.todas.length === 0 ? 'Todavia no hay canciones cargadas.' : 'Sin resultados.';
+      if (estado.todas.length === 0) {
+        li.className = 'tetra-song-select-lista-vacia tetra-song-select-vacio';
+
+        // Icono hecho con CSS: cuatro barras verticales, el cuatro de la marca.
+        const icono = document.createElement('span');
+        icono.className = 'tetra-song-select-vacio-icono';
+        icono.setAttribute('aria-hidden', 'true');
+        for (let i = 0; i < 4; i++) icono.appendChild(document.createElement('span'));
+        li.appendChild(icono);
+
+        const tituloVacio = document.createElement('p');
+        tituloVacio.className = 'tetra-song-select-vacio-titulo';
+        tituloVacio.textContent = 'Tu biblioteca esta vacia';
+        li.appendChild(tituloVacio);
+
+        const ayudaVacio = document.createElement('p');
+        ayudaVacio.className = 'tetra-song-select-vacio-ayuda';
+        ayudaVacio.textContent = 'Solta un .osz de mania 4K en la zona de arriba o proba el click track.';
+        li.appendChild(ayudaVacio);
+      } else {
+        li.className = 'tetra-song-select-lista-vacia';
+        li.textContent = 'Sin resultados.';
+      }
       listaEl.appendChild(li);
       return;
     }
@@ -657,6 +743,8 @@ export function mostrarSongSelect(contenedor: HTMLElement, opciones: OpcionesSon
       const item = document.createElement('li');
       item.className = enfocada ? 'tetra-song-item tetra-song-item-enfocada' : 'tetra-song-item';
       item.dataset.songId = cancion.id;
+      // T-022: portada de fondo (bajo el velo del CSS) o franja sin portada.
+      aplicarPortada(item, cancion, 'tetra-song-item-sin-portada');
 
       const cabecera = document.createElement('button');
       cabecera.type = 'button';
@@ -753,6 +841,7 @@ export function mostrarSongSelect(contenedor: HTMLElement, opciones: OpcionesSon
     // `mostrarSongSelect` crea uno nuevo al volver.
     reproductor.destruir();
     clienteDificultad.destruir();
+    revocarPortadas();
     const resultado = await runGame(chart, audio, skin);
     if (resultado.estado === 'completado') {
       mostrarBotonVolverDesdeResultados();

@@ -17,7 +17,9 @@ import {
   filtrarCanciones,
   filtrarPorRangoDeEstrellas,
   formatearDuracion,
+  nivelDeEstrellas,
   ordenarCanciones,
+  type NivelEstrellas,
   type ObtenerEstrellas,
 } from './song-select-logica.js';
 
@@ -394,6 +396,40 @@ describe('filtrarPorRangoDeEstrellas', () => {
     const original = [...lista];
     filtrarPorRangoDeEstrellas(lista, 4, null, obtener);
     expect(lista).toEqual(original);
+  });
+});
+
+describe('nivelDeEstrellas', () => {
+  it.each<[number, NivelEstrellas]>([
+    [0, 'facil'],
+    [1.99, 'facil'],
+    [2, 'normal'],
+    [2.99, 'normal'],
+    [3, 'dificil'],
+    [3.99, 'dificil'],
+    [4, 'insano'],
+    [4.99, 'insano'],
+    [5, 'experto'],
+    [6.49, 'experto'],
+    [6.5, 'extremo'],
+    [12, 'extremo'],
+  ])('%f estrellas -> %s (los bordes exactos pertenecen al nivel de arriba)', (estrellas, esperado) => {
+    // Una implementacion con <= en vez de < en los cortes pondria el borde
+    // exacto (2, 3, 4, 5, 6.5) en el nivel de abajo.
+    expect(nivelDeEstrellas(estrellas)).toBe(esperado);
+  });
+
+  it('NaN cae en facil (todas las comparaciones con NaN dan false)', () => {
+    // Una cadena de `if (x < corte)` sin mirar NaN lo mandaria a 'extremo'.
+    expect(nivelDeEstrellas(Number.NaN)).toBe('facil');
+  });
+
+  it('un valor negativo cae en facil', () => {
+    expect(nivelDeEstrellas(-3)).toBe('facil');
+  });
+
+  it('infinito positivo es extremo', () => {
+    expect(nivelDeEstrellas(Number.POSITIVE_INFINITY)).toBe('extremo');
   });
 });
 

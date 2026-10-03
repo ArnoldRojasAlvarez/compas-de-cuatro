@@ -1,8 +1,15 @@
-/* Song select (song-select.ts). Movido desde style.css sin cambios (pasada grafica, T-019 a T-024): cada pantalla tiene su CSS propio para que varios tickets puedan trabajar en paralelo sin chocar en un solo archivo. */
+/* Song select (song-select.ts). Cada pantalla tiene su CSS propio para que varios tickets puedan trabajar en paralelo sin chocar en un solo archivo.
+
+   T-022 (pasada grafica): tarjetas con portada y velo, estrellas por nivel,
+   perfil de skillsets legible, estado vacio con presencia.
+
+   Nota de especificidad: style.css restila TODO <button> con `#app button`
+   (especificidad de id), asi que lo que aca pisa a un boton va con el
+   prefijo `#app` para ganarle; los selectores sin prefijo son para
+   elementos que no son botones. */
 
 /* ---------------------------------------------------------------------- */
-/* T-011/T-012: song select (ver src/song-select.ts). Sin estilos hasta    */
-/* T-012: esta seccion es enteramente nueva.                               */
+/* T-011/T-012: estructura de la pantalla (ver src/song-select.ts).        */
 /* ---------------------------------------------------------------------- */
 
 .tetra-song-select {
@@ -54,6 +61,7 @@
   min-width: 0;
 }
 
+/* Zona de soltar .osz: borde punteado en reposo, acento al arrastrar encima. */
 .tetra-song-select-zona {
   display: flex;
   flex-direction: column;
@@ -64,11 +72,24 @@
   border-radius: var(--radio-panel);
   text-align: center;
   color: var(--tinta-2);
+  transition:
+    border-color 0.15s ease,
+    color 0.15s ease,
+    background-color 0.15s ease;
 }
 
+/* Biblioteca vacia: la zona es lo que hay que usar, asi que se nota. */
+.tetra-song-select-zona-resaltada {
+  border-color: color-mix(in srgb, var(--acento) 45%, var(--linea));
+  background: color-mix(in srgb, var(--acento) 5%, transparent);
+  color: var(--tinta);
+}
+
+/* Despues de -resaltada a proposito: arrastrar encima gana siempre. */
 .tetra-song-select-zona-activa {
   border-color: var(--acento);
-  color: var(--tinta);
+  background: color-mix(in srgb, var(--acento) 10%, transparent);
+  color: var(--acento);
 }
 
 .tetra-song-select-zona-texto {
@@ -91,18 +112,25 @@
   font-size: var(--tipo-sm);
 }
 
+/* ---------------------------------------------------------------------- */
+/* T-022: lista de canciones. Cada <li> es una tarjeta; el padding de la   */
+/* lista deja lugar al desplazamiento del hover y al glow de la enfocada,  */
+/* que de otro modo el overflow de la lista recortaria.                    */
+/* ---------------------------------------------------------------------- */
+
 .tetra-song-select-lista {
   list-style: none;
   margin: 0;
-  padding: 0;
+  padding: var(--espacio-3);
   display: flex;
   flex-direction: column;
-  gap: var(--espacio-1);
+  gap: var(--espacio-2);
   max-height: 52vh;
+  overflow-x: hidden;
   overflow-y: auto;
   border: 1px solid var(--linea);
   border-radius: var(--radio-panel);
-  background: var(--superficie);
+  background: var(--fondo);
 }
 
 .tetra-song-select-lista-vacia {
@@ -112,26 +140,171 @@
   text-align: center;
 }
 
+/* Estado vacio (sin ninguna cancion): bloque con presencia. */
+.tetra-song-select-vacio {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--espacio-2);
+  padding: var(--espacio-6) var(--espacio-4);
+}
+
+/* El cuatro de la marca, hecho con CSS: cuatro barras verticales. */
+.tetra-song-select-vacio-icono {
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+  height: 48px;
+  margin-bottom: var(--espacio-2);
+}
+
+.tetra-song-select-vacio-icono > span {
+  display: block;
+  width: 9px;
+  border-radius: 2px;
+  background: var(--tinta-3);
+}
+
+.tetra-song-select-vacio-icono > span:nth-child(1) {
+  height: 55%;
+}
+
+.tetra-song-select-vacio-icono > span:nth-child(2) {
+  height: 100%;
+  background: var(--acento);
+}
+
+.tetra-song-select-vacio-icono > span:nth-child(3) {
+  height: 75%;
+}
+
+.tetra-song-select-vacio-icono > span:nth-child(4) {
+  height: 40%;
+}
+
+.tetra-song-select-vacio-titulo {
+  margin: 0;
+  font-family: var(--fuente-display);
+  font-weight: 600;
+  font-size: var(--tipo-lg);
+  color: var(--tinta);
+}
+
+.tetra-song-select-vacio-ayuda {
+  margin: 0;
+  max-width: 34ch;
+  font-size: var(--tipo-sm);
+  color: var(--tinta-2);
+  text-wrap: balance;
+}
+
+/* La tarjeta, sin overflow hidden: el borde redondeado recorta el fondo por
+   si solo, y un overflow recortaria la franja de ::after de mas abajo. Con
+   portada: la imagen de fondo (variable --portada, la pone JS) bajo un velo
+   en ::before. Sin portada: fondo de superficie y una franja vertical fina
+   a la izquierda (el borde izquierdo). */
 .tetra-song-item {
-  border-bottom: 1px solid var(--linea);
+  --velo-opacidad: 1;
+  position: relative;
+  isolation: isolate;
+  border: 1px solid var(--linea);
+  border-left: 3px solid transparent;
+  border-radius: var(--radio-control);
+  background-color: var(--superficie);
+  background-image: var(--portada, none);
+  background-size: cover;
+  background-position: center;
+  transition:
+    transform 0.15s ease,
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
 }
 
-.tetra-song-item:last-child {
-  border-bottom: none;
+/* Velo oscuro: de --fondo opaco a la izquierda a semitransparente a la
+   derecha, para que el texto se lea sobre cualquier portada. Al pasar el
+   mouse se aclara apenas (opacity < 1). */
+.tetra-song-item::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  background: linear-gradient(
+    90deg,
+    var(--fondo) 0%,
+    var(--fondo) 28%,
+    color-mix(in srgb, var(--fondo) 45%, transparent) 100%
+  );
+  opacity: var(--velo-opacidad);
+  transition: opacity 0.15s ease;
+  pointer-events: none;
 }
 
-.tetra-song-item-cabecera {
+/* Franja invisible a la izquierda: al desplazarse la tarjeta hacia la
+   derecha en el hover, el puntero que estaba en su borde izquierdo seguiria
+   adentro de ella en vez de salir y volver a entrar (parpadeo). Se mueve
+   junto con la tarjeta, asi que cubre ese hueco. */
+.tetra-song-item::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -6px;
+  width: 6px;
+}
+
+.tetra-song-item-sin-portada {
+  border-left-color: var(--linea);
+  background-image: none;
+}
+
+/* Sin portada no hay nada que cubrir: el velo se apaga. */
+.tetra-song-item-sin-portada::before {
+  display: none;
+}
+
+.tetra-song-item:hover {
+  --velo-opacidad: 0.82;
+  transform: translateX(3px);
+}
+
+.tetra-song-item-sin-portada:hover {
+  background-color: var(--superficie-2);
+}
+
+/* Foco: la cancion enfocada y el foco de teclado sobre su cabecera. Es la
+   unica cosa que brilla en la lista (docs/DISENO.md): borde izquierdo en el
+   acento y un glow muy tenue. */
+.tetra-song-item-enfocada,
+.tetra-song-item:has(.tetra-song-item-cabecera:focus-visible) {
+  border-left-color: var(--acento);
+  box-shadow: 0 0 10px color-mix(in srgb, var(--acento) 16%, transparent);
+}
+
+#app .tetra-song-item-cabecera {
   display: flex;
   flex-direction: row;
   align-items: center;
   gap: var(--espacio-2);
   width: 100%;
   box-sizing: border-box;
-  padding: var(--espacio-2) var(--espacio-3);
+  padding: var(--espacio-3);
   background: transparent;
   border: none;
   border-radius: 0;
   text-align: left;
+}
+
+/* El hover lo pinta la tarjeta (velo y desplazamiento), no el boton. */
+#app .tetra-song-item-cabecera:hover:not(:disabled) {
+  background: transparent;
+}
+
+/* El anillo del boton se reemplaza por el borde y el glow de la tarjeta
+   (ver :has arriba): un anillo exterior quedaria pegado al borde de la
+   tarjeta y se leeria como un segundo marco. */
+#app .tetra-song-item-cabecera:focus-visible {
+  outline: none;
 }
 
 /* T-014: titulo + artista quedan en su propia columna (antes eran hijos
@@ -145,79 +318,144 @@
   flex: 1;
 }
 
-.tetra-song-item-cabecera:hover:not(:disabled) {
-  background: var(--superficie-2);
-}
-
-/* La cancion en foco se resalta (docs/DISENO.md, "una sola cosa brilla por
-   pantalla": aca es literal, el borde izquierdo con el acento marca cual
-   es la unica cancion "activa" en la lista). */
-.tetra-song-item-enfocada {
-  background: var(--superficie-2);
-  border-left: 2px solid var(--acento);
-}
-
-.tetra-song-item-enfocada .tetra-song-item-cabecera {
-  padding-left: calc(var(--espacio-3) - 2px);
-}
-
 .tetra-song-item-titulo {
+  max-width: 100%;
+  font-family: var(--fuente-display);
+  font-weight: 600;
   font-size: var(--tipo-sm);
   color: var(--tinta);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .tetra-song-item-artista {
+  max-width: 100%;
   font-size: var(--tipo-xs);
-  color: var(--tinta-3);
+  color: var(--tinta-2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
+/* Dificultades como chips con la estrella coloreada. */
 .tetra-song-item-dificultades {
   list-style: none;
   margin: 0;
-  padding: 0 var(--espacio-3) var(--espacio-2);
+  padding: 0 var(--espacio-3) var(--espacio-3);
   display: flex;
   flex-wrap: wrap;
   gap: var(--espacio-1);
 }
 
-.tetra-dificultad-item {
+#app .tetra-dificultad-item {
   display: inline-flex;
   align-items: center;
   gap: var(--espacio-2);
   font-size: var(--tipo-xs);
   padding: var(--espacio-1) var(--espacio-2);
+  background: color-mix(in srgb, var(--fondo) 70%, transparent);
+  border: 1px solid var(--linea);
+  color: var(--tinta-2);
 }
 
-.tetra-dificultad-item-enfocada {
-  background: var(--acento);
+#app .tetra-dificultad-item:hover:not(:disabled) {
+  background: var(--superficie-2);
+  color: var(--tinta);
+}
+
+#app .tetra-dificultad-item-enfocada,
+#app .tetra-dificultad-item-enfocada:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--acento) 12%, var(--fondo));
   border-color: var(--acento);
-  color: var(--fondo);
+  color: var(--tinta);
 }
 
-/* T-014: estrella dentro del boton de dificultad enfocado, mismo color que
-   el resto del boton (fondo acento) para que la marca de provisional (el
-   subrayado punteado, ver .tetra-estrella-provisional) siga siendo legible. */
-.tetra-dificultad-item-enfocada .tetra-dificultad-item-estrella {
-  color: inherit !important;
+/* Dentro del chip la estrella no lleva caja propia (el chip ya es la
+   caja): solo el texto en el color de su nivel. */
+.tetra-dificultad-item .tetra-estrella {
+  padding: 0;
+  background: transparent;
+  border-color: transparent;
 }
+
+/* ---------------------------------------------------------------------- */
+/* T-022: panel de detalle. Portada arriba (mismo velo, alto fijo) con     */
+/* titulo y artista superpuestos; debajo, el contenido con su padding.     */
+/* ---------------------------------------------------------------------- */
 
 .tetra-song-select-detalle {
   display: flex;
   flex-direction: column;
-  gap: var(--espacio-2);
-  padding: var(--espacio-4);
   background: var(--superficie);
   border: 1px solid var(--linea);
   border-radius: var(--radio-panel);
   min-height: 200px;
   box-sizing: border-box;
+  overflow: hidden;
 }
 
 .tetra-song-select-detalle-vacio {
   margin: auto;
+  padding: var(--espacio-4);
   color: var(--tinta-3);
   font-size: var(--tipo-sm);
   text-align: center;
+}
+
+.tetra-song-select-detalle-portada {
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: 2px;
+  flex-shrink: 0;
+  height: 160px;
+  box-sizing: border-box;
+  padding: var(--espacio-3) var(--espacio-4);
+  background-color: var(--superficie-2);
+  background-image: var(--portada, none);
+  background-size: cover;
+  background-position: center;
+}
+
+/* Mismo velo que las tarjetas (de --fondo opaco a la izquierda a
+   semitransparente a la derecha) mas un fundido hacia abajo, que es donde
+   va el texto. */
+.tetra-song-select-detalle-portada::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background:
+    linear-gradient(0deg, color-mix(in srgb, var(--fondo) 90%, transparent) 0%, transparent 65%),
+    linear-gradient(
+      90deg,
+      var(--fondo) 0%,
+      color-mix(in srgb, var(--fondo) 70%, transparent) 40%,
+      color-mix(in srgb, var(--fondo) 45%, transparent) 100%
+    );
+  pointer-events: none;
+}
+
+/* Sin portada: fondo liso y la misma franja vertical que la tarjeta. */
+.tetra-song-select-detalle-portada-vacia {
+  border-left: 3px solid var(--linea);
+  border-bottom: 1px solid var(--linea);
+  background-image: none;
+}
+
+.tetra-song-select-detalle-portada-vacia::before {
+  display: none;
+}
+
+.tetra-song-select-detalle-contenido {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  gap: var(--espacio-3);
+  padding: var(--espacio-4);
 }
 
 .tetra-song-select-detalle-titulo {
@@ -227,6 +465,11 @@
   font-size: var(--tipo-lg);
   color: var(--tinta);
   text-wrap: balance;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
 }
 
 .tetra-song-select-detalle-artista {
@@ -259,44 +502,95 @@
   font-style: italic;
 }
 
+/* Datos (BPM, duracion, notas...) como grilla de celdas mono. Cada celda es
+   un <div> con su dt/dd; la ultima (siete datos en dos columnas) ocupa todo
+   el ancho para no dejar un hueco. */
 .tetra-song-select-datos {
   display: grid;
-  grid-template-columns: auto 1fr;
-  gap: var(--espacio-1) var(--espacio-3);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--espacio-2);
   margin: 0;
   font-family: var(--fuente-datos);
-  font-size: var(--tipo-sm);
   font-variant-numeric: tabular-nums;
 }
 
+.tetra-song-select-dato {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--espacio-2) var(--espacio-3);
+  background: var(--superficie-2);
+  border-radius: var(--radio-control);
+}
+
+.tetra-song-select-dato:last-child:nth-child(odd) {
+  grid-column: 1 / -1;
+}
+
 .tetra-song-select-datos dt {
+  font-size: var(--tipo-xs);
   color: var(--tinta-3);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
 }
 
 .tetra-song-select-datos dd {
   margin: 0;
+  font-size: var(--tipo-base);
   color: var(--tinta);
-  text-align: right;
 }
 
-/* T-014: estrella, en cualquier contexto (lista o detalle). Ancho fijo en
-   caracteres para que el estado "calculando" (···) no salte el layout
-   cuando el resultado real llega (ver el ticket, "un estado de calculando
-   que no salte el layout"). El color lo pone JS por elemento (colorDeEstrella,
-   derivado de los tokens de juicio: docs/DISENO.md, "no un arcoiris nuevo"). */
+/* ---------------------------------------------------------------------- */
+/* T-022: badge de estrellas. Color por nivel (nivelDeEstrellas en         */
+/* song-select-logica.ts): fondo del color con alpha baja, borde y texto   */
+/* en el color. Ancho fijo en caracteres para que el estado "calculando"   */
+/* (···) no salte el layout cuando llega el resultado real.                */
+/* ---------------------------------------------------------------------- */
+
 .tetra-estrella {
+  --nivel: var(--tinta);
   display: inline-block;
   min-width: 3.5ch;
+  padding: 1px 6px;
   font-family: var(--fuente-datos);
   font-size: var(--tipo-xs);
   font-variant-numeric: tabular-nums;
-  text-align: right;
-  color: var(--tinta);
+  text-align: center;
+  color: var(--nivel);
+  background: color-mix(in srgb, var(--nivel) 14%, transparent);
+  border: 1px solid color-mix(in srgb, var(--nivel) 65%, transparent);
+  border-radius: var(--radio-control);
   flex-shrink: 0;
 }
 
+/* Cortes de nivel: ver nivelDeEstrellas. Colores del espectro de juicio
+   (docs/DISENO.md, "no un arcoiris nuevo"). */
+.tetra-estrella-facil {
+  --nivel: var(--j-200);
+}
+
+.tetra-estrella-normal {
+  --nivel: var(--j-100);
+}
+
+.tetra-estrella-dificil {
+  --nivel: var(--acento);
+}
+
+.tetra-estrella-insano {
+  --nivel: var(--acento-2);
+}
+
+.tetra-estrella-experto {
+  --nivel: var(--j-miss);
+}
+
+.tetra-estrella-extremo {
+  --nivel: var(--j-50);
+}
+
 .tetra-estrella-calculando {
-  color: var(--tinta-3);
+  --nivel: var(--tinta-3);
 }
 
 /* Subrayado punteado discreto: la marca visual de "provisional" (ver
@@ -313,9 +607,12 @@
   font-size: var(--tipo-sm);
 }
 
-/* T-014, Parte C: perfil de siete skillsets (ver el ticket, "en el panel
-   de detalle"). Barras horizontales, no radar: se leen y se comparan mejor
-   en una sola escala (docs/DISENO.md). */
+/* ---------------------------------------------------------------------- */
+/* T-014, Parte C / T-022: perfil de siete skillsets. Barras horizontales, */
+/* no radar: se leen y se comparan mejor en una sola escala. Nombre de     */
+/* ancho fijo, pista visible, barra en tinta-3 y la dominante en acento.   */
+/* ---------------------------------------------------------------------- */
+
 .tetra-song-select-perfil-titulo {
   margin: var(--espacio-2) 0 0;
   font-family: var(--fuente-display);
@@ -343,11 +640,13 @@
 
 .tetra-perfil-fila {
   display: grid;
-  /* 10ch: el nombre mas largo de los siete skillsets es "jumpstream"/
-     "handstream" (10 caracteres). Con menos, "Jumpstre..." queda cortado. */
-  grid-template-columns: 10ch 1fr 5ch;
+  /* 12ch fijo: el nombre mas largo de los siete skillsets es
+     "jumpstream"/"handstream" (10 caracteres), con aire de sobra para que
+     las pistas de todas las filas arranquen en la misma columna. */
+  grid-template-columns: 12ch minmax(0, 1fr) 5ch;
   align-items: center;
-  gap: var(--espacio-2);
+  gap: var(--espacio-3);
+  min-height: 26px;
 }
 
 .tetra-perfil-fila-nombre {
@@ -361,7 +660,7 @@
 
 .tetra-perfil-fila-pista {
   display: block;
-  height: 6px;
+  height: 8px;
   border-radius: 999px;
   background: var(--superficie-2);
   overflow: hidden;
@@ -429,5 +728,30 @@
 @media (max-width: 720px) {
   .tetra-song-select-cuerpo {
     grid-template-columns: 1fr;
+  }
+
+  .tetra-song-select-herramientas {
+    margin-left: 0;
+    width: 100%;
+  }
+
+  .tetra-song-select-buscar {
+    min-width: 0;
+    flex: 1 1 100%;
+  }
+}
+
+/* Sin desplazamientos ni transiciones de movimiento para quien las pide
+   reducidas: el hover sigue aclarando el velo, pero sin mover la tarjeta. */
+@media (prefers-reduced-motion: reduce) {
+  .tetra-song-item,
+  .tetra-song-item::before,
+  .tetra-perfil-fila-barra,
+  .tetra-song-select-zona {
+    transition: none;
+  }
+
+  .tetra-song-item:hover {
+    transform: none;
   }
 }
