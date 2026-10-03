@@ -1,6 +1,6 @@
 # Estado del proyecto
 
-Ultima actualizacion: 28 de setiembre de 2026.
+Ultima actualizacion: 3 de octubre de 2026.
 
 Estado corto y siempre al dia. **Si sos una sesion NUEVA, empeza por
 `docs/HANDOFF.md`** (metodo de trabajo, reglas, lecciones), despues
@@ -8,7 +8,7 @@ Estado corto y siempre al dia. **Si sos una sesion NUEVA, empeza por
 
 ## Donde esta todo
 
-- `main`: limpio, verde, 423 tests + e2e de sincronia.
+- `main`: limpio, verde, 443 tests + e2e de sincronia.
 - En curso: nada.
 
 ## Hecho
@@ -32,6 +32,7 @@ Estado corto y siempre al dia. **Si sos una sesion NUEVA, empeza por
 | T-016 | Motor v2: stamina como media movil del strain en estrellas, anclada en regimen; exponente de estrellas (version 2) |
 | T-017 | Jackspeed en cualquier fila con jack; chordjack igual que T-013 (version 3) |
 | T-018 | Calibracion v1 con 54 SR de osu! lazer: Spearman 0.962, error medio 0.21 estrellas (version 4) |
+| Header | Header persistente con hora y tiempo jugado acumulado (suma el tiempo de cancion real, oculto en partida) |
 | T-015 | Herramienta `#calibracion`: SR de osu! por dificultad, Spearman, ajuste log-log, export JSON |
 
 La prueba de feel de Arnold ya se hizo: en una cancion real sus golpes salieron
@@ -48,7 +49,6 @@ centrados en cero. El motor esta bien sincronizado.
   anote el SR de osu! de unas 25 dificultades. Los `.osz` de Arnold los
   importa osu! lazer y desaparecen de Descargas; se leen de su almacen con
   `medir-lazer.mjs` (scratchpad, ver T-017).
-- **Header persistente** con tiempo y tiempo jugado.
 - **La cancion y el video del avance II (28 de octubre):** camino critico del
   curso, no depende del codigo.
 

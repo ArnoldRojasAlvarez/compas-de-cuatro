@@ -9,13 +9,21 @@
 
 body {
   margin: 0;
+  /* Alto reservado para el header persistente (header.ts). En partida el
+     header se oculta y el espacio se devuelve (ver mas abajo). */
+  padding-top: var(--alto-header);
   background: var(--fondo);
   color: var(--tinta);
   font-family: var(--fuente-cuerpo);
+  --alto-header: 32px;
+}
+
+body.tetra-en-juego {
+  --alto-header: 0px;
 }
 
 #app {
-  min-height: 100vh;
+  min-height: calc(100vh - var(--alto-header));
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -894,4 +902,63 @@ body {
   .tetra-song-select-cuerpo {
     grid-template-columns: 1fr;
   }
+}
+
+/* ---------------------------------------------------------------------- */
+/* Header persistente (header.ts): barra fina fija arriba, fuera de #app.  */
+/* No empuja el layout (position: fixed) y se oculta durante la partida.   */
+/* ---------------------------------------------------------------------- */
+
+.tetra-header {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--espacio-4);
+  padding: var(--espacio-2) var(--espacio-5);
+  background: var(--fondo);
+  border-bottom: 1px solid var(--linea);
+  font-size: var(--tipo-xs);
+  color: var(--tinta-2);
+  pointer-events: none;
+}
+
+.tetra-header-marca {
+  font-family: var(--fuente-display);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--acento);
+}
+
+.tetra-header-datos {
+  display: flex;
+  align-items: baseline;
+  gap: var(--espacio-5);
+}
+
+.tetra-header-dato {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--espacio-2);
+}
+
+.tetra-header-etiqueta {
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--tinta-3);
+}
+
+.tetra-header-valor {
+  font-family: var(--fuente-datos);
+  font-variant-numeric: tabular-nums;
+  color: var(--tinta);
+}
+
+body.tetra-en-juego .tetra-header {
+  display: none;
 }

@@ -8,10 +8,13 @@
 
 import './style.css';
 import { iniciarRouter } from './router.js';
+import { montarHeader } from './header.js';
 
 const contenedor = document.getElementById('app');
 if (!contenedor) {
   throw new Error('No se encontro el elemento #app en el documento.');
 }
+
+montarHeader();
 
 iniciarRouter(contenedor);

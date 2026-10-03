@@ -20,6 +20,8 @@ import { leerOffset } from './offset.js';
 import { leerVelocidad, velocidadAScrollDuration } from './velocidad.js';
 import { leerKeyMap } from './keymap.js';
 import { leerMostrarFps } from './graficos.js';
+import { CLASE_EN_JUEGO, EVENTO_TIEMPO_JUGADO } from './header.js';
+import { sumarTiempoJugado } from './tiempo-jugado.js';
 
 // scrollDuration no es fijo desde T-008: sale de la velocidad guardada por
 // el jugador (ver apps/web/src/velocidad.ts) y se calcula una sola vez al
@@ -151,6 +153,7 @@ export function runGame(
     // callback de app.init()), asi que se fija el tipo una sola vez aca.
     const contenedor: HTMLElement = elementoApp;
     contenedor.innerHTML = '';
+    document.body.classList.add(CLASE_EN_JUEGO);
 
     // T-008: la velocidad se lee una sola vez al arrancar, igual que el
     // offset (ver el comentario de leerOffset() mas abajo): no hay pausa ni
@@ -224,6 +227,16 @@ export function runGame(
       if (rafId !== 0) {
         cancelAnimationFrame(rafId);
       }
+      // Tiempo de cancion que corrio de verdad (el lead-in da now() negativo
+      // y sumarTiempoJugado lo ignora). Se lee antes de clock.stop(). Si el
+      // almacenamiento falla no debe impedir cerrar la partida.
+      try {
+        sumarTiempoJugado(Math.min(clock.now(), clock.duration));
+        window.dispatchEvent(new Event(EVENTO_TIEMPO_JUGADO));
+      } catch {
+        // el header simplemente no se actualiza.
+      }
+      document.body.classList.remove(CLASE_EN_JUEGO);
       clock.stop();
       input?.destroy();
       window.removeEventListener('keydown', manejarEscape);
