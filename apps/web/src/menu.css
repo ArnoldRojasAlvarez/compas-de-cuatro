@@ -38,9 +38,11 @@
 .tetra-menu-titulo {
   margin: 0;
   font-family: var(--fuente-display);
-  font-weight: 600;
+  /* T-024: un poco mas de presencia (peso y tracking). */
+  font-weight: 700;
   font-size: var(--tipo-2xl);
-  letter-spacing: 0.02em;
+  letter-spacing: 0.06em;
+  line-height: 1.1;
   color: var(--tinta);
   text-wrap: balance;
 }
@@ -65,4 +67,24 @@
   padding: var(--espacio-3) var(--espacio-4);
   font-size: var(--tipo-base);
   text-align: center;
+}
+
+/* Mismo lenguaje de microinteracciones que el resto de la app (transiciones
+   y :active salen de style.css): el boton secundario del menu insinua el
+   acento en el borde al pasar el mouse, sin rellenarse, para que "Jugar"
+   siga siendo lo unico que brilla. Vale para cualquier cantidad de botones
+   en .tetra-menu-accesos (por ejemplo un tercero, "Mapeador"). */
+#app .tetra-menu-boton:not(.tetra-boton-primario):hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--acento) 45%, var(--linea));
+}
+
+/* Con tres botones el menu crece unos 50px: en ventanas bajas se compacta
+   para mantener el "sin scroll". */
+@media (max-height: 760px) {
+  .tetra-menu {
+    gap: var(--espacio-3);
+  }
+  .tetra-menu-boton {
+    padding: var(--espacio-2) var(--espacio-4);
+  }
 }

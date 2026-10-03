@@ -1,8 +1,10 @@
-/* Header persistente (header.ts). Movido desde style.css sin cambios (pasada grafica, T-019 a T-024): cada pantalla tiene su CSS propio para que varios tickets puedan trabajar en paralelo sin chocar en un solo archivo. */
+/* Header persistente (header.ts). Movido desde style.css (pasada grafica, T-019 a T-024): cada pantalla tiene su CSS propio para que varios tickets puedan trabajar en paralelo sin chocar en un solo archivo. */
 
 /* ---------------------------------------------------------------------- */
 /* Header persistente (header.ts): barra fina fija arriba, fuera de #app.  */
 /* No empuja el layout (position: fixed) y se oculta durante la partida.   */
+/* T-024: fondo translucido con blur, marca con cuatro barras, datos en    */
+/* mono tabular. Alto fijo de 32px (--alto-header).                        */
 /* ---------------------------------------------------------------------- */
 
 .tetra-header {
@@ -11,24 +13,64 @@
   left: 0;
   right: 0;
   z-index: 10;
+  box-sizing: border-box;
+  height: var(--alto-header);
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--espacio-4);
-  padding: var(--espacio-2) var(--espacio-5);
-  background: var(--fondo);
+  padding: 0 var(--espacio-5);
+  background: color-mix(in srgb, var(--fondo) 80%, transparent);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
   border-bottom: 1px solid var(--linea);
   font-size: var(--tipo-xs);
+  line-height: 1;
   color: var(--tinta-2);
   pointer-events: none;
 }
 
 .tetra-header-marca {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--espacio-2);
   font-family: var(--fuente-display);
   font-weight: 600;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--acento);
+}
+
+/* Cuatro barras chicas de alturas distintas: el cuatro, y un guino al
+   espectro del logo. Solo decoracion (aria-hidden en el HTML). */
+.tetra-header-barras {
+  display: inline-flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 12px;
+}
+
+.tetra-header-barras > span {
+  display: block;
+  width: 2px;
+  background: var(--acento);
+  border-radius: 1px;
+}
+
+.tetra-header-barras > span:nth-child(1) {
+  height: 5px;
+  opacity: 0.55;
+}
+.tetra-header-barras > span:nth-child(2) {
+  height: 10px;
+}
+.tetra-header-barras > span:nth-child(3) {
+  height: 7px;
+  opacity: 0.8;
+}
+.tetra-header-barras > span:nth-child(4) {
+  height: 12px;
+  opacity: 0.55;
 }
 
 .tetra-header-datos {

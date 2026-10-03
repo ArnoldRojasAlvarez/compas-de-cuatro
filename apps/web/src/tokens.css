@@ -63,4 +63,12 @@
      que lean como instrumento tecnico; paneles con algo mas de aire. */
   --radio-control: 4px;
   --radio-panel: 12px;
+
+  /* -- Movimiento (T-024): duraciones y curva compartidas -- */
+  --duracion-rapida: 140ms;
+  --duracion-entrada: 200ms;
+  --curva-salida: cubic-bezier(0.22, 0.61, 0.36, 1);
+
+  /* Brillo tenue del acento, para el hover del boton primario. */
+  --sombra-acento: 0 0 16px color-mix(in srgb, var(--acento) 28%, transparent);
 }
