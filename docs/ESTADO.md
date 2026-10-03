@@ -52,6 +52,11 @@ centrados en cero. El motor esta bien sincronizado.
 
 ## Lo que sigue despues
 
+- **Backlog de mejoras:** `docs/BACKLOG.md` indexa los tickets T-026 a T-048
+  (pausa, hitsounds, records, mejoras del mapeador, modo presentacion, e2e,
+  accesibilidad, respaldo y mas), con prioridad, dependencias y decisiones
+  pendientes de Arnold.
+
 - **Calibracion con datos:** la herramienta ya esta (T-015). Falta que Arnold
   anote el SR de osu! de unas 25 dificultades. Los `.osz` de Arnold los
   importa osu! lazer y desaparecen de Descargas; se leen de su almacen con
