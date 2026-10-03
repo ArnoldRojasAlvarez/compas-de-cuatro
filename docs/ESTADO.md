@@ -40,6 +40,7 @@ Estado corto y siempre al dia. **Si sos una sesion NUEVA, empeza por
 | T-022 | Song select: tarjetas con portada (object URLs cacheados y revocados), estrellas por nivel, perfil legible, estado vacio |
 | T-023 | Ajustes en cuatro tarjetas numeradas, controles de 36px, teclas como keycaps |
 | T-024 | Fondo con halo y rejilla de cuatro columnas, transicion de entrada por pantalla, microinteracciones, header sin trabajo por frame |
+| T-025 | Mapeador: editor manual (canvas, rejilla, onda, grabacion en vivo, deshacer), mapeo automatico por onsets y tempo con cuatro niveles, analisis en Web Worker, probar, guardar en la biblioteca y exportar `.osz`/`.osu` |
 
 La prueba de feel de Arnold ya se hizo: en una cancion real sus golpes salieron
 centrados en cero. El motor esta bien sincronizado.
@@ -55,6 +56,13 @@ centrados en cero. El motor esta bien sincronizado.
   anote el SR de osu! de unas 25 dificultades. Los `.osz` de Arnold los
   importa osu! lazer y desaparecen de Descargas; se leen de su almacen con
   `medir-lazer.mjs` (scratchpad, ver T-017).
+- **Mapeador con musica real:** probar el automatico con la cancion de Arnold,
+  revisar BPM de oido y ver que ajustes de `PRESETS_AUTO` hacen falta. Ideas
+  pendientes: tempo variable, copiar y pegar, latencia de grabacion, reabrir en
+  el editor una cancion de la biblioteca (ver `docs/tickets/T-025-mapeador.md`).
+- **Probar en el navegador sin sonido:** en `npm run dev`, poner
+  `localStorage.setItem('tetra:mudo','1')` en la consola silencia todo el audio
+  de esa pestana (lo inyecta `vite.config.ts`, solo en dev y por navegador).
 - **La cancion y el video del avance II (28 de octubre):** camino critico del
   curso, no depende del codigo.
 
