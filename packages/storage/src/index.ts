@@ -15,6 +15,7 @@
 
 import type { DifficultyResult } from '@tetra/core';
 import { extraerCancionDeOsz } from './osz.js';
+import { construirOsz, type EntradaOsz } from './osz-escritor.js';
 import { extraerImagenesDeOsk } from './osk.js';
 import {
   guardarCancion,
@@ -29,6 +30,8 @@ import type { SongId, CancionGuardada, SkinId, SkinGuardada } from './db.js';
 export type { SongId, CancionGuardada, SkinId, SkinGuardada, DificultadCacheada } from './db.js';
 export type { MapaImportado, CancionImportada } from './osz.js';
 export { elegirArchivoOsu, elegirArchivosOsu, mimeDesdeNombre, extraerMapaDeOsz, extraerCancionDeOsz } from './osz.js';
+export type { DificultadParaOsz, EntradaOsz } from './osz-escritor.js';
+export { construirOsz, nombreDeOsu, nombreSeguro } from './osz-escritor.js';
 export type { ClaveImagenSkin, ImagenesDeSkin } from './osk.js';
 export { ubicarImagenesDeSkin, extraerImagenesDeOsk } from './osk.js';
 
@@ -111,4 +114,14 @@ export function cachearDificultad(clave: string, resultado: DifficultyResult): P
 /** Lee un resultado de dificultad de la cache. `undefined` si no hay entrada para esa clave. */
 export function leerDificultadDeCache(clave: string): Promise<DifficultyResult | undefined> {
   return leerDificultadCacheada(clave);
+}
+
+/**
+ * Guarda en la biblioteca una cancion creada en el mapeador. Pasa por un .osz
+ * (el mismo camino que cualquier importacion) para que lo guardado sea
+ * exactamente lo que se exportaria. Devuelve el id de la cancion.
+ */
+export async function guardarCancionCreada(entrada: EntradaOsz): Promise<SongId> {
+  const osz = construirOsz(entrada);
+  return importarOsz(new Blob([new Uint8Array(osz)], { type: 'application/zip' }));
 }
