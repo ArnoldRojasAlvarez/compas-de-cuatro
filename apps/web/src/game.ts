@@ -22,6 +22,8 @@ import { leerKeyMap } from './keymap.js';
 import { leerMostrarFps } from './graficos.js';
 import { CLASE_EN_JUEGO, EVENTO_TIEMPO_JUGADO } from './header.js';
 import { sumarTiempoJugado } from './tiempo-jugado.js';
+import { crearMenuPausa, type MenuPausa } from './pausa.js';
+import { numeroDeCuenta, transicionPausa, type FasePausa } from './pausa-logica.js';
 import {
   escalaPulsoCombo,
   formatearPrecision,
@@ -57,7 +59,8 @@ const LEAD_IN_MS: Ms = 1500;
  */
 export type ResultadoPartida =
   | { readonly estado: 'completado'; readonly score: ScoreState }
-  | { readonly estado: 'abortado' };
+  | { readonly estado: 'abortado' }
+  | { readonly estado: 'reintentar' };
 
 /**
  * Gancho de depuracion para el e2e de Playwright (ver
@@ -451,6 +454,9 @@ export function runGame(
         // el header simplemente no se actualiza.
       }
       document.body.classList.remove(CLASE_EN_JUEGO);
+      cerrarCuenta();
+      menuPausa?.destruir();
+      menuPausa = null;
       clock.stop();
       input?.destroy();
       window.removeEventListener('keydown', manejarEscape);
@@ -500,10 +506,122 @@ export function runGame(
       resolve({ estado: 'abortado' });
     }
 
-    function manejarEscape(evento: KeyboardEvent): void {
-      if (evento.key === 'Escape') {
-        abortar();
+    // T-026: pausa. Al pausar se suspende el AudioContext del juego, y su
+    // currentTime (el reloj de juego) se congela solo: no se mide la pausa con
+    // ningun temporizador. La cuenta regresiva se mide con el reloj de OTRO
+    // AudioContext. Las pulsaciones hechas durante la pausa se descartan.
+    let fase: FasePausa = 'jugando';
+    let menuPausa: MenuPausa | null = null;
+    let ctxCuenta: AudioContext | null = null;
+    let cuentaRafId = 0;
+    let cuentaInicio = 0;
+    // Lo asigna app.init().then(): programa el siguiente frame del bucle de juego.
+    let reanudarBucle: (() => void) | null = null;
+    // Para poner en reposo las teclas visuales al reanudar; lo asigna app.init().then().
+    let soltarTeclas: (() => void) | null = null;
+
+    function cerrarCuenta(): void {
+      if (cuentaRafId !== 0) {
+        cancelAnimationFrame(cuentaRafId);
+        cuentaRafId = 0;
       }
+      if (ctxCuenta) {
+        void ctxCuenta.close().catch(() => {
+          // best-effort, igual que el contexto del juego.
+        });
+        ctxCuenta = null;
+      }
+    }
+
+    function pausar(): void {
+      if (detenido || !appInicializada) return;
+      const siguiente = transicionPausa(fase, 'pausar');
+      if (siguiente === null) return;
+      fase = siguiente;
+      if (rafId !== 0) {
+        cancelAnimationFrame(rafId);
+        rafId = 0;
+      }
+      void ctx.suspend();
+      menuPausa = crearMenuPausa(partida, {
+        continuar: () => iniciarCuenta(),
+        reintentar: () => reintentar(),
+        salir: () => abortar(),
+      });
+      menuPausa.mostrarMenu();
+    }
+
+    function iniciarCuenta(): void {
+      const siguiente = transicionPausa(fase, 'continuar');
+      if (siguiente === null || !menuPausa) return;
+      fase = siguiente;
+      ctxCuenta = new AudioContext();
+      cuentaInicio = ctxCuenta.currentTime;
+      menuPausa.mostrarCuenta(numeroDeCuenta(0));
+      const pasoDeCuenta = (): void => {
+        if (!ctxCuenta || !menuPausa || fase !== 'cuenta') return;
+        const numero = numeroDeCuenta(ctxCuenta.currentTime - cuentaInicio);
+        if (numero === 0) {
+          reanudar();
+          return;
+        }
+        menuPausa.mostrarCuenta(numero);
+        // eslint-disable-next-line no-restricted-globals -- solo dibuja el numero de la cuenta; el tiempo sale del currentTime de un AudioContext (CLAUDE.md, "El reloj es el audio").
+        cuentaRafId = requestAnimationFrame(pasoDeCuenta);
+      };
+      // eslint-disable-next-line no-restricted-globals -- ver comentario dentro de pasoDeCuenta().
+      cuentaRafId = requestAnimationFrame(pasoDeCuenta);
+    }
+
+    function volverAPausa(): void {
+      const siguiente = transicionPausa(fase, 'volver');
+      if (siguiente === null) return;
+      fase = siguiente;
+      cerrarCuenta();
+      menuPausa?.mostrarMenu();
+    }
+
+    function reanudar(): void {
+      const siguiente = transicionPausa(fase, 'cuentaTerminada');
+      if (siguiente === null) return;
+      fase = siguiente;
+      cerrarCuenta();
+      menuPausa?.destruir();
+      menuPausa = null;
+      // Lo pulsado durante la pausa no cuenta: se vacia la entrada y se sueltan
+      // las teclas dibujadas.
+      input?.drain();
+      soltarTeclas?.();
+      void ctx.resume().then(() => {
+        if (detenido) return;
+        ultimoT = clock.now();
+        reanudarBucle?.();
+      });
+    }
+
+    /** T-026: Reintentar. Limpia como abortar() y avisa para que quien llamo vuelva a jugar. */
+    function reintentar(): void {
+      if (detenido) return;
+      cerrarCuenta();
+      limpiar();
+      if (appInicializada) {
+        playfieldParaLimpieza?.destroy();
+        app.destroy(true, { children: true });
+      }
+      contenedor.innerHTML = '';
+      resolve({ estado: 'reintentar' });
+    }
+
+    function manejarEscape(evento: KeyboardEvent): void {
+      if (evento.key !== 'Escape') return;
+      if (!appInicializada) {
+        // Todavia cargando: no hay nada que pausar, se abandona como antes.
+        abortar();
+        return;
+      }
+      if (fase === 'jugando') pausar();
+      else if (fase === 'pausado') iniciarCuenta();
+      else if (fase === 'cuenta') volverAPausa();
     }
     // Escuchado desde ya, no solo despues de que arranque la partida: se
     // puede abortar incluso mientras app.init() todavia esta cargando.
@@ -584,6 +702,15 @@ export function runGame(
           // eslint-disable-next-line no-restricted-globals -- se usa solo para programar el siguiente frame de dibujo, nunca para medir tiempo (ver CLAUDE.md, "El reloj es el audio").
           rafId = requestAnimationFrame(frame);
         }
+
+        // T-026: lo que necesita la pausa para reanudar este mismo bucle.
+        reanudarBucle = () => {
+          // eslint-disable-next-line no-restricted-globals -- ver comentario dentro de frame().
+          rafId = requestAnimationFrame(frame);
+        };
+        soltarTeclas = () => {
+          for (const columna of [0, 1, 2, 3] as const) playfield.setPressed(columna, false);
+        };
 
         // eslint-disable-next-line no-restricted-globals -- ver comentario dentro de frame().
         rafId = requestAnimationFrame(frame);

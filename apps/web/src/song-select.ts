@@ -842,7 +842,12 @@ export function mostrarSongSelect(contenedor: HTMLElement, opciones: OpcionesSon
     reproductor.destruir();
     clienteDificultad.destruir();
     revocarPortadas();
-    const resultado = await runGame(chart, audio, skin);
+    let resultado = await runGame(chart, audio, skin);
+    // T-026: "Reintentar" en el menu de pausa vuelve a jugar el mismo mapa sin
+    // pasar por el song select ni volver a decodificar el audio.
+    while (resultado.estado === 'reintentar') {
+      resultado = await runGame(chart, audio, skin);
+    }
     if (resultado.estado === 'completado') {
       mostrarBotonVolverDesdeResultados();
     } else {

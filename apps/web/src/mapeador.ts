@@ -870,7 +870,10 @@ export function mostrarMapeador(contenedor: HTMLElement, opciones: OpcionesMapea
     const chart = chartActual();
     guardarSesion();
     limpiarEscena();
-    const resultado = await runGame(chart, sesion.buffer);
+    let resultado = await runGame(chart, sesion.buffer);
+    while (resultado.estado === 'reintentar') {
+      resultado = await runGame(chart, sesion.buffer);
+    }
     const volverAlEditor = (): void => mostrarMapeador(raiz, opciones);
     if (resultado.estado === 'completado') {
       const b = boton('Volver al mapeador', 'tetra-resultados-volver-song-select');

@@ -1,0 +1,87 @@
+/* T-026: superposicion de pausa (pausa.ts). Cubre la ventana, por encima de la
+   pista y del HUD. Mismos tokens y lenguaje que el resto de la app. */
+
+.tetra-pausa {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: color-mix(in srgb, var(--fondo) 78%, transparent);
+  backdrop-filter: blur(4px);
+}
+
+.tetra-pausa-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espacio-3);
+  width: min(86vw, 320px);
+  padding: var(--espacio-5);
+  background: var(--superficie);
+  border: 1px solid var(--linea);
+  border-radius: var(--radio-panel);
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.5);
+}
+
+.tetra-pausa-panel[hidden],
+.tetra-pausa-cuenta[hidden] {
+  display: none;
+}
+
+.tetra-pausa-titulo {
+  margin: 0 0 var(--espacio-2);
+  font-family: var(--fuente-display);
+  font-size: var(--tipo-xl);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-align: center;
+  color: var(--tinta);
+}
+
+#app .tetra-pausa-boton {
+  width: 100%;
+  padding: var(--espacio-3) var(--espacio-4);
+  font-size: var(--tipo-base);
+}
+
+.tetra-pausa-pista {
+  margin: var(--espacio-1) 0 0;
+  font-size: var(--tipo-xs);
+  text-align: center;
+  color: var(--tinta-3);
+}
+
+.tetra-pausa-cuenta {
+  font-family: var(--fuente-datos);
+  font-size: 9rem;
+  font-weight: 500;
+  line-height: 1;
+  color: var(--acento);
+  text-shadow: 0 0 40px color-mix(in srgb, var(--acento) 45%, transparent);
+}
+
+.tetra-pausa-cuenta--pulso {
+  animation: tetra-pausa-pulso 0.9s var(--curva-salida) both;
+}
+
+@keyframes tetra-pausa-pulso {
+  from {
+    opacity: 0;
+    transform: scale(1.5);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tetra-pausa {
+    backdrop-filter: none;
+  }
+
+  .tetra-pausa-cuenta--pulso {
+    animation: none;
+  }
+}
