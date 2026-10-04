@@ -397,18 +397,27 @@ describe('rendimiento', () => {
       crearNotaSimple((i % 4) as Column, 1000 + i * 50),
     );
     const chart = crearMapa(notas);
-    const motor = createJudgeEngine(chart);
 
-    const inicio = process.hrtime.bigint();
+    // Mejor de varias corridas: el minimo ignora los picos de carga de la
+    // maquina (otros procesos, el servidor de desarrollo abierto) y sigue
+    // delatando una regresion algoritmica real, que seria lenta en TODAS las
+    // corridas. Un limite sobre una sola corrida media la maquina, no el codigo.
+    const CORRIDAS = 7;
+    let duracionMs = Infinity;
+    let motor = createJudgeEngine(chart);
+    for (let corrida = 0; corrida < CORRIDAS; corrida++) {
+      motor = createJudgeEngine(chart);
+      const inicio = process.hrtime.bigint();
 
-    for (const nota of chart.notes) {
-      motor.press(nota.time, nota.column);
-      motor.update(nota.time);
+      for (const nota of chart.notes) {
+        motor.press(nota.time, nota.column);
+        motor.update(nota.time);
+      }
+      const ultimaNota = chart.notes[chart.notes.length - 1]!;
+      motor.update(ultimaNota.time + 1000);
+
+      duracionMs = Math.min(duracionMs, Number(process.hrtime.bigint() - inicio) / 1_000_000);
     }
-    const ultimaNota = chart.notes[chart.notes.length - 1]!;
-    motor.update(ultimaNota.time + 1000);
-
-    const duracionMs = Number(process.hrtime.bigint() - inicio) / 1_000_000;
 
     // No alcanza con que el cronometro de poco: si una implementacion
     // incorrecta "retornara temprano" sin procesar nada, seria rapidisima

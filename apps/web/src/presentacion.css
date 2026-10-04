@@ -1,0 +1,51 @@
+/* T-037: modo presentacion (presentacion.ts). Se activa con la clase
+   `tetra-presentacion` en <body>. Quita lo que distrae (header, textos de
+   ayuda), agranda la interfaz un 10 % y oculta el cursor tras 2 s sin moverlo. */
+
+html:has(body.tetra-presentacion) {
+  font-size: 110%;
+}
+
+body.tetra-presentacion {
+  /* Sin header no hay alto que reservar (ver style.css, --alto-header). */
+  --alto-header: 0px;
+}
+
+body.tetra-presentacion .tetra-header {
+  display: none;
+}
+
+/* Textos de ayuda y avisos secundarios. */
+body.tetra-presentacion .tetra-mp-ayuda,
+body.tetra-presentacion .tetra-pausa-pista,
+body.tetra-presentacion .tetra-ajustes-ayuda {
+  display: none;
+}
+
+body.tetra-sin-cursor,
+body.tetra-sin-cursor * {
+  cursor: none !important;
+}
+
+/* Tarjeta de ajustes: lista "Antes de presentar". */
+.tetra-presentacion-lista {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espacio-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.tetra-presentacion-lista label {
+  display: flex;
+  align-items: center;
+  gap: var(--espacio-3);
+  font-size: var(--tipo-sm);
+  color: var(--tinta-2);
+  cursor: pointer;
+}
+
+.tetra-presentacion-lista input {
+  accent-color: var(--acento);
+}

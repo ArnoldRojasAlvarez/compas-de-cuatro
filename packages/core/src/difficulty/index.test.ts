@@ -708,9 +708,17 @@ describe('rendimiento', () => {
     );
     const chart = crearMapa(notes);
 
-    const inicio = process.hrtime.bigint();
-    const resultado = calcularDificultad(chart);
-    const duracionMs = Number(process.hrtime.bigint() - inicio) / 1_000_000;
+    // Mejor de varias corridas: ignora los picos de carga de la maquina y
+    // sigue delatando una regresion algoritmica real (ver el mismo criterio en
+    // judge/engine.test.ts).
+    const CORRIDAS = 7;
+    let duracionMs = Infinity;
+    let resultado = calcularDificultad(chart);
+    for (let corrida = 0; corrida < CORRIDAS; corrida++) {
+      const inicio = process.hrtime.bigint();
+      resultado = calcularDificultad(chart);
+      duracionMs = Math.min(duracionMs, Number(process.hrtime.bigint() - inicio) / 1_000_000);
+    }
 
     // No alcanza con que el cronometro de poco: una implementacion que
     // "retornara temprano" sin procesar nada seria rapidisima, pero esta

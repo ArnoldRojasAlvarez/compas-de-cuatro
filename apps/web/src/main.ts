@@ -9,6 +9,7 @@
 import './style.css';
 import { iniciarRouter } from './router.js';
 import { montarHeader } from './header.js';
+import { instalarPresentacion } from './presentacion.js';
 
 const contenedor = document.getElementById('app');
 if (!contenedor) {
@@ -16,5 +17,6 @@ if (!contenedor) {
 }
 
 montarHeader();
+instalarPresentacion();
 
 iniciarRouter(contenedor);

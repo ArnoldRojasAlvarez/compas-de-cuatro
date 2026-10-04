@@ -28,6 +28,14 @@ import {
   leerVelocidad,
   velocidadAScrollDuration,
 } from './velocidad.js';
+import {
+  PASOS_PREVIOS,
+  alternarPresentacion,
+  guardarChecklist,
+  leerChecklist,
+  presentacionActiva,
+  type PasoPrevio,
+} from './presentacion.js';
 
 /**
  * Envuelve `hijos` en una tarjeta `<section>` con su cabecera: indice
@@ -432,6 +440,52 @@ function crearControlDeFps(): HTMLElement {
   });
 }
 
+/**
+ * Modo presentacion (T-037): boton para entrar y salir (pantalla completa, sin
+ * header ni textos de ayuda, cursor que se oculta) y la lista "Antes de
+ * presentar", que solo recuerda y no bloquea nada.
+ */
+function crearControlDePresentacion(): HTMLElement {
+  const boton = document.createElement('button');
+  boton.type = 'button';
+  const pintar = (): void => {
+    boton.textContent = presentacionActiva() ? 'Salir del modo presentacion' : 'Entrar al modo presentacion';
+  };
+  pintar();
+  boton.addEventListener('click', () => {
+    void alternarPresentacion().then(pintar);
+  });
+
+  const ayuda = document.createElement('p');
+  ayuda.className = 'tetra-ajustes-ayuda';
+  ayuda.textContent = 'Pantalla completa, sin header ni avisos, y el cursor se oculta solo. Atajo: F.';
+
+  const lista = document.createElement('ul');
+  lista.className = 'tetra-presentacion-lista';
+  const estado = { ...leerChecklist() };
+  for (const paso of PASOS_PREVIOS) {
+    const item = document.createElement('li');
+    const etiqueta = document.createElement('label');
+    const casilla = document.createElement('input');
+    casilla.type = 'checkbox';
+    casilla.checked = estado[paso.id];
+    casilla.addEventListener('change', () => {
+      (estado as Record<PasoPrevio, boolean>)[paso.id] = casilla.checked;
+      guardarChecklist(estado);
+    });
+    etiqueta.append(casilla, document.createTextNode(paso.texto));
+    item.appendChild(etiqueta);
+    lista.appendChild(item);
+  }
+
+  const fila = crearFila({ nombre: 'Modo presentacion', ayudas: [ayuda], controles: [boton] });
+  const filaLista = crearFila({ nombre: 'Antes de presentar', controles: [lista], apilada: true });
+  const envoltorio = document.createElement('div');
+  envoltorio.className = 'tetra-ajustes-grupo';
+  envoltorio.append(fila, filaLista);
+  return envoltorio;
+}
+
 /** Valor de `<option>` para "sin skin, rectangulos" (el default): no puede ser un SkinId real (crypto.randomUUID() nunca da string vacio). */
 const OPCION_SIN_SKIN = '';
 
@@ -603,6 +657,9 @@ export function mostrarAjustes(contenedor: HTMLElement, opciones: OpcionesAjuste
   rejilla.appendChild(crearSeccion(2, 'Teclas', 'teclas', crearControlDeTeclas(mostrarError)));
   rejilla.appendChild(crearSeccion(3, 'Graficos', 'graficos', crearControlDeFps()));
   rejilla.appendChild(crearSeccion(4, 'Apariencia', 'apariencia', crearControlDeSkin(mostrarError)));
+  rejilla.appendChild(
+    crearSeccion(5, 'Presentacion', 'presentacion', crearControlDePresentacion()),
+  );
   panel.appendChild(rejilla);
 
   contenedor.appendChild(panel);
