@@ -20,6 +20,10 @@ export function runGame(chart: Chart, audio: AudioBuffer, opciones?: OpcionesPar
 
 La firma actual `runGame(chart, audio, skin?)` se conserva como sobrecarga hasta migrar `song-select.ts`.
 
+## Nota de implementacion
+
+El contrato final difiere en un detalle del de arriba: en vez de reemplazar el tercer parametro por un objeto de opciones, `runGame(chart, audio, skin?, opciones?)` recibe `OpcionesPartida` como cuarto parametro. Es mas simple y no cambia a ningun llamador existente. Las notas largas que empiezan antes del inicio se descartan enteras (decision pedida por el ticket).
+
 ## Comportamiento
 
 - Desde `inicioMs` el motor de juicio ignora las notas anteriores (no cuentan como miss) y la barra de progreso arranca en proporcion. El reloj se posiciona con `clock.seek`, no con un temporizador.

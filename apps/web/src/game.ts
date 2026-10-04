@@ -23,6 +23,7 @@ import { leerMostrarFps } from './graficos.js';
 import { CLASE_EN_JUEGO, EVENTO_TIEMPO_JUGADO } from './header.js';
 import { sumarTiempoJugado } from './tiempo-jugado.js';
 import { crearMenuPausa, type MenuPausa } from './pausa.js';
+import { filtrarNotasDesde, inicioDeLaCancion } from './partida-logica.js';
 import { numeroDeCuenta, transicionPausa, type FasePausa } from './pausa-logica.js';
 import {
   escalaPulsoCombo,
@@ -340,6 +341,15 @@ function actualizarHud(
 }
 
 /**
+ * T-035: opciones de una partida que no son el mapa ni el audio ni la skin.
+ * Todas opcionales: quien no las pasa juega el mapa completo, como siempre.
+ */
+export interface OpcionesPartida {
+  /** Empieza la partida en este instante (ms) de la cancion, con el aire de siempre antes de la primera nota. */
+  inicioMs?: Ms;
+}
+
+/**
  * T-009: `skin` son texturas ya resueltas (ver @tetra/engine,
  * `cargarTexturasDeSkin`), no el .osk crudo ni los Blob que guarda
  * @tetra/storage: quien llama (song-select.ts, ver
@@ -349,10 +359,15 @@ function actualizarHud(
  * fallback de rectangulos (ver packages/engine/src/playfield.ts).
  */
 export function runGame(
-  chart: Chart,
+  chartCompleto: Chart,
   audio: AudioBuffer,
   skin?: TexturasDeSkin,
+  opciones: OpcionesPartida = {},
 ): Promise<ResultadoPartida> {
+  // T-035: arrancar a mitad del mapa. Solo cuentan (y se dibujan) las notas
+  // desde `inicioMs`; las anteriores no generan miss.
+  const inicioMs = opciones.inicioMs ?? 0;
+  const chart = filtrarNotasDesde(chartCompleto, inicioMs);
   return new Promise((resolve, reject) => {
     const elementoApp = document.getElementById('app');
     if (!elementoApp) {
@@ -432,7 +447,7 @@ export function runGame(
     // abortar() para limpiar, declarada afuera porque las dos pueden correr
     // antes de que el `.then()` termine de armar la pista.
     let playfieldParaLimpieza: ReturnType<typeof createPlayfield> | null = null;
-    let ultimoT = -LEAD_IN_MS;
+    let ultimoT = inicioMs > 0 ? inicioDeLaCancion(inicioMs, LEAD_IN_MS) : -LEAD_IN_MS;
     // true desde que app.init() resuelve: distingue, dentro de abortar(), si
     // ya hay que destruir la Application de Pixi (partida en curso) o si
     // todavia esta inicializando y el callback de mas abajo se va a
@@ -448,7 +463,9 @@ export function runGame(
       // y sumarTiempoJugado lo ignora). Se lee antes de clock.stop(). Si el
       // almacenamiento falla no debe impedir cerrar la partida.
       try {
-        sumarTiempoJugado(Math.min(clock.now(), clock.duration));
+        // Desde un inicio a mitad de mapa solo cuenta lo que corrio desde ahi.
+        const desdeMs = inicioMs > 0 ? inicioDeLaCancion(inicioMs, LEAD_IN_MS) : 0;
+        sumarTiempoJugado(Math.min(clock.now(), clock.duration) - desdeMs);
         window.dispatchEvent(new Event(EVENTO_TIEMPO_JUGADO));
       } catch {
         // el header simplemente no se actualiza.
@@ -654,7 +671,15 @@ export function runGame(
         // velocidad de arriba.
         input.setKeyMap(leerKeyMap());
 
-        clock.start(LEAD_IN_MS);
+        if (inicioMs > 0) {
+          // T-035: arranca la cancion LEAD_IN_MS antes del inicio pedido (con la
+          // musica sonando, en vez del silencio de siempre). start(0) y seek en
+          // el mismo tick: el primer source se corta antes de sonar.
+          clock.start(0);
+          clock.seek(inicioDeLaCancion(inicioMs, LEAD_IN_MS));
+        } else {
+          clock.start(LEAD_IN_MS);
+        }
 
         function frame(): void {
           if (detenido) return;

@@ -33,6 +33,8 @@ import { construirOsz, guardarCancionCreada, guardarDificultad, leerCancion } fr
 import { runGame } from './game.js';
 import { analizarAudio } from './mapeador-worker-cliente.js';
 import { leerKeyMap } from './keymap.js';
+import { leerOffset } from './offset.js';
+import { compensarLatencia } from './partida-logica.js';
 import {
   agregarTap,
   alternarTap,
@@ -249,6 +251,7 @@ export function mostrarMapeador(contenedor: HTMLElement, opciones: OpcionesMapea
   let arrastre: { col: Column; slotInicio: number; slotActual: number } | null = null;
   let arrastrandoBarra = false;
   let mostrarOnsets = true;
+  let compensar = true;
   let taps: number[] = [];
 
   const vista: Vista = { tiempo: sesion.tiempo, pxPorMs: sesion.pxPorMs, yCabezal: 400 };
@@ -334,6 +337,7 @@ export function mostrarMapeador(contenedor: HTMLElement, opciones: OpcionesMapea
 
   // Salida.
   const bProbar = boton('Probar el mapa', 'tetra-boton-primario');
+  const bProbarAqui = boton('Probar desde el cabezal');
   const bGuardar = boton('Guardar en la biblioteca');
   const bOsz = boton('Descargar .osz');
   const bOsu = boton('Descargar .osu');
@@ -371,7 +375,7 @@ export function mostrarMapeador(contenedor: HTMLElement, opciones: OpcionesMapea
       filaAuto,
     ),
     tarjeta('Dificultad del mapa', campo('OD', iOd), campo('HP', iHp)),
-    tarjeta('Salida', bProbar, bGuardar, filaDescargas),
+    tarjeta('Salida', bProbar, bProbarAqui, bGuardar, filaDescargas),
     estado,
   );
 
@@ -397,6 +401,12 @@ export function mostrarMapeador(contenedor: HTMLElement, opciones: OpcionesMapea
   cMetro.type = 'checkbox';
   const lMetro = el('label', 'tetra-mp-casilla');
   lMetro.append(cMetro, el('span', undefined, 'Metronomo'));
+  const cCompensar = el('input');
+  cCompensar.type = 'checkbox';
+  cCompensar.checked = true;
+  const lCompensar = el('label', 'tetra-mp-casilla');
+  lCompensar.title = 'Al grabar en vivo, resta el offset de calibracion y la latencia de salida del audio';
+  lCompensar.append(cCompensar, el('span', undefined, 'Compensar latencia'));
   const cOnsets = el('input');
   cOnsets.type = 'checkbox';
   cOnsets.checked = true;
@@ -414,7 +424,7 @@ export function mostrarMapeador(contenedor: HTMLElement, opciones: OpcionesMapea
   const lecturaTiempo = el('span', 'tetra-mp-tiempo', '0:00.000');
   const lecturaNotas = el('span', 'tetra-mp-notas', '0 notas');
   lectura.append(lecturaTiempo, lecturaNotas);
-  barra.append(bPlay, sVelocidad, bDeshacer, bRehacer, lSonido, lMetro, lOnsets, iZoom, lectura);
+  barra.append(bPlay, sVelocidad, bDeshacer, bRehacer, lSonido, lMetro, lCompensar, lOnsets, iZoom, lectura);
 
   const lienzoContenedor = el('div', 'tetra-mp-lienzo');
   const canvas = el('canvas', 'tetra-mp-canvas');
@@ -443,6 +453,7 @@ export function mostrarMapeador(contenedor: HTMLElement, opciones: OpcionesMapea
     const sinAudio = sesion.buffer === null;
     bPlay.disabled = sinAudio;
     bProbar.disabled = sinAudio || notas().length === 0;
+    bProbarAqui.disabled = sinAudio || notas().length === 0;
     bGuardar.disabled = sinAudio || notas().length === 0;
     bOsz.disabled = sinAudio || notas().length === 0;
     bOsu.disabled = notas().length === 0;
@@ -546,6 +557,11 @@ export function mostrarMapeador(contenedor: HTMLElement, opciones: OpcionesMapea
     return b;
   }
 
+  /** Latencia de salida del audio en ms (0 si el navegador no la informa). */
+  function latenciaSalidaMs(): number {
+    return ctx && Number.isFinite(ctx.outputLatency) ? ctx.outputLatency * 1000 : 0;
+  }
+
   function tiempoActual(): number {
     if (reproduciendo && ctx) {
       return baseMs + (ctx.currentTime - inicioCtx) * 1000 * velocidad;
@@ -647,6 +663,9 @@ export function mostrarMapeador(contenedor: HTMLElement, opciones: OpcionesMapea
   });
   cMetro.addEventListener('change', () => {
     metronomo = cMetro.checked;
+  });
+  cCompensar.addEventListener('change', () => {
+    compensar = cCompensar.checked;
   });
   cOnsets.addEventListener('change', () => {
     mostrarOnsets = cOnsets.checked;
@@ -991,15 +1010,21 @@ export function mostrarMapeador(contenedor: HTMLElement, opciones: OpcionesMapea
       sincronizarBotones();
     }
   });
-  bProbar.addEventListener('click', async () => {
+  /** Juega el mapa (entero o desde `inicioMs`) y vuelve al editor. */
+  async function probar(inicioMs: number): Promise<void> {
     if (!sesion.buffer) return;
     pausar();
     const chart = chartActual();
+    if (inicioMs > 0 && !chart.notes.some((n) => n.time >= inicioMs)) {
+      aviso('No hay notas despues del cabezal: mueve el cabezal antes de la ultima nota.', 'error');
+      return;
+    }
     guardarSesion();
     limpiarEscena();
-    let resultado = await runGame(chart, sesion.buffer);
+    const opcionesPartida = { inicioMs };
+    let resultado = await runGame(chart, sesion.buffer, undefined, opcionesPartida);
     while (resultado.estado === 'reintentar') {
-      resultado = await runGame(chart, sesion.buffer);
+      resultado = await runGame(chart, sesion.buffer, undefined, opcionesPartida);
     }
     // Sin `abrir`: ya hay una sesion en curso y reabrir de la biblioteca la pisaria.
     const volverAlEditor = (): void => mostrarMapeador(raiz, sinAbrir(opciones));
@@ -1010,7 +1035,9 @@ export function mostrarMapeador(contenedor: HTMLElement, opciones: OpcionesMapea
     } else {
       volverAlEditor();
     }
-  });
+  }
+  bProbar.addEventListener('click', () => void probar(0));
+  bProbarAqui.addEventListener('click', () => void probar(Math.round(tiempoActual())));
 
   // -- Dibujo ---------------------------------------------------------------
 
@@ -1278,7 +1305,10 @@ export function mostrarMapeador(contenedor: HTMLElement, opciones: OpcionesMapea
       e.preventDefault();
       if (e.repeat || !sesion.buffer) return;
       const col = carril as Column;
-      const slot = slotMasCercano(sesion.grilla, tiempoActual());
+      // En vivo se graba el instante que el jugador OYO (T-035), igual que
+      // clock.now() en el juego; en pausa el cabezal ya es exacto.
+      const instante = reproduciendo && compensar ? compensarLatencia(tiempoActual(), leerOffset(), latenciaSalidaMs()) : tiempoActual();
+      const slot = slotMasCercano(sesion.grilla, instante);
       const t = tiempoDeSlotEntero(sesion.grilla, slot);
       confirmarNotas(reproduciendo ? agregarTap(notas(), col, t) : alternarTap(notas(), col, t));
       return;
