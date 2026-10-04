@@ -14,7 +14,7 @@ El curso manda sobre el codigo (ver `docs/ESTADO.md`): el avance II es el 28 de 
 | T-035 | Probar desde el cabezal y latencia de grabacion (**hecho**) | Alta | M | Sonnet |
 | T-036 | Mapeo automatico v2, con protocolo de evaluacion | Alta | L | Opus (protocolo) + Sonnet |
 | T-037 | Modo presentacion (**hecho**) | Alta | S | Sonnet |
-| T-040 | E2E del flujo completo y CI real (**parcial**: los tests de rendimiento ya no dependen de la carga; faltan los e2e y la CI) | Alta | M | Sonnet |
+| T-040 | E2E del flujo completo y CI real (**hecho**; la CI espera al repositorio remoto) | Alta | M | Sonnet |
 | T-027 | Hitsounds y volumenes | Alta | M | Sonnet |
 | T-028 | Records por mapa | Alta | M | Sonnet |
 | T-030 | Musica del menu elegible | Media | M | Sonnet |

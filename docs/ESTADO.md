@@ -8,7 +8,7 @@ Estado corto y siempre al dia. **Si sos una sesion NUEVA, empeza por
 
 ## Donde esta todo
 
-- `main`: limpio, verde, 640 tests + e2e de sincronia.
+- `main`: limpio, verde, 640 tests + 4 e2e (sincronia, pausa x2, mapeador).
 - En curso: nada.
 
 ## Hecho
@@ -45,6 +45,7 @@ Estado corto y siempre al dia. **Si sos una sesion NUEVA, empeza por
 | T-037 | Modo presentacion: atajo F o boton en ajustes, sin header ni textos de ayuda, interfaz 10 % mas grande, cursor que se oculta a los 2 s, lista "Antes de presentar"; la pantalla completa real no se pudo verificar en el panel de pruebas |
 | T-032 | Reabrir una cancion de la biblioteca en el mapeador (boton "Editar en el mapeador" en el song select), guardar reemplaza o agrega dificultades sobre la misma cancion, conserva tempos y velocidades originales, boton "Nuevo" |
 | T-035 | "Probar desde el cabezal" (`runGame` acepta `inicioMs` como cuarto parametro opcional: solo cuentan las notas desde ahi, sin misses de las anteriores) y compensacion de latencia al grabar en vivo (offset de calibracion + latencia de salida, mismo ajuste que `clock.now()`) |
+| T-040 | E2E de pausa (reloj congelado, cuenta regresiva, reintentar) y del mapeador de punta a punta (cargar audio, generar, editar, deshacer, guardar, reabrir), estables 3 de 3; tests de rendimiento sin depender de la carga; CI con un job `e2e` aparte (nunca corrio en GitHub: no hay repositorio remoto) |
 
 La prueba de feel de Arnold ya se hizo: en una cancion real sus golpes salieron
 centrados en cero. El motor esta bien sincronizado.

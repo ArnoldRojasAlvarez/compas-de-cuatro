@@ -18,3 +18,21 @@ jobs:
       - run: npm run lint
       - run: npm run test
       - run: npm run build
+
+  # T-040: los e2e corren en un job aparte: tardan unos 3 minutos (la prueba de
+  # deriva deja correr 60 s de audio real) y no deben demorar el feedback de los
+  # cuatro checks de arriba. Playwright levanta solo el build con
+  # `npm run preview` (ver apps/web/playwright.config.ts).
+  e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+        working-directory: apps/web
+      - run: npx playwright test
+        working-directory: apps/web
