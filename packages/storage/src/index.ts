@@ -13,13 +13,16 @@
 // Todo lo demas (unzip, parseo, IndexedDB) es detalle interno repartido
 // entre osz.ts y db.ts.
 
-import type { DifficultyResult } from '@tetra/core';
+import type { Chart, DifficultyResult } from '@tetra/core';
+import { ponerDificultad, quitarDificultad } from './dificultades.js';
 import { extraerCancionDeOsz } from './osz.js';
 import { construirOsz, type EntradaOsz } from './osz-escritor.js';
 import { extraerImagenesDeOsk } from './osk.js';
 import {
   guardarCancion,
   listarCancionesDeLaBase,
+  leerCancionDeLaBase,
+  borrarCancionDeLaBase,
   guardarSkin,
   listarSkinsDeLaBase,
   guardarDificultadCacheada,
@@ -124,4 +127,40 @@ export function leerDificultadDeCache(clave: string): Promise<DifficultyResult |
 export async function guardarCancionCreada(entrada: EntradaOsz): Promise<SongId> {
   const osz = construirOsz(entrada);
   return importarOsz(new Blob([new Uint8Array(osz)], { type: 'application/zip' }));
+}
+
+/** Devuelve una cancion por id, con todas sus dificultades. `undefined` si no existe. */
+export function leerCancion(id: SongId): Promise<CancionGuardada | undefined> {
+  return leerCancionDeLaBase(id);
+}
+
+/**
+ * Pone una dificultad en una cancion que ya existe: reemplaza la que tenga el
+ * mismo `difficultyName` o agrega una nueva. No cambia el id ni toca otras
+ * canciones. Falla con un mensaje claro si la cancion no existe.
+ */
+export async function guardarDificultad(id: SongId, chart: Chart): Promise<void> {
+  const cancion = await leerCancionDeLaBase(id);
+  if (!cancion) {
+    throw new Error('La cancion ya no esta en la biblioteca: no se puede guardar la dificultad.');
+  }
+  await guardarCancion({ ...cancion, dificultades: ponerDificultad(cancion.dificultades, chart) });
+}
+
+/**
+ * Quita una dificultad de una cancion. Una cancion nunca queda sin
+ * dificultades: si era la ultima, se borra la cancion entera (decision de
+ * T-032, ver el ticket). Devuelve `true` si la cancion se borro.
+ */
+export async function borrarDificultad(id: SongId, difficultyName: string): Promise<boolean> {
+  const cancion = await leerCancionDeLaBase(id);
+  if (!cancion) return false;
+  const restantes = quitarDificultad(cancion.dificultades, difficultyName);
+  if (restantes.length === cancion.dificultades.length) return false;
+  if (restantes.length === 0) {
+    await borrarCancionDeLaBase(id);
+    return true;
+  }
+  await guardarCancion({ ...cancion, dificultades: restantes });
+  return false;
 }

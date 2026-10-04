@@ -282,3 +282,7 @@
     max-height: 46vh;
   }
 }
+
+#app .tetra-mp-nuevo {
+  margin-left: auto;
+}

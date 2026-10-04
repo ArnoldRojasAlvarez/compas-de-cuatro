@@ -3,7 +3,7 @@
 // La pantalla (mapeador.ts) solo dibuja y reenvia eventos a estas funciones,
 // y por eso se puede probar casi todo en vitest sin navegador.
 
-import type { Chart, Column, Grilla, HoldNote, Ms, Note } from '@tetra/core';
+import type { Chart, Column, Grilla, HoldNote, Ms, Note, SpeedPoint, TimingPoint } from '@tetra/core';
 import { slotMasCercano, tiempoDeSlot } from '@tetra/core';
 
 // ---------------------------------------------------------------------------
@@ -262,13 +262,39 @@ export interface AjustesMapa {
   hpDrain: number;
 }
 
-/** Arma el Chart que se juega y se exporta. Los tiempos salen en ms enteros y ordenados. */
+/** Puntos de tempo y de velocidad de una dificultad que se esta editando (el editor todavia no los edita). */
+export interface PuntosOriginales {
+  timingPoints: readonly TimingPoint[];
+  speedPoints: readonly SpeedPoint[];
+}
+
+/**
+ * Puntos de tempo del chart. El editor edita un solo tempo (la grilla), que
+ * pasa a ser el primer punto; si la dificultad original traia mas, se
+ * conservan tal cual detras del primero (no se pierden al guardar).
+ */
+export function puntosDeTiempo(grilla: Grilla, original?: readonly TimingPoint[]): TimingPoint[] {
+  const primero: TimingPoint = {
+    time: redondear(grilla.offsetMs),
+    bpm: grilla.bpm,
+    meter: original?.[0]?.meter ?? 4,
+  };
+  return [primero, ...(original?.slice(1) ?? [])];
+}
+
+/**
+ * Arma el Chart que se juega y se exporta. Los tiempos salen en ms enteros y
+ * ordenados. `original` es lo que traia la dificultad si se abrio de la
+ * biblioteca: sus puntos de velocidad y los tempos posteriores al primero se
+ * conservan.
+ */
 export function construirChart(
   meta: MetadatosMapa,
   grilla: Grilla,
   ajustes: AjustesMapa,
   notas: readonly Note[],
   previewTime: Ms = 0,
+  original?: PuntosOriginales,
 ): Chart {
   const enteras = ordenar(
     notas.map((n) =>
@@ -288,8 +314,8 @@ export function construirChart(
     },
     overallDifficulty: ajustes.overallDifficulty,
     hpDrain: ajustes.hpDrain,
-    timingPoints: [{ time: redondear(grilla.offsetMs), bpm: grilla.bpm, meter: 4 }],
-    speedPoints: [],
+    timingPoints: puntosDeTiempo(grilla, original?.timingPoints),
+    speedPoints: [...(original?.speedPoints ?? [])],
     notes: enteras,
   };
 }

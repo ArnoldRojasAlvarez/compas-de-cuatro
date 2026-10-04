@@ -755,3 +755,10 @@
     transform: none;
   }
 }
+
+/* T-032: boton secundario bajo "Jugar" para abrir la dificultad en el mapeador. */
+#app .tetra-song-select-editar {
+  width: 100%;
+  margin-top: var(--espacio-2);
+  padding: var(--espacio-2) var(--espacio-4);
+}

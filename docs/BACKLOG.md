@@ -9,7 +9,7 @@ El curso manda sobre el codigo (ver `docs/ESTADO.md`): el avance II es el 28 de 
 | Ticket | Que es | Prioridad | Tamano | Modelo |
 |---|---|---|---|---|
 | T-026 | Pausa y reintento rapido en partida (**hecho**) | Alta | M | Sonnet |
-| T-032 | Reabrir una cancion en el editor y varias dificultades | Alta | M | Sonnet |
+| T-032 | Reabrir una cancion en el editor y varias dificultades (**hecho**) | Alta | M | Sonnet |
 | T-034 | Seleccion, copiar, pegar y mover notas | Alta | M | Sonnet |
 | T-035 | Probar desde el cabezal y latencia de grabacion | Alta | M | Sonnet |
 | T-036 | Mapeo automatico v2, con protocolo de evaluacion | Alta | L | Opus (protocolo) + Sonnet |

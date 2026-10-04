@@ -144,6 +144,8 @@ function crearReproductorDePreview(): {
 export interface OpcionesSongSelect {
   /** Volver al menu. Es la unica salida de esta pantalla (ver el ticket, "Cada pantalla tiene como volver"). */
   aMenu: () => void;
+  /** Abre una dificultad de la biblioteca en el mapeador (T-032). Sin este gancho no se muestra el boton. */
+  aMapeador?: (songId: string, difficultyName: string) => void;
 }
 
 interface EstadoSongSelect {
@@ -698,6 +700,22 @@ export function mostrarSongSelect(contenedor: HTMLElement, opciones: OpcionesSon
     botonJugar.textContent = `Jugar ${info.nombre}`;
     botonJugar.addEventListener('click', () => void jugarDificultadEnfocada());
     contenido.appendChild(botonJugar);
+
+    const abrirEnMapeador = opciones.aMapeador;
+    if (abrirEnMapeador && estado.cancionEnfocadaId !== null) {
+      const songId = estado.cancionEnfocadaId;
+      const nombreDificultad = info.nombre;
+      const botonEditar = document.createElement('button');
+      botonEditar.type = 'button';
+      botonEditar.className = 'tetra-song-select-editar';
+      botonEditar.textContent = 'Editar en el mapeador';
+      botonEditar.addEventListener('click', () => {
+        reproductor.destruir();
+        clienteDificultad.destruir();
+        abrirEnMapeador(songId, nombreDificultad);
+      });
+      contenido.appendChild(botonEditar);
+    }
   }
 
   function renderizarLista(): void {

@@ -139,6 +139,37 @@ export async function listarCancionesDeLaBase(): Promise<CancionGuardada[]> {
   }
 }
 
+/** Devuelve una cancion por id, o `undefined` si no existe. */
+export async function leerCancionDeLaBase(id: SongId): Promise<CancionGuardada | undefined> {
+  const db = await abrirBaseDeDatos();
+  try {
+    return await new Promise<CancionGuardada | undefined>((resolve, reject) => {
+      const tx = db.transaction(NOMBRE_TIENDA_CANCIONES, 'readonly');
+      const peticion = tx.objectStore(NOMBRE_TIENDA_CANCIONES).get(id);
+      peticion.onsuccess = () => resolve(peticion.result as CancionGuardada | undefined);
+      peticion.onerror = () => reject(peticion.error ?? new Error('No se pudo leer la cancion.'));
+    });
+  } finally {
+    db.close();
+  }
+}
+
+/** Borra una cancion entera. No hace nada si el id no existe. */
+export async function borrarCancionDeLaBase(id: SongId): Promise<void> {
+  const db = await abrirBaseDeDatos();
+  try {
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction(NOMBRE_TIENDA_CANCIONES, 'readwrite');
+      tx.objectStore(NOMBRE_TIENDA_CANCIONES).delete(id);
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error ?? new Error('No se pudo borrar la cancion.'));
+      tx.onabort = () => reject(tx.error ?? new Error('Se aborto el borrado de la cancion.'));
+    });
+  } finally {
+    db.close();
+  }
+}
+
 /** Guarda (o reemplaza si el id ya existia) una skin completa. */
 export async function guardarSkin(skin: SkinGuardada): Promise<void> {
   const db = await abrirBaseDeDatos();

@@ -19,6 +19,7 @@ import {
   limitarZoom,
   mezclarMono,
   notaEn,
+  puntosDeTiempo,
   quitarNota,
   quitarRango,
   resumirNotas,
@@ -276,6 +277,56 @@ describe('construirChart', () => {
       { kind: 'tap', time: 901, column: 1 },
     ]);
     expect(chart.overallDifficulty).toBe(8);
+  });
+});
+
+describe('puntos originales al editar una dificultad de la biblioteca', () => {
+  const meta = {
+    titulo: 'T',
+    artista: 'A',
+    creador: 'C',
+    dificultad: 'D',
+    audioArchivo: 'a.mp3',
+  };
+  const ajustes = { overallDifficulty: 7, hpDrain: 5 };
+
+  it('sin original, un solo punto de tempo y ninguno de velocidad (como siempre)', () => {
+    const chart = construirChart(meta, { bpm: 128, offsetMs: 250, divisor: 4 }, ajustes, []);
+    expect(chart.timingPoints).toEqual([{ time: 250, bpm: 128, meter: 4 }]);
+    expect(chart.speedPoints).toEqual([]);
+  });
+
+  it('el primer tempo sale de la grilla (editable) y los demas se conservan intactos', () => {
+    const original = {
+      timingPoints: [
+        { time: 100, bpm: 120, meter: 3 },
+        { time: 60000, bpm: 90, meter: 4 },
+        { time: 90000, bpm: 150, meter: 4 },
+      ],
+      speedPoints: [{ time: 70000, multiplier: 1.5 }],
+    };
+    const chart = construirChart(meta, { bpm: 121, offsetMs: 105.4, divisor: 4 }, ajustes, [], 0, original);
+    expect(chart.timingPoints).toEqual([
+      { time: 105, bpm: 121, meter: 3 },
+      { time: 60000, bpm: 90, meter: 4 },
+      { time: 90000, bpm: 150, meter: 4 },
+    ]);
+    expect(chart.speedPoints).toEqual([{ time: 70000, multiplier: 1.5 }]);
+  });
+
+  it('el chart no comparte arreglos con el original (no se puede mutar por accidente)', () => {
+    const original = {
+      timingPoints: [{ time: 0, bpm: 120, meter: 4 }],
+      speedPoints: [{ time: 10, multiplier: 2 }],
+    };
+    const chart = construirChart(meta, { bpm: 120, offsetMs: 0, divisor: 4 }, ajustes, [], 0, original);
+    expect(chart.speedPoints).not.toBe(original.speedPoints);
+  });
+
+  it('puntosDeTiempo sin original usa compas 4/4', () => {
+    expect(puntosDeTiempo({ bpm: 100, offsetMs: 0, divisor: 4 })).toEqual([
+      { time: 0, bpm: 100, meter: 4 },
+    ]);
   });
 });
 

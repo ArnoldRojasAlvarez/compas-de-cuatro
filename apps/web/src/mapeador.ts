@@ -9,7 +9,16 @@
 // temporizadores. El bucle de dibujo usa rAF solo para dibujar.
 
 import './mapeador.css';
-import type { AnalisisOnsets, Column, EstimacionTempo, Grilla, NivelAuto, Note } from '@tetra/core';
+import type {
+  AnalisisOnsets,
+  Column,
+  EstimacionTempo,
+  Grilla,
+  NivelAuto,
+  Note,
+  SpeedPoint,
+  TimingPoint,
+} from '@tetra/core';
 import {
   DIVISORES,
   PRESETS_AUTO,
@@ -20,7 +29,7 @@ import {
   lineasDeGrilla,
   slotMasCercano,
 } from '@tetra/core';
-import { construirOsz, guardarCancionCreada } from '@tetra/storage';
+import { construirOsz, guardarCancionCreada, guardarDificultad, leerCancion } from '@tetra/storage';
 import { runGame } from './game.js';
 import { analizarAudio } from './mapeador-worker-cliente.js';
 import { leerKeyMap } from './keymap.js';
@@ -56,11 +65,21 @@ export interface OpcionesMapeador {
   aMenu: () => void;
   /** Ir al song select (despues de guardar en la biblioteca). */
   aSongSelect: () => void;
+  /** Si viene, el editor arranca cargado con esa dificultad de esa cancion de la biblioteca. */
+  abrir?: { songId: string; difficultyName: string };
 }
 
 /** Lo que sobrevive a probar el mapa (runGame reemplaza la pantalla) y a salir al menu. */
 interface Sesion {
-  archivo: File | null;
+  /** Nombre del archivo de audio (el que va en AudioFilename del .osu y dentro del .osz). */
+  nombreAudio: string;
+  /**
+   * Si se esta editando una cancion de la biblioteca (porque se abrio de ahi o
+   * porque ya se guardo una vez): guardar reemplaza o agrega una dificultad en
+   * esa cancion en vez de crear otra. Guarda tambien los puntos de tempo y de
+   * velocidad originales, que el editor todavia no edita y no debe perder.
+   */
+  base: { songId: string; timingPoints: readonly TimingPoint[]; speedPoints: readonly SpeedPoint[] } | null;
   bytes: ArrayBuffer | null;
   buffer: AudioBuffer | null;
   picos: Float32Array | null;
@@ -76,16 +95,23 @@ interface Sesion {
 
 let sesionGuardada: Sesion | null = null;
 
+/** Las mismas opciones sin `abrir`: reabrir de la biblioteca pisaria una sesion en curso. */
+function sinAbrir(o: OpcionesMapeador): OpcionesMapeador {
+  return { aMenu: o.aMenu, aSongSelect: o.aSongSelect };
+}
+
 const MS_POR_CUBETA = 5;
 const ANCHO_COLUMNA_MAX = 96;
 const COLOR_ACENTO = '#3fd8c2';
 const COLOR_AMBAR = '#e8b84a';
 const COLOR_TINTA = '#e7eef0';
 
-function sesionNueva(): Sesion {
-  const borrador = leerBorrador();
+function sesionNueva(usarBorrador = true): Sesion {
+  // Al abrir una cancion de la biblioteca no se mezcla el borrador de otra cosa.
+  const borrador = usarBorrador ? leerBorrador() : null;
   return {
-    archivo: null,
+    nombreAudio: '',
+    base: null,
     bytes: null,
     buffer: null,
     picos: null,
@@ -200,7 +226,9 @@ function nombreDeArchivoBase(meta: MetadatosMapa): string {
 
 export function mostrarMapeador(contenedor: HTMLElement, opciones: OpcionesMapeador): void {
   contenedor.innerHTML = '';
-  const sesion: Sesion = sesionGuardada ?? sesionNueva();
+  // Abrir una cancion de la biblioteca siempre empieza una sesion limpia; al
+  // volver de "Probar" se reusa la que ya habia (ver volverAlEditor).
+  const sesion: Sesion = opciones.abrir ? sesionNueva(false) : (sesionGuardada ?? sesionNueva());
   sesionGuardada = sesion;
   const raiz = document.getElementById('app') ?? contenedor;
 
@@ -245,7 +273,9 @@ export function mostrarMapeador(contenedor: HTMLElement, opciones: OpcionesMapea
   // Cabecera del panel.
   const cabecera = el('div', 'tetra-mp-cabecera');
   const volver = boton('← Menu', 'tetra-mp-volver');
-  cabecera.append(volver, el('h1', 'tetra-mp-titulo', 'Mapeador'));
+  const nuevo = boton('Nuevo', 'tetra-mp-nuevo');
+  nuevo.title = 'Empezar un mapa desde cero';
+  cabecera.append(volver, el('h1', 'tetra-mp-titulo', 'Mapeador'), nuevo);
 
   // Cancion.
   const archivoEntrada = el('input');
@@ -430,6 +460,9 @@ export function mostrarMapeador(contenedor: HTMLElement, opciones: OpcionesMapea
   function guardarSesion(): void {
     sesion.tiempo = vista.tiempo;
     sesion.pxPorMs = vista.pxPorMs;
+    // Una cancion que ya vive en la biblioteca no usa el borrador: ese borrador
+    // reaparecería despues en una sesion nueva, sin audio y sin explicacion.
+    if (sesion.base) return;
     guardarBorrador({
       version: 1,
       meta: sesion.meta,
@@ -451,7 +484,7 @@ export function mostrarMapeador(contenedor: HTMLElement, opciones: OpcionesMapea
       artista: iArtista.value,
       creador: iCreador.value,
       dificultad: iDificultad.value,
-      audioArchivo: sesion.archivo?.name ?? sesion.meta.audioArchivo,
+      audioArchivo: sesion.nombreAudio || sesion.meta.audioArchivo,
     };
     guardarSesion();
   }
@@ -639,42 +672,111 @@ export function mostrarMapeador(contenedor: HTMLElement, opciones: OpcionesMapea
   // -- Cargar audio y analizar ---------------------------------------------
 
   async function cargarAudio(archivo: File): Promise<void> {
-    pausar();
-    aviso('Decodificando el audio...');
     try {
-      const bytes = await archivo.arrayBuffer();
-      const decodificador = new AudioContext();
-      let buffer: AudioBuffer;
-      try {
-        buffer = await decodificador.decodeAudioData(bytes.slice(0));
-      } finally {
-        await decodificador.close();
-      }
-      sesion.archivo = archivo;
-      sesion.bytes = bytes;
-      sesion.buffer = buffer;
-      const canales: Float32Array[] = [];
-      for (let c = 0; c < buffer.numberOfChannels; c++) canales.push(buffer.getChannelData(c));
-      const mono = mezclarMono(canales);
-      sesion.picos = calcularPicos(mono, buffer.sampleRate, MS_POR_CUBETA);
-      archivoNombre.textContent = `${archivo.name} (${formatoTiempo(buffer.duration * 1000)})`;
-      iPosicion.max = String(Math.round(buffer.duration * 1000));
-      if (iTitulo.value.trim() === '') {
-        iTitulo.value = archivo.name.replace(/\.[^.]+$/, '');
-      }
-      leerMeta();
-      vista.tiempo = 0;
-      aviso('Analizando los golpes del audio...');
-      const { analisis, tempo } = await analizarAudio(mono, buffer.sampleRate);
-      sesion.analisis = analisis;
-      aplicarTempo(tempo, false);
-      sincronizarBotones();
-      aviso(
-        `Listo. ${sesion.analisis.onsets.length} golpes detectados. Ajusta BPM y offset, y pulsa "Generar" o mapea a mano.`,
-        'ok',
-      );
+      await procesarAudio(await archivo.arrayBuffer(), archivo.name, { esNuevo: true });
     } catch (error) {
       aviso(`No se pudo leer el audio: ${error instanceof Error ? error.message : String(error)}`, 'error');
+    }
+  }
+
+  /**
+   * Decodifica, calcula la onda y analiza los golpes. `esNuevo` es true cuando
+   * el usuario cargo un audio nuevo (se detecta el tempo y se propone el
+   * titulo); es false al reabrir una cancion de la biblioteca, donde el BPM, el
+   * offset y los datos del mapa ya vienen del chart y no se pisan.
+   */
+  async function procesarAudio(
+    bytes: ArrayBuffer,
+    nombre: string,
+    opcionesProceso: { esNuevo: boolean },
+  ): Promise<void> {
+    pausar();
+    aviso('Decodificando el audio...');
+    const decodificador = new AudioContext();
+    let buffer: AudioBuffer;
+    try {
+      buffer = await decodificador.decodeAudioData(bytes.slice(0));
+    } finally {
+      await decodificador.close();
+    }
+    sesion.nombreAudio = nombre;
+    sesion.bytes = bytes;
+    sesion.buffer = buffer;
+    const canales: Float32Array[] = [];
+    for (let c = 0; c < buffer.numberOfChannels; c++) canales.push(buffer.getChannelData(c));
+    const mono = mezclarMono(canales);
+    sesion.picos = calcularPicos(mono, buffer.sampleRate, MS_POR_CUBETA);
+    archivoNombre.textContent = `${nombre} (${formatoTiempo(buffer.duration * 1000)})`;
+    iPosicion.max = String(Math.round(buffer.duration * 1000));
+    if (opcionesProceso.esNuevo && iTitulo.value.trim() === '') {
+      iTitulo.value = nombre.replace(/\.[^.]+$/, '');
+    }
+    leerMeta();
+    vista.tiempo = 0;
+    sincronizarBotones();
+    aviso('Analizando los golpes del audio...');
+    const { analisis, tempo } = await analizarAudio(mono, buffer.sampleRate);
+    sesion.analisis = analisis;
+    if (opcionesProceso.esNuevo) {
+      aplicarTempo(tempo, false);
+      aviso(
+        `Listo. ${analisis.onsets.length} golpes detectados. Ajusta BPM y offset, y pulsa "Generar" o mapea a mano.`,
+        'ok',
+      );
+    } else {
+      aviso(`Audio listo. ${analisis.onsets.length} golpes detectados. Edita el mapa y guarda para reemplazar la dificultad.`, 'ok');
+    }
+    sincronizarBotones();
+  }
+
+  /** Reabre una dificultad de la biblioteca: carga el audio y el mapa tal cual estan guardados. */
+  async function abrirDeLaBiblioteca(songId: string, nombreDificultad: string): Promise<void> {
+    try {
+      aviso('Abriendo la cancion de la biblioteca...');
+      const cancion = await leerCancion(songId);
+      const chart = cancion?.dificultades.find((d) => d.metadata.difficultyName === nombreDificultad);
+      if (!cancion || !chart) {
+        aviso('Esa dificultad ya no esta en la biblioteca.', 'error');
+        return;
+      }
+      const primero = chart.timingPoints[0];
+      sesion.base = {
+        songId,
+        timingPoints: chart.timingPoints,
+        speedPoints: chart.speedPoints,
+      };
+      sesion.meta = {
+        titulo: chart.metadata.title,
+        artista: chart.metadata.artist,
+        creador: chart.metadata.creator,
+        dificultad: chart.metadata.difficultyName,
+        audioArchivo: chart.metadata.audioFile,
+      };
+      sesion.grilla = {
+        bpm: primero?.bpm ?? 120,
+        offsetMs: primero?.time ?? 0,
+        divisor: sesion.grilla.divisor,
+      };
+      sesion.ajustes = { overallDifficulty: chart.overallDifficulty, hpDrain: chart.hpDrain };
+      sesion.historial = crearHistorial<Note[]>([...chart.notes]);
+      iTitulo.value = sesion.meta.titulo;
+      iArtista.value = sesion.meta.artista;
+      iCreador.value = sesion.meta.creador;
+      iDificultad.value = sesion.meta.dificultad;
+      iBpm.value = String(sesion.grilla.bpm);
+      iOffset.value = String(Math.round(sesion.grilla.offsetMs));
+      iOd.value = String(sesion.ajustes.overallDifficulty);
+      iHp.value = String(sesion.ajustes.hpDrain);
+      sincronizarBotones();
+      await procesarAudio(await cancion.audio.arrayBuffer(), chart.metadata.audioFile, { esNuevo: false });
+      if (chart.timingPoints.length > 1 || chart.speedPoints.length > 0) {
+        aviso(
+          `Abierta. Esta dificultad tiene ${chart.timingPoints.length} puntos de tempo y ${chart.speedPoints.length} de velocidad: el editor usa el primer tempo y conserva los demas al guardar.`,
+          'info',
+        );
+      }
+    } catch (error) {
+      aviso(`No se pudo abrir la cancion: ${error instanceof Error ? error.message : String(error)}`, 'error');
     }
   }
 
@@ -814,16 +916,17 @@ export function mostrarMapeador(contenedor: HTMLElement, opciones: OpcionesMapea
   function chartActual(): ReturnType<typeof construirChart> {
     leerMeta();
     return construirChart(
-      { ...sesion.meta, audioArchivo: sesion.archivo?.name ?? 'audio.mp3' },
+      { ...sesion.meta, audioArchivo: sesion.nombreAudio || sesion.meta.audioArchivo || 'audio.mp3' },
       sesion.grilla,
       sesion.ajustes,
       notas(),
       Math.min(duracionMs() * 0.3, notas()[0]?.time ?? 0),
+      sesion.base ?? undefined,
     );
   }
 
   function entradaOsz(): Parameters<typeof construirOsz>[0] | null {
-    if (!sesion.bytes || !sesion.archivo) return null;
+    if (!sesion.bytes || !sesion.nombreAudio) return null;
     const chart = chartActual();
     return {
       titulo: chart.metadata.title,
@@ -851,15 +954,39 @@ export function mostrarMapeador(contenedor: HTMLElement, opciones: OpcionesMapea
     if (!entrada) return;
     bGuardar.disabled = true;
     try {
-      await guardarCancionCreada(entrada);
+      const chart = chartActual();
+      const nombre = chart.metadata.difficultyName;
+      let mensaje: string;
+      if (sesion.base) {
+        // La cancion ya esta en la biblioteca: se reemplaza esa dificultad o se
+        // agrega una nueva si se cambio el nombre. No se crea otra cancion.
+        const previa = await leerCancion(sesion.base.songId);
+        const existia = previa?.dificultades.some((d) => d.metadata.difficultyName === nombre) ?? false;
+        await guardarDificultad(sesion.base.songId, chart);
+        mensaje = existia
+          ? `Dificultad "${nombre}" reemplazada en la biblioteca.`
+          : `Dificultad "${nombre}" agregada a la cancion en la biblioteca.`;
+      } else {
+        const id = await guardarCancionCreada(entrada);
+        sesion.base = { songId: id, timingPoints: chart.timingPoints, speedPoints: chart.speedPoints };
+        mensaje =
+          'Guardado en la biblioteca. Para otra dificultad de la misma cancion, cambia el nombre en "Dificultad" y vuelve a guardar.';
+      }
       borrarBorrador();
-      aviso('Guardado en la biblioteca. Ya aparece en el song select.', 'ok');
+      aviso(mensaje, 'ok');
       const ir = boton('Ir al song select', 'tetra-boton-primario');
       ir.addEventListener('click', () => salir(opciones.aSongSelect));
       estado.appendChild(document.createElement('br'));
       estado.appendChild(ir);
     } catch (error) {
-      aviso(`No se pudo guardar: ${error instanceof Error ? error.message : String(error)}`, 'error');
+      const texto = error instanceof Error ? error.message : String(error);
+      if (sesion.base && texto.includes('ya no esta en la biblioteca')) {
+        // Se borro la cancion desde otro lado: la proxima vez se crea de nuevo.
+        sesion.base = null;
+        aviso('La cancion se borro de la biblioteca. Pulsa "Guardar" otra vez para crearla de nuevo.', 'error');
+      } else {
+        aviso(`No se pudo guardar: ${texto}`, 'error');
+      }
     } finally {
       sincronizarBotones();
     }
@@ -874,7 +1001,8 @@ export function mostrarMapeador(contenedor: HTMLElement, opciones: OpcionesMapea
     while (resultado.estado === 'reintentar') {
       resultado = await runGame(chart, sesion.buffer);
     }
-    const volverAlEditor = (): void => mostrarMapeador(raiz, opciones);
+    // Sin `abrir`: ya hay una sesion en curso y reabrir de la biblioteca la pisaria.
+    const volverAlEditor = (): void => mostrarMapeador(raiz, sinAbrir(opciones));
     if (resultado.estado === 'completado') {
       const b = boton('Volver al mapeador', 'tetra-resultados-volver-song-select');
       b.addEventListener('click', volverAlEditor);
@@ -1221,10 +1349,23 @@ export function mostrarMapeador(contenedor: HTMLElement, opciones: OpcionesMapea
     destino();
   }
   volver.addEventListener('click', () => salir(opciones.aMenu));
+  nuevo.addEventListener('click', () => {
+    const hayTrabajo = notas().length > 0 || sesion.buffer !== null;
+    if (hayTrabajo && !window.confirm('Se descarta lo que hay en el editor y se empieza un mapa nuevo. ¿Seguir?')) {
+      return;
+    }
+    pausar();
+    limpiarEscena();
+    borrarBorrador();
+    sesionGuardada = null;
+    mostrarMapeador(raiz, sinAbrir(opciones));
+  });
 
   // Arranque.
-  if (sesion.buffer) {
-    archivoNombre.textContent = `${sesion.archivo?.name ?? 'audio'} (${formatoTiempo(duracionMs())})`;
+  if (opciones.abrir) {
+    void abrirDeLaBiblioteca(opciones.abrir.songId, opciones.abrir.difficultyName);
+  } else if (sesion.buffer) {
+    archivoNombre.textContent = `${sesion.nombreAudio || 'audio'} (${formatoTiempo(duracionMs())})`;
     iPosicion.max = String(Math.round(duracionMs()));
     aviso('Sesion recuperada.', 'info');
   } else if (notas().length > 0) {

@@ -8,7 +8,7 @@ Estado corto y siempre al dia. **Si sos una sesion NUEVA, empeza por
 
 ## Donde esta todo
 
-- `main`: limpio, verde, 611 tests + e2e de sincronia.
+- `main`: limpio, verde, 627 tests + e2e de sincronia.
 - En curso: nada.
 
 ## Hecho
@@ -43,6 +43,7 @@ Estado corto y siempre al dia. **Si sos una sesion NUEVA, empeza por
 | T-025 | Mapeador: editor manual (canvas, rejilla, onda, grabacion en vivo, deshacer), mapeo automatico por onsets y tempo con cuatro niveles, analisis en Web Worker, probar, guardar en la biblioteca y exportar `.osz`/`.osu` |
 | T-026 | Pausa con Escape (menu Continuar, Reintentar, Salir; cuenta regresiva de 3 s medida con otro `AudioContext`; el reloj se congela con `ctx.suspend()`) y reintento sin volver al song select |
 | T-037 | Modo presentacion: atajo F o boton en ajustes, sin header ni textos de ayuda, interfaz 10 % mas grande, cursor que se oculta a los 2 s, lista "Antes de presentar"; la pantalla completa real no se pudo verificar en el panel de pruebas |
+| T-032 | Reabrir una cancion de la biblioteca en el mapeador (boton "Editar en el mapeador" en el song select), guardar reemplaza o agrega dificultades sobre la misma cancion, conserva tempos y velocidades originales, boton "Nuevo" |
 
 La prueba de feel de Arnold ya se hizo: en una cancion real sus golpes salieron
 centrados en cero. El motor esta bien sincronizado.

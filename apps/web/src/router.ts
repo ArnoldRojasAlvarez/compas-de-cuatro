@@ -35,7 +35,12 @@ export function iniciarRouter(contenedor: HTMLElement): void {
     mostrarMenu(contenedor, { aJugar: aSongSelect, aAjustes, aMapeador });
   }
   function aSongSelect(): void {
-    mostrarSongSelect(contenedor, { aMenu });
+    mostrarSongSelect(contenedor, {
+      aMenu,
+      // T-032: editar una dificultad de la biblioteca en el mapeador.
+      aMapeador: (songId, difficultyName) =>
+        mostrarMapeador(contenedor, { aMenu, aSongSelect, abrir: { songId, difficultyName } }),
+    });
   }
   function aAjustes(): void {
     mostrarAjustes(contenedor, { aMenu });

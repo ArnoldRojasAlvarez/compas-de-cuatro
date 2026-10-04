@@ -69,5 +69,4 @@ biblioteca", descargar `.osz` o `.osu`.
 - La grabacion en vivo no compensa la latencia de salida de audio.
 - "Probar" siempre arranca del principio de la cancion.
 - Sin seleccion multiple ni copiar y pegar; sin cambios de velocidad (SV).
-- Una cancion creada y guardada no se puede volver a abrir en el editor desde
-  la biblioteca (se puede reimportar el `.osz` exportado en osu!).
+- (Resuelto en T-032) Una cancion guardada se reabre desde el song select.
