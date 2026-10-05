@@ -6,13 +6,23 @@ import {
   COLOR_NOTA_EXTERIOR,
   COLOR_NOTA_INTERIOR,
   DECAY_FLASH_MS,
+  DESPLAZAMIENTO_JUICIO_MS,
+  DESPLAZAMIENTO_POP_JUICIO,
+  DURACION_DESTELLO_MS,
+  ESCALA_FINAL_DESTELLO,
+  ESCALA_INICIAL_DESTELLO,
   ESCALA_POP_JUICIO,
+  OPACIDAD_PISTA_POR_DEFECTO,
   POP_JUICIO_MS,
+  alphaDestello,
   alphaFlash,
   alphaJuicio,
   animacionJuicio,
   colorDeNota,
+  desplazamientoJuicio,
+  escalaDestello,
   escalaJuicio,
+  normalizarOpacidadPista,
 } from './efectos.js';
 
 const DURACION = 450;
@@ -129,5 +139,117 @@ describe('colorDeNota', () => {
     expect(colorDeNota(0)).toBe(colorDeNota(3));
     expect(colorDeNota(1)).toBe(colorDeNota(2));
     expect(colorDeNota(0)).not.toBe(colorDeNota(1));
+  });
+});
+
+describe('alphaDestello (T-050)', () => {
+  it('dura 160 ms', () => {
+    expect(DURACION_DESTELLO_MS).toBe(160);
+  });
+
+  it('vale 1 justo en el golpe (0 ms)', () => {
+    expect(alphaDestello(0)).toBe(1);
+  });
+
+  it('llega a 0 exacto en la duracion y se queda en 0 despues', () => {
+    expect(alphaDestello(DURACION_DESTELLO_MS)).toBe(0);
+    expect(alphaDestello(DURACION_DESTELLO_MS + 1)).toBe(0);
+    expect(alphaDestello(60_000)).toBe(0);
+  });
+
+  it('con ms negativos esta apagado (todavia no hubo golpe)', () => {
+    expect(alphaDestello(-1)).toBe(0);
+    expect(alphaDestello(Number.NEGATIVE_INFINITY)).toBe(0);
+  });
+
+  it('cae de forma cuadratica: a la mitad vale 0.25, no 0.5', () => {
+    expect(alphaDestello(DURACION_DESTELLO_MS / 2)).toBeCloseTo(0.25, 10);
+  });
+
+  it('es monotono decreciente y queda dentro de [0, 1]', () => {
+    let anterior = 1;
+    for (let ms = 0; ms < DURACION_DESTELLO_MS; ms += 8) {
+      const a = alphaDestello(ms);
+      expect(a).toBeLessThanOrEqual(anterior);
+      expect(a).toBeGreaterThanOrEqual(0);
+      anterior = a;
+    }
+  });
+});
+
+describe('escalaDestello (T-050)', () => {
+  it('nace en la escala inicial y termina en la final', () => {
+    expect(escalaDestello(0)).toBeCloseTo(ESCALA_INICIAL_DESTELLO, 10);
+    expect(escalaDestello(DURACION_DESTELLO_MS)).toBeCloseTo(ESCALA_FINAL_DESTELLO, 10);
+  });
+
+  it('con ms negativos vale la inicial y pasada la duracion la final', () => {
+    expect(escalaDestello(-50)).toBe(ESCALA_INICIAL_DESTELLO);
+    expect(escalaDestello(5000)).toBe(ESCALA_FINAL_DESTELLO);
+  });
+
+  it('se expande rapido y frena: a la mitad ya paso de la mitad del recorrido', () => {
+    const mitad = escalaDestello(DURACION_DESTELLO_MS / 2);
+    const puntoMedio = (ESCALA_INICIAL_DESTELLO + ESCALA_FINAL_DESTELLO) / 2;
+    expect(mitad).toBeGreaterThan(puntoMedio);
+    expect(mitad).toBeLessThan(ESCALA_FINAL_DESTELLO);
+  });
+
+  it('crece de forma monotona', () => {
+    let anterior = 0;
+    for (let ms = 0; ms <= DURACION_DESTELLO_MS; ms += 8) {
+      const e = escalaDestello(ms);
+      expect(e).toBeGreaterThanOrEqual(anterior);
+      anterior = e;
+    }
+  });
+});
+
+describe('desplazamientoJuicio (T-050)', () => {
+  it('arranca en +6 px al aparecer', () => {
+    expect(DESPLAZAMIENTO_POP_JUICIO).toBe(6);
+    expect(desplazamientoJuicio(0)).toBe(6);
+  });
+
+  it('llega a 0 en su duracion y se queda en 0', () => {
+    expect(desplazamientoJuicio(DESPLAZAMIENTO_JUICIO_MS)).toBe(0);
+    expect(desplazamientoJuicio(DESPLAZAMIENTO_JUICIO_MS + 500)).toBe(0);
+  });
+
+  it('con ms negativos vale 0 (no hay juicio en pantalla)', () => {
+    expect(desplazamientoJuicio(-1)).toBe(0);
+  });
+
+  it('baja de forma monotona y nunca es negativo', () => {
+    let anterior = Number.POSITIVE_INFINITY;
+    for (let ms = 0; ms < DESPLAZAMIENTO_JUICIO_MS; ms += 6) {
+      const d = desplazamientoJuicio(ms);
+      expect(d).toBeLessThanOrEqual(anterior);
+      expect(d).toBeGreaterThanOrEqual(0);
+      anterior = d;
+    }
+  });
+});
+
+describe('normalizarOpacidadPista (T-050)', () => {
+  it('sin valor da el default 0.85', () => {
+    expect(OPACIDAD_PISTA_POR_DEFECTO).toBe(0.85);
+    expect(normalizarOpacidadPista(undefined)).toBe(0.85);
+  });
+
+  it('respeta los valores validos, incluidos los extremos 0 y 1', () => {
+    expect(normalizarOpacidadPista(0)).toBe(0);
+    expect(normalizarOpacidadPista(0.4)).toBe(0.4);
+    expect(normalizarOpacidadPista(1)).toBe(1);
+  });
+
+  it('recorta lo que se sale de [0, 1]', () => {
+    expect(normalizarOpacidadPista(-0.2)).toBe(0);
+    expect(normalizarOpacidadPista(7)).toBe(1);
+  });
+
+  it('un NaN o infinito cae al default en vez de propagarse', () => {
+    expect(normalizarOpacidadPista(Number.NaN)).toBe(0.85);
+    expect(normalizarOpacidadPista(Number.POSITIVE_INFINITY)).toBe(0.85);
   });
 });

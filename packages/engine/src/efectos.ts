@@ -89,3 +89,69 @@ export function colorDeNota(columna: number): number {
   const exterior = columna === 0 || columna === 3;
   return exterior ? COLOR_NOTA_EXTERIOR : COLOR_NOTA_INTERIOR;
 }
+
+// ---------------------------------------------------------------------------
+// T-050: destello al golpe, desplazamiento del juicio y opacidad de la pista
+// ---------------------------------------------------------------------------
+
+/** Cuanto dura el destello del receptor al juzgar una nota (de encendido a apagado). */
+export const DURACION_DESTELLO_MS = 160;
+/** Escala con la que nace el destello, relativa a su tamano final. */
+export const ESCALA_INICIAL_DESTELLO = 0.6;
+/** Escala a la que llega el destello al apagarse. */
+export const ESCALA_FINAL_DESTELLO = 1.3;
+
+/**
+ * Alpha del destello segun los ms desde el golpe: 1 en 0 ms y cae de forma
+ * cuadratica (rapido al principio, cola suave) hasta 0 en
+ * `DURACION_DESTELLO_MS`. Con `ms < 0` (todavia no hubo golpe, o el reloj
+ * retrocedio) o pasada la duracion vale 0: el destello esta apagado.
+ */
+export function alphaDestello(msDesdeGolpe: number): number {
+  if (msDesdeGolpe < 0 || msDesdeGolpe >= DURACION_DESTELLO_MS) return 0;
+  const resto = 1 - msDesdeGolpe / DURACION_DESTELLO_MS;
+  return resto * resto;
+}
+
+/**
+ * Escala del destello: crece de `ESCALA_INICIAL_DESTELLO` a
+ * `ESCALA_FINAL_DESTELLO` con desaceleracion (se expande rapido y frena).
+ * Antes del golpe vale la inicial y despues de la duracion la final.
+ */
+export function escalaDestello(msDesdeGolpe: number): number {
+  if (msDesdeGolpe <= 0) return ESCALA_INICIAL_DESTELLO;
+  if (msDesdeGolpe >= DURACION_DESTELLO_MS) return ESCALA_FINAL_DESTELLO;
+  const resto = 1 - msDesdeGolpe / DURACION_DESTELLO_MS;
+  const avance = 1 - resto * resto;
+  return ESCALA_INICIAL_DESTELLO + (ESCALA_FINAL_DESTELLO - ESCALA_INICIAL_DESTELLO) * avance;
+}
+
+/** Cuanto baja el juicio (px) en el instante en que aparece, antes de subir a su lugar. */
+export const DESPLAZAMIENTO_POP_JUICIO = 6;
+/** Duracion del desplazamiento vertical del juicio. */
+export const DESPLAZAMIENTO_JUICIO_MS = 120;
+
+/**
+ * Desplazamiento vertical del juicio en px (positivo = hacia abajo): vale
+ * `DESPLAZAMIENTO_POP_JUICIO` al aparecer y llega a 0 en
+ * `DESPLAZAMIENTO_JUICIO_MS` con desaceleracion. Fuera de ese rango
+ * (incluidos los ms negativos) vale 0: el juicio esta en su lugar.
+ */
+export function desplazamientoJuicio(msDesdeAparicion: number): number {
+  if (msDesdeAparicion < 0 || msDesdeAparicion >= DESPLAZAMIENTO_JUICIO_MS) return 0;
+  const resto = 1 - msDesdeAparicion / DESPLAZAMIENTO_JUICIO_MS;
+  return DESPLAZAMIENTO_POP_JUICIO * resto * resto;
+}
+
+/** Opacidad por defecto del fondo de la pista (los carriles). */
+export const OPACIDAD_PISTA_POR_DEFECTO = 0.85;
+
+/**
+ * Normaliza la opacidad pedida para el fondo de la pista: `undefined` o un
+ * valor que no es un numero finito dan el default, el resto se recorta a
+ * `[0, 1]`.
+ */
+export function normalizarOpacidadPista(opacidad: number | undefined): number {
+  if (opacidad === undefined || !Number.isFinite(opacidad)) return OPACIDAD_PISTA_POR_DEFECTO;
+  return Math.min(1, Math.max(0, opacidad));
+}

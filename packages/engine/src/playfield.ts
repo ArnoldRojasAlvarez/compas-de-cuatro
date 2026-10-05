@@ -22,6 +22,12 @@
 // showJudgement() ni setPressed() crean objetos: el estado de efectos son
 // numeros y booleanos en arrays de tamano fijo. La aritmetica de las
 // animaciones vive en efectos.ts (pura, con tests).
+//
+// T-050: destello por columna al juzgar (un sprite reusado con mezcla
+// aditiva), haz de pulsado mas suave y alto, glow de la linea de juicio,
+// bordes del escenario opacos y `opacidadPista` (quinto parametro opcional).
+// Las skins propias (skins-propias.ts) se reconocen por `infoDeSkinPropia`:
+// sus piezas se dibujan a su tamano natural en vez de estirarse.
 
 import { Container, FillGradient, Graphics, Rectangle, Sprite, Text, Texture } from 'pixi.js';
 import type { Application } from 'pixi.js';
@@ -38,7 +44,18 @@ import {
   type VentanaNotas,
 } from './position.js';
 import { imagenDeSkin, type TexturasDeSkin } from './skin.js';
-import { alphaFlash, alphaJuicio, colorDeNota, escalaJuicio } from './efectos.js';
+import {
+  alphaDestello,
+  alphaFlash,
+  alphaJuicio,
+  colorDeNota,
+  desplazamientoJuicio,
+  escalaDestello,
+  escalaJuicio,
+  normalizarOpacidadPista,
+} from './efectos.js';
+import { crearLienzo } from './lienzo.js';
+import { infoDeSkinPropia } from './skins-propias.js';
 
 export interface PlayfieldOptions {
   /** Cuantos ms de pista se ven de golpe. Menor valor, notas mas rapidas. */
@@ -49,6 +66,12 @@ export interface PlayfieldOptions {
   columnWidth: number;
   /** Distancia del receptor al borde inferior, en pixeles. */
   receptorOffset: number;
+}
+
+/** Ajustes visuales opcionales de la pista (T-050). */
+export interface OpcionesVisualesPista {
+  /** 0 a 1. Opacidad del fondo de la pista (los carriles). Default 0.85. Menos = se ve mas el fondo de la cancion. */
+  opacidadPista?: number;
 }
 
 export interface Playfield {
@@ -90,19 +113,31 @@ const COLOR_ACENTO = 0x3fd8c2;
 
 const COLOR_RECEPTOR_APAGADO = COLOR_TINTA_3;
 const ALPHA_LINEA_CARRIL = 0.7;
+/** Los bordes del escenario (primera y ultima linea) van opacos: la pista tiene que leerse sobre un fondo con imagen. */
+const ALPHA_BORDE_ESCENARIO = 1;
 const ALPHA_LINEA_JUICIO = 0.5;
+/** Glow de la linea de juicio: una segunda linea ancha y muy transparente bajo la nitida. */
+const ALTO_GLOW_LINEA_JUICIO = 10;
+const ALPHA_GLOW_LINEA_JUICIO = 0.14;
 
 /** Alpha de los cuerpos de LN: baja en el fallback, la de siempre con skin. */
 const ALPHA_CUERPO_FALLBACK = 0.42;
 const ALPHA_CUERPO_SKIN = 0.55;
 
 /** Alpha maximo del haz de flash y su tamano como fraccion de la pista. */
-const ALPHA_MAX_FLASH = 0.55;
-const ALTO_FLASH_FACTOR = 0.42;
+const ALPHA_MAX_FLASH = 0.5;
+const ALTO_FLASH_FACTOR = 0.55;
 const ANCHO_FLASH_FACTOR = 0.94;
+
+/** Destello del receptor al golpear: alpha maximo y tamano base como fraccion del carril. */
+const ALPHA_MAX_DESTELLO = 0.9;
+const TAMANO_DESTELLO_FACTOR = 1.25;
 
 /** Altura del texto de juicio, como fraccion de `receptorY`. */
 const POSICION_JUICIO_FACTOR = 0.58;
+
+/** Glow del texto MAX (teal); el resto de juicios no brilla y MISS en particular va seco. */
+const GLOW_JUICIO_MAX = { alpha: 0.65, angle: 0, blur: 8, color: 0x3fd8c2, distance: 0 };
 
 const FUENTE_JUICIO = "'JetBrains Mono', 'Sora', monospace";
 const TAMANO_JUICIO = 34;
@@ -291,11 +326,56 @@ function generarTextura(
   return textura;
 }
 
+/**
+ * Haz de pulsado: blanco, transparente arriba y mas opaco abajo (en el
+ * receptor), con curva suave (varias paradas, no una rampa lineal) y bordes
+ * laterales que se desvanecen. Se tinta con el color de la columna. Se dibuja
+ * con Canvas 2D, una vez al crear el playfield.
+ */
+function crearTexturaHaz(): Texture {
+  const { canvas, ctx, ancho, alto } = crearLienzo(32, 128);
+  const vertical = ctx.createLinearGradient(0, 0, 0, alto);
+  vertical.addColorStop(0, 'rgba(255, 255, 255, 0)');
+  vertical.addColorStop(0.45, 'rgba(255, 255, 255, 0.08)');
+  vertical.addColorStop(0.8, 'rgba(255, 255, 255, 0.34)');
+  vertical.addColorStop(1, 'rgba(255, 255, 255, 0.78)');
+  ctx.fillStyle = vertical;
+  ctx.fillRect(0, 0, ancho, alto);
+  // Desvanece los costados: lo que ya esta dibujado se queda segun este degradado horizontal.
+  ctx.globalCompositeOperation = 'destination-in';
+  const horizontal = ctx.createLinearGradient(0, 0, ancho, 0);
+  horizontal.addColorStop(0, 'rgba(0, 0, 0, 0.25)');
+  horizontal.addColorStop(0.3, 'rgba(0, 0, 0, 1)');
+  horizontal.addColorStop(0.7, 'rgba(0, 0, 0, 1)');
+  horizontal.addColorStop(1, 'rgba(0, 0, 0, 0.25)');
+  ctx.fillStyle = horizontal;
+  ctx.fillRect(0, 0, ancho, alto);
+  return Texture.from(canvas);
+}
+
+/**
+ * Brillo redondo para el destello del receptor: blanco al centro y
+ * transparente en el borde. Se tinta con el color del juicio y se dibuja con
+ * mezcla aditiva.
+ */
+function crearTexturaBrillo(): Texture {
+  const { canvas, ctx, ancho, alto } = crearLienzo(64, 64);
+  const g = ctx.createRadialGradient(ancho / 2, alto / 2, 0, ancho / 2, alto / 2, ancho / 2);
+  g.addColorStop(0, 'rgba(255, 255, 255, 1)');
+  g.addColorStop(0.3, 'rgba(255, 255, 255, 0.55)');
+  g.addColorStop(0.65, 'rgba(255, 255, 255, 0.14)');
+  g.addColorStop(1, 'rgba(255, 255, 255, 0)');
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, ancho, alto);
+  return Texture.from(canvas);
+}
+
 export function createPlayfield(
   app: Application,
   chart: Chart,
   options: PlayfieldOptions,
   skin?: TexturasDeSkin,
+  visual?: OpcionesVisualesPista,
 ): Playfield {
   // Se guarda la referencia a `options`, no una copia: si quien nos creo
   // muta `options.scrollDuration` en caliente, el proximo render() ya lo ve,
@@ -312,9 +392,18 @@ export function createPlayfield(
   const capaFlash = new Container();
   const capaCuerpos = new Container();
   const capaReceptores = new Container();
+  const capaDestellos = new Container();
   const capaMarcadores = new Container();
   const capaJuicios = new Container();
-  raiz.addChild(capaFondo, capaFlash, capaCuerpos, capaReceptores, capaMarcadores, capaJuicios);
+  raiz.addChild(
+    capaFondo,
+    capaFlash,
+    capaCuerpos,
+    capaReceptores,
+    capaDestellos,
+    capaMarcadores,
+    capaJuicios,
+  );
 
   // Notas separadas por columna, en el mismo orden ascendente que
   // chart.notes (mismo patron que MotorDeJuicio en packages/core): permite
@@ -339,6 +428,13 @@ export function createPlayfield(
   for (let columna = 0; columna < COLUMN_COUNT; columna++) {
     texturasPorColumna.push(texturasDeColumna(columna as Column, skin));
   }
+
+  // Si la skin es una de las propias (texturasDeSkinPropia) se conocen sus
+  // medidas y colores: las piezas se dibujan a su tamano natural (no se
+  // estiran como las de un .osk) y el haz de pulsado toma el color de la
+  // columna. Con un .osk o sin skin esto es `undefined` y todo queda como antes.
+  const propia = infoDeSkinPropia(skin);
+  const opacidadPista = normalizarOpacidadPista(visual?.opacidadPista);
 
   // -------------------------------------------------------------------------
   // Texturas generadas (una vez; se destruyen en destroy())
@@ -378,37 +474,36 @@ export function createPlayfield(
     g.rect(0, ALTO_MARCADOR - franjaNota, anchoTexNota, franjaNota).fill(0xffffff);
   });
 
-  // Haz del flash: blanco, transparente arriba y opaco abajo (en el
-  // receptor); se tinta con el color de cada columna.
-  const texturaFlash = generarTextura(app, 16, 128, (g) => {
-    const gradiente = new FillGradient({
-      type: 'linear',
-      start: { x: 0, y: 0 },
-      end: { x: 0, y: 1 },
-      colorStops: [
-        { offset: 0, color: 'rgba(255, 255, 255, 0)' },
-        { offset: 1, color: 'rgba(255, 255, 255, 1)' },
-      ],
-    });
-    g.rect(0, 0, 16, 128).fill(gradiente);
-  });
+  // Haz del flash y brillo del destello: se dibujan con Canvas 2D (ver
+  // crearTexturaHaz y crearTexturaBrillo).
+  const texturaFlash = crearTexturaHaz();
+  const texturaBrillo = crearTexturaBrillo();
 
   // -------------------------------------------------------------------------
   // Fondo, lineas de carril y linea de juicio
   // -------------------------------------------------------------------------
 
   const fondo = new Sprite(texturaFondo);
+  fondo.alpha = opacidadPista;
   capaFondo.addChild(fondo);
 
   const lineasCarril: Sprite[] = [];
   for (let i = 0; i <= COLUMN_COUNT; i++) {
     const linea = new Sprite(Texture.WHITE);
     linea.tint = COLOR_LINEA;
-    linea.alpha = ALPHA_LINEA_CARRIL;
+    // Primera y ultima linea: los bordes del escenario, opacos.
+    linea.alpha = i === 0 || i === COLUMN_COUNT ? ALPHA_BORDE_ESCENARIO : ALPHA_LINEA_CARRIL;
     linea.width = 1;
     capaFondo.addChild(linea);
     lineasCarril.push(linea);
   }
+
+  const glowLineaJuicio = new Sprite(Texture.WHITE);
+  glowLineaJuicio.tint = COLOR_ACENTO;
+  glowLineaJuicio.alpha = ALPHA_GLOW_LINEA_JUICIO;
+  glowLineaJuicio.anchor.set(0, 0.5);
+  glowLineaJuicio.height = ALTO_GLOW_LINEA_JUICIO;
+  capaReceptores.addChild(glowLineaJuicio);
 
   const lineaJuicio = new Sprite(Texture.WHITE);
   lineaJuicio.tint = COLOR_ACENTO;
@@ -425,6 +520,7 @@ export function createPlayfield(
   const poolCuerpos: Pool[] = [];
   const receptores: Sprite[] = [];
   const hacesFlash: Sprite[] = [];
+  const destellos: Sprite[] = [];
 
   // Por columna, lo que depende de si esa imagen viene de la skin o es el
   // fallback propio (se resuelve una vez aca): color y desplazamientos
@@ -435,6 +531,8 @@ export function createPlayfield(
   const desplCola: number[] = [];
   const altoCola: number[] = [];
   const alphaCuerpo: number[] = [];
+  /** Color del haz de pulsado por columna: el de la skin propia, o el de la nota del fallback. */
+  const colorHaz: number[] = [];
 
   // Estado de efectos por columna: numeros y booleanos de tamano fijo, sin
   // objetos nuevos por evento. `setPressed(false)` no trae tiempo, asi que
@@ -442,6 +540,11 @@ export function createPlayfield(
   const pulsadas: boolean[] = [];
   const soltadaPendiente: boolean[] = [];
   const tiempoSoltada: Ms[] = [];
+  // Destello al golpe (T-050): mismo patron. showJudgement() no recibe tiempo,
+  // asi que deja el pedido y el color y render() toma el tiempo del frame.
+  const destelloPendiente: boolean[] = [];
+  const colorDestelloPendiente: number[] = [];
+  const tiempoDestello: Ms[] = [];
 
   for (let columna = 0; columna < COLUMN_COUNT; columna++) {
     const texturas = texturasPorColumna[columna]!;
@@ -450,11 +553,25 @@ export function createPlayfield(
     desplNota.push(texturas.nota === undefined ? -ALTO_MARCADOR / 2 : 0);
     desplCola.push(texturas.colaLn === undefined ? -ALTO_COLA_FALLBACK / 2 : 0);
     altoCola.push(texturas.colaLn === undefined ? ALTO_COLA_FALLBACK : ALTO_MARCADOR);
-    alphaCuerpo.push(texturas.cuerpoLn === undefined ? ALPHA_CUERPO_FALLBACK : ALPHA_CUERPO_SKIN);
+    alphaCuerpo.push(
+      propia !== undefined
+        ? 1 // la translucidez de una skin propia ya viene en la textura
+        : texturas.cuerpoLn === undefined
+          ? ALPHA_CUERPO_FALLBACK
+          : ALPHA_CUERPO_SKIN,
+    );
+    // Exterior o interior se decide una sola vez, con la misma funcion que usa la skin.
+    const exterior = imagenDeSkin(columna as Column, 'nota') === 'note1';
+    colorHaz.push(
+      propia === undefined ? color : exterior ? propia.colores.exterior : propia.colores.interior,
+    );
 
     pulsadas.push(false);
     soltadaPendiente.push(false);
     tiempoSoltada.push(Number.NEGATIVE_INFINITY);
+    destelloPendiente.push(false);
+    colorDestelloPendiente.push(COLOR_JUICIO.max);
+    tiempoDestello.push(Number.NEGATIVE_INFINITY);
 
     const poolMarcador = new Pool(capaMarcadores, () => {
       const sprite = new Sprite(Texture.WHITE);
@@ -477,18 +594,26 @@ export function createPlayfield(
     // Con imagen de skin el receptor se centra en la linea (como hoy); el
     // fallback es una barra baja que cuelga justo debajo de la linea de juicio.
     receptor.anchor.set(0.5, texturas.receptor === undefined ? 0 : 0.5);
-    receptor.height = ALTO_RECEPTOR;
+    // (el alto y el ancho se fijan en posicionarElementos)
     aplicarTextura(receptor, texturas.receptor, Texture.WHITE, COLOR_RECEPTOR_APAGADO);
     capaReceptores.addChild(receptor);
     receptores.push(receptor);
 
     const haz = new Sprite(texturaFlash);
     haz.anchor.set(0.5, 1);
-    haz.tint = color;
+    haz.tint = colorHaz[columna]!;
     haz.alpha = 0;
     haz.visible = false;
     capaFlash.addChild(haz);
     hacesFlash.push(haz);
+
+    const destello = new Sprite(texturaBrillo);
+    destello.anchor.set(0.5, 0.5);
+    destello.blendMode = 'add';
+    destello.alpha = 0;
+    destello.visible = false;
+    capaDestellos.addChild(destello);
+    destellos.push(destello);
   }
 
   // -------------------------------------------------------------------------
@@ -505,6 +630,8 @@ export function createPlayfield(
         fontSize: TAMANO_JUICIO,
         fontWeight: '600',
         letterSpacing: 3,
+        // Solo MAX brilla (teal); el resto va seco, MISS incluido.
+        ...(juicio === 'max' ? { dropShadow: GLOW_JUICIO_MAX } : {}),
       },
     });
     texto.anchor.set(0.5, 0.5);
@@ -522,10 +649,15 @@ export function createPlayfield(
   let juicioPendiente = false;
   let juicioVisible = -1;
   let juicioAparicion: Ms = 0;
+  // Altura base del texto de juicio (el pop lo baja unos px y vuelve).
+  let baseJuicioY = 0;
 
   // Un solo objeto de geometria, reutilizado: se actualiza en cada llamada
   // en vez de crear uno nuevo (geometria() corre dentro de render()).
-  const geo: GeometriaPista = { height: alturaActual, receptorOffset: options.receptorOffset };
+  const geo: GeometriaPista = {
+    height: alturaActual,
+    receptorOffset: options.receptorOffset,
+  };
   function geometria(): GeometriaPista {
     geo.height = alturaActual;
     geo.receptorOffset = options.receptorOffset;
@@ -553,23 +685,37 @@ export function createPlayfield(
     lineaJuicio.x = 0;
     lineaJuicio.y = y;
     lineaJuicio.width = anchoPista;
+    glowLineaJuicio.x = 0;
+    glowLineaJuicio.y = y;
+    glowLineaJuicio.width = anchoPista;
 
     for (let columna = 0; columna < COLUMN_COUNT; columna++) {
       const receptor = receptores[columna]!;
       receptor.x = columnaX(columna);
       receptor.y = y;
-      receptor.width = options.columnWidth * ANCHO_MARCADOR_FACTOR;
+      if (propia !== undefined) {
+        receptor.width = options.columnWidth * propia.medidas.anchoReceptor;
+        receptor.height = options.columnWidth * propia.medidas.altoReceptor;
+      } else {
+        receptor.width = options.columnWidth * ANCHO_MARCADOR_FACTOR;
+        receptor.height = ALTO_RECEPTOR;
+      }
 
       const haz = hacesFlash[columna]!;
       haz.x = columnaX(columna);
       haz.y = y;
       haz.width = options.columnWidth * ANCHO_FLASH_FACTOR;
       haz.height = y * ALTO_FLASH_FACTOR;
+
+      const destello = destellos[columna]!;
+      destello.x = columnaX(columna);
+      destello.y = y;
     }
 
+    baseJuicioY = y * POSICION_JUICIO_FACTOR;
     for (const texto of textosJuicio) {
       texto.x = anchoPista / 2;
-      texto.y = y * POSICION_JUICIO_FACTOR;
+      texto.y = baseJuicioY;
     }
   }
   posicionarElementos();
@@ -594,6 +740,7 @@ export function createPlayfield(
       } else {
         texto.alpha = alpha;
         texto.scale.set(escalaJuicio(transcurrido, DURACION_POPUP_JUICIO));
+        texto.y = baseJuicioY + desplazamientoJuicio(transcurrido);
       }
     }
 
@@ -607,9 +754,38 @@ export function createPlayfield(
       const haz = hacesFlash[columna]!;
       haz.visible = alpha > 0;
       haz.alpha = alpha * ALPHA_MAX_FLASH;
+
+      // Destello al golpe: toma el tiempo de este frame y se anima solo con el.
+      if (destelloPendiente[columna]) {
+        tiempoDestello[columna] = time;
+        destelloPendiente[columna] = false;
+        destellos[columna]!.tint = colorDestelloPendiente[columna]!;
+      }
+      const msDestello = time - tiempoDestello[columna]!;
+      const alphaDeDestello = alphaDestello(msDestello);
+      const destello = destellos[columna]!;
+      destello.visible = alphaDeDestello > 0;
+      if (alphaDeDestello > 0) {
+        destello.alpha = alphaDeDestello * ALPHA_MAX_DESTELLO;
+        destello.scale.set(
+          (options.columnWidth * TAMANO_DESTELLO_FACTOR * escalaDestello(msDestello)) /
+            texturaBrillo.width,
+        );
+      }
     }
 
     geometria();
+    // Medidas de las piezas, una vez por frame: las de la skin propia (a su
+    // tamano natural) o las de siempre (estiradas, con osk y fallback).
+    const ancho = options.columnWidth;
+    const anchoNota =
+      propia !== undefined ? ancho * propia.medidas.anchoNota : ancho * ANCHO_MARCADOR_FACTOR;
+    const altoNota = propia !== undefined ? ancho * propia.medidas.altoNota : ALTO_MARCADOR;
+    const anchoCuerpo =
+      propia !== undefined ? ancho * propia.medidas.anchoCuerpo : ancho * ANCHO_CUERPO_FACTOR;
+    const anchoCola =
+      propia !== undefined ? ancho * propia.medidas.anchoCola : ancho * ANCHO_MARCADOR_FACTOR;
+    const altoColaPropia = propia !== undefined ? ancho * propia.medidas.altoCola : 0;
     const yReceptorActual = receptorY(geo);
     for (let columna = 0; columna < COLUMN_COUNT; columna++) {
       const notas = notasPorColumna[columna]!;
@@ -646,7 +822,7 @@ export function createPlayfield(
             const cuerpo = poolCuerpo.obtener();
             cuerpo.x = columnaX(columna);
             cuerpo.y = colaY;
-            cuerpo.width = options.columnWidth * ANCHO_CUERPO_FACTOR;
+            cuerpo.width = anchoCuerpo;
             cuerpo.height = Math.max(0, yCabezaClipeada - colaY);
             cuerpo.alpha = alphaCuerpo[columna]!;
             aplicarTextura(cuerpo, texturas.cuerpoLn, Texture.WHITE, color);
@@ -662,16 +838,16 @@ export function createPlayfield(
             const marcador = poolMarcador.obtener();
             marcador.x = columnaX(columna);
             marcador.y = cabezaY + desplNota[columna]!;
-            marcador.width = options.columnWidth * ANCHO_MARCADOR_FACTOR;
-            marcador.height = ALTO_MARCADOR;
+            marcador.width = anchoNota;
+            marcador.height = altoNota;
             aplicarTextura(marcador, texturas.nota, texturaNota, color);
           }
           if (colaVisible) {
             const marcadorCola = poolMarcador.obtener();
             marcadorCola.x = columnaX(columna);
             marcadorCola.y = colaY + desplCola[columna]!;
-            marcadorCola.width = options.columnWidth * ANCHO_MARCADOR_FACTOR;
-            marcadorCola.height = altoCola[columna]!;
+            marcadorCola.width = anchoCola;
+            marcadorCola.height = propia !== undefined ? altoColaPropia : altoCola[columna]!;
             aplicarTextura(marcadorCola, texturas.colaLn, texturaNota, color);
           }
         } else {
@@ -680,8 +856,8 @@ export function createPlayfield(
             const marcador = poolMarcador.obtener();
             marcador.x = columnaX(columna);
             marcador.y = progresoAY(progreso, geo) + desplNota[columna]!;
-            marcador.width = options.columnWidth * ANCHO_MARCADOR_FACTOR;
-            marcador.height = ALTO_MARCADOR;
+            marcador.width = anchoNota;
+            marcador.height = altoNota;
             aplicarTextura(marcador, texturas.nota, texturaNota, color);
           }
         }
@@ -693,10 +869,15 @@ export function createPlayfield(
   }
 
   function showJudgement(column: Column, judgement: Judgement): void {
-    // El juicio es uno solo y va centrado en la pista: la columna no se usa.
-    void column;
+    // El texto de juicio es uno solo y va centrado en la pista.
     juicioNuevo = INDICE_JUICIO[judgement];
     juicioPendiente = true;
+    // El destello del receptor es por columna y con el color del juicio; un
+    // miss no destella (no hubo golpe que celebrar).
+    if (judgement !== 'miss') {
+      destelloPendiente[column] = true;
+      colorDestelloPendiente[column] = COLOR_JUICIO[judgement];
+    }
   }
 
   function setPressed(column: Column, pressed: boolean): void {
@@ -727,9 +908,11 @@ export function createPlayfield(
     for (const pool of poolCuerpos) pool.destruir();
     for (const receptor of receptores) receptor.destroy();
     for (const haz of hacesFlash) haz.destroy();
+    for (const destello of destellos) destello.destroy();
     for (const linea of lineasCarril) linea.destroy();
     for (const texto of textosJuicio) texto.destroy();
     lineaJuicio.destroy();
+    glowLineaJuicio.destroy();
     fondo.destroy();
     juicioVisible = -1;
     juicioPendiente = false;
@@ -738,6 +921,7 @@ export function createPlayfield(
     texturaFondo.destroy(true);
     texturaNota.destroy(true);
     texturaFlash.destroy(true);
+    texturaBrillo.destroy(true);
   }
 
   return { render, showJudgement, setPressed, resize, destroy };
