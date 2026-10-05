@@ -28,25 +28,28 @@ import { mostrarSongSelect } from './song-select.js';
 import { mostrarAjustes } from './ajustes.js';
 import { mostrarCalibracion } from './calibracion.js';
 import { mostrarMapeador } from './mapeador.js';
+import type { SongId } from '@tetra/storage';
 
 /** Arranca el router sobre `contenedor` (siempre `#app`) y muestra el menu, la pantalla raiz. */
 export function iniciarRouter(contenedor: HTMLElement): void {
   function aMenu(): void {
-    mostrarMenu(contenedor, { aJugar: aSongSelect, aAjustes, aMapeador });
+    mostrarMenu(contenedor, { aJugar: (id) => aSongSelect(id), aAjustes, aMapeador });
   }
-  function aSongSelect(): void {
+  // T-052: desde el menu se llega con la cancion que sonaba ya enfocada.
+  function aSongSelect(cancionInicial?: SongId): void {
     mostrarSongSelect(contenedor, {
       aMenu,
+      ...(cancionInicial !== undefined && { cancionInicial }),
       // T-032: editar una dificultad de la biblioteca en el mapeador.
       aMapeador: (songId, difficultyName) =>
-        mostrarMapeador(contenedor, { aMenu, aSongSelect, abrir: { songId, difficultyName } }),
+        mostrarMapeador(contenedor, { aMenu, aSongSelect: () => aSongSelect(), abrir: { songId, difficultyName } }),
     });
   }
   function aAjustes(): void {
     mostrarAjustes(contenedor, { aMenu });
   }
   function aMapeador(): void {
-    mostrarMapeador(contenedor, { aMenu, aSongSelect });
+    mostrarMapeador(contenedor, { aMenu, aSongSelect: () => aSongSelect() });
   }
 
   // T-015: `#calibracion` es una herramienta de desarrollo, fuera de la

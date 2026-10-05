@@ -280,3 +280,92 @@ export function elegirIndiceAleatorio(
   if (indice >= excluir) indice += 1;
   return indice;
 }
+
+// ---------------------------------------------------------------------------
+// T-052: linea de datos, barra de progreso del preview, foco tras borrar
+// ---------------------------------------------------------------------------
+
+/** Menor y mayor BPM de la dificultad (redondeados). Sin timing points da 0 y 0. */
+export function rangoBpm(chart: Chart): { minimo: number; maximo: number } {
+  if (chart.timingPoints.length === 0) return { minimo: 0, maximo: 0 };
+  let minimo = Number.POSITIVE_INFINITY;
+  let maximo = Number.NEGATIVE_INFINITY;
+  for (const punto of chart.timingPoints) {
+    if (punto.bpm < minimo) minimo = punto.bpm;
+    if (punto.bpm > maximo) maximo = punto.bpm;
+  }
+  return { minimo: Math.round(minimo), maximo: Math.round(maximo) };
+}
+
+/** "128" si el tempo no cambia, "120-180" si varia (con los valores ya redondeados: 120.2 y 119.8 dan "120"). */
+export function formatearBpm(chart: Chart): string {
+  const { minimo, maximo } = rangoBpm(chart);
+  return minimo === maximo ? String(minimo) : `${minimo}-${maximo}`;
+}
+
+/** La linea de datos del detalle: "Creador · 128 BPM · 1:20 · 340 notas". */
+export function formatearLineaDeDatos(chart: Chart): string {
+  const partes = [
+    chart.metadata.creator.trim(),
+    `${formatearBpm(chart)} BPM`,
+    formatearDuracion(duracionMs(chart)),
+    `${chart.notes.length} notas`,
+  ];
+  return partes.filter((parte) => parte !== '').join(' · ');
+}
+
+/**
+ * Que fraccion (0 a 1) de la barra de progreso cayo bajo un clic. `izquierda`
+ * y `ancho` son las del rectangulo de la barra; fuera de la barra se recorta a
+ * los extremos, y una barra sin ancho (aun sin layout) da 0 en vez de NaN.
+ */
+export function fraccionDeClic(clienteX: number, izquierda: number, ancho: number): number {
+  if (!(ancho > 0)) return 0;
+  return Math.min(1, Math.max(0, (clienteX - izquierda) / ancho));
+}
+
+/**
+ * Posicion del preview (segundos dentro del audio) a partir del reloj de SU
+ * propio AudioContext: arranco en `offsetS` cuando ese reloj marcaba
+ * `inicioCtxS`, y el audio esta en bucle, asi que la posicion da la vuelta al
+ * llegar a `duracionS`. No usa performance.now: si el contexto se suspende
+ * (pausa), `ahoraCtxS` se congela y la posicion tambien.
+ */
+export function posicionDePreviewSegundos(
+  offsetS: number,
+  inicioCtxS: number,
+  ahoraCtxS: number,
+  duracionS: number,
+): number {
+  if (!(duracionS > 0)) return 0;
+  const transcurrido = Math.max(0, ahoraCtxS - inicioCtxS);
+  return (offsetS + transcurrido) % duracionS;
+}
+
+/** Posicion sobre duracion, recortada a 0..1 (duracion 0 da 0). */
+export function fraccionDePosicion(posicionS: number, duracionS: number): number {
+  if (!(duracionS > 0)) return 0;
+  return Math.min(1, Math.max(0, posicionS / duracionS));
+}
+
+/**
+ * A que cancion pasa el foco cuando se borra `borradoId` de la lista visible
+ * `ids`: la que queda en su lugar (la siguiente), o la anterior si era la
+ * ultima. `null` si no queda ninguna (o el id no estaba en la lista).
+ */
+export function idTrasBorrar(ids: readonly string[], borradoId: string): string | null {
+  const indice = ids.indexOf(borradoId);
+  if (indice === -1) return null;
+  return ids[indice + 1] ?? ids[indice - 1] ?? null;
+}
+
+/**
+ * Mueve un indice `delta` posiciones dentro de `[0, total)` sin dar la vuelta
+ * (se detiene en los extremos). Sin elementos da -1. Con `actual` en -1 (nada
+ * enfocado) un delta positivo cae en el primero y uno negativo en el ultimo.
+ */
+export function moverIndice(actual: number, total: number, delta: number): number {
+  if (total <= 0) return -1;
+  const base = actual < 0 ? (delta > 0 ? -1 : total) : actual;
+  return Math.min(total - 1, Math.max(0, base + delta));
+}

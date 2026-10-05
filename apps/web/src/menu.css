@@ -1,29 +1,17 @@
-/* Menu principal (menu.ts). Movido desde style.css sin cambios (pasada grafica, T-019 a T-024): cada pantalla tiene su CSS propio para que varios tickets puedan trabajar en paralelo sin chocar en un solo archivo. */
+/* Menu principal (menu.ts). Cada pantalla tiene su CSS propio para que varios tickets puedan trabajar en paralelo sin chocar en un solo archivo.
 
-/* ---------------------------------------------------------------------- */
-/* T-010: el menu principal (ver src/menu.ts). Oscuro, espacioso, alineado */
-/* a una grilla (docs/DISENO.md, "Layout y principios"): sin scroll, todo  */
-/* visible apenas carga.                                                  */
-/* ---------------------------------------------------------------------- */
+   T-052: minimo. El logo manda (una sola cosa brilla), los tres accesos debajo
+   y, discreto abajo a la izquierda, lo que suena. Sobre el fondo de la
+   escena: la imagen de la cancion, oscurecida (fondo-escena.ts). */
 
 .tetra-menu {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: var(--espacio-4);
+  gap: var(--espacio-5);
   width: min(92vw, 560px);
-  /* Vertical mas ajustado que horizontal a proposito: lo que limita "sin
-     scroll" (ticket, criterios de aceptacion) es la altura de la ventana,
-     no el ancho. */
+  /* La altura de la ventana es lo que limita el "sin scroll", no el ancho. */
   padding: var(--espacio-4) 0;
-}
-
-.tetra-menu-encabezado {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: var(--espacio-2);
-  text-align: center;
 }
 
 .tetra-menu-logo {
@@ -31,35 +19,22 @@
   justify-content: center;
 }
 
+/* Clic en el logo = Jugar (comodidad del mouse; el boton es el control accesible). */
+.tetra-menu-logo-clicable {
+  cursor: pointer;
+}
+
 .tetra-logo {
   display: block;
-}
-
-.tetra-menu-titulo {
-  margin: 0;
-  font-family: var(--fuente-display);
-  /* T-024: un poco mas de presencia (peso y tracking). */
-  font-weight: 700;
-  font-size: var(--tipo-2xl);
-  letter-spacing: 0.06em;
-  line-height: 1.1;
-  color: var(--tinta);
-  text-wrap: balance;
-}
-
-.tetra-menu-lema {
-  margin: 0;
-  max-width: 40ch;
-  font-size: var(--tipo-sm);
-  color: var(--tinta-2);
-  text-wrap: balance;
+  /* Un halo muy tenue del acento detras del anillo: el logo es lo unico que brilla. */
+  filter: drop-shadow(0 0 22px color-mix(in srgb, var(--acento) 18%, transparent));
 }
 
 .tetra-menu-accesos {
   display: flex;
   flex-direction: column;
   gap: var(--espacio-2);
-  width: min(100%, 280px);
+  width: min(100%, 260px);
 }
 
 .tetra-menu-boton {
@@ -72,15 +47,53 @@
 /* Mismo lenguaje de microinteracciones que el resto de la app (transiciones
    y :active salen de style.css): el boton secundario del menu insinua el
    acento en el borde al pasar el mouse, sin rellenarse, para que "Jugar"
-   siga siendo lo unico que brilla. Vale para cualquier cantidad de botones
-   en .tetra-menu-accesos (por ejemplo un tercero, "Mapeador"). */
+   siga siendo lo unico que brilla. */
+#app .tetra-menu-boton:not(.tetra-boton-primario) {
+  background: color-mix(in srgb, var(--superficie) 70%, transparent);
+}
+
 #app .tetra-menu-boton:not(.tetra-boton-primario):hover:not(:disabled) {
+  background: color-mix(in srgb, var(--superficie-2) 80%, transparent);
   border-color: color-mix(in srgb, var(--acento) 45%, var(--linea));
 }
 
-/* Con tres botones el menu crece unos 50px: en ventanas bajas se compacta
-   para mantener el "sin scroll". */
-@media (max-height: 760px) {
+/* Lo que suena: una linea de datos en mono chico y dos botones-icono, abajo a
+   la izquierda. Aparece con un fundido cuando ya suena algo. */
+.tetra-menu-sonando {
+  position: fixed;
+  left: var(--espacio-5);
+  bottom: var(--espacio-4);
+  z-index: 2;
+  max-width: calc(100vw - 2 * var(--espacio-5));
+}
+
+.tetra-menu-sonando-fila {
+  display: flex;
+  align-items: center;
+  gap: var(--espacio-1);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 400ms var(--curva-salida);
+}
+
+.tetra-menu-sonando-visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.tetra-menu-sonando-texto {
+  min-width: 0;
+  margin-left: var(--espacio-2);
+  font-family: var(--fuente-datos);
+  font-size: var(--tipo-xs);
+  color: var(--tinta-2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Con ventanas bajas el menu se compacta para mantener el "sin scroll". */
+@media (max-height: 640px) {
   .tetra-menu {
     gap: var(--espacio-3);
   }

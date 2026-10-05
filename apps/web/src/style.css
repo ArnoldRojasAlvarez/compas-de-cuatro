@@ -15,6 +15,7 @@
 @import './song-select.css';
 @import './ajustes.css';
 @import './header.css';
+@import './fondo-escena.css';
 
 body {
   margin: 0;
@@ -297,4 +298,48 @@ body.tetra-en-juego #app > * {
 .tetra-toggle input[type='checkbox']:checked::before {
   transform: translateX(18px);
   background: var(--fondo);
+}
+
+/* T-052: boton-icono (menu y song select). Cuadrado, sin texto: el nombre
+   accesible va en aria-label y title (iconos.ts). Fantasma en reposo para que
+   no compita con el contenido; el hover lo aclara. */
+#app .tetra-boton-icono {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  background: transparent;
+  border-color: transparent;
+  color: var(--tinta-2);
+}
+
+#app .tetra-boton-icono:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--superficie-2) 80%, transparent);
+  color: var(--tinta);
+}
+
+#app .tetra-boton-icono[aria-pressed='true'],
+#app .tetra-boton-icono[aria-expanded='true'] {
+  color: var(--acento);
+}
+
+.tetra-icono {
+  display: block;
+}
+
+/* Visualmente oculto pero presente para lectores de pantalla (por ejemplo el
+   h1 del menu, cuya marca visible es el logo). */
+.tetra-solo-lector {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }

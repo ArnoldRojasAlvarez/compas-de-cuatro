@@ -7,13 +7,11 @@
 // logo-logica.ts, testeable sin navegador; este archivo es todo lo que si
 // necesita DOM, Canvas y AudioContext.
 //
-// Musica del menu: reproduccion APARTE del AudioClock del juego (ver
-// CLAUDE.md, "El reloj es el audio", y el ticket, "Ojo con el reloj"). El
-// AudioContext de aca solo alimenta el AnalyserNode del visualizador,
-// nunca mide tiempo de gameplay ni comparte instancia con game.ts (que
-// arma el suyo propio en runGame). Se cierra entero al llamar a detener().
+// Audio: el logo ya no crea el suyo (T-052). Recibe el AnalyserNode de la
+// musica del menu (musica-menu.ts, con su propio AudioContext aparte del reloj
+// de juego, ver CLAUDE.md, "El reloj es el audio") o null, y solo lo lee.
+// Quien cierra ese audio es el menu, no el logo.
 
-import { RUTA_AUDIO_CLICK } from './click-track.js';
 import {
   ESTADO_PULSO_INICIAL,
   anguloDeRotacion,
@@ -24,21 +22,19 @@ import {
   type EstadoPulso,
 } from './logo-logica.js';
 
-const TAMANO_CSS = 168; // px, lado del cuadrado del canvas en pantalla: chico a proposito, para que el menu entre sin scroll (ver el ticket, criterios de aceptacion)
+const TAMANO_CSS = 220; // px, lado del cuadrado del canvas en pantalla (T-052: mas grande, el menu ya no lleva titulo ni lema)
+const ESCALA_TIPO = TAMANO_CSS / 168; // el texto central se dibujo pensado para 168 px
 const NUM_BARRAS_POR_CUADRANTE = 10;
 const FRACCION_RADIO_ANILLO = 0.62; // fraccion del radio del canvas
 const FRACCION_LARGO_BARRA_MAX = 0.3; // fraccion del radio del canvas
-const GROSOR_ANILLO = 3;
+const GROSOR_ANILLO = 4;
 const OPACIDAD_BARRA_MINIMA = 0.35; // las barras nunca desaparecen del todo, ni en silencio
 
 export interface Logo {
   /**
-   * Detiene el bucle de dibujo y libera el audio del menu: desconecta el
-   * AnalyserNode, para la fuente y cierra el AudioContext dedicado. Hay
-   * que llamarla SIEMPRE antes de salir del menu (ver menu.ts, los
-   * handlers de los botones "Jugar" y "Ajustes") para no dejar dos audios
-   * sonando en paralelo ni un rAF colgado (ver el ticket, "Rendimiento").
-   * Es seguro llamarla mas de una vez.
+   * Detiene el bucle de dibujo. Hay que llamarla SIEMPRE antes de salir del
+   * menu (ver menu.ts) para no dejar un rAF colgado detras de la pantalla
+   * nueva. No toca el audio (es del menu). Es seguro llamarla mas de una vez.
    */
   detener(): void;
 }
@@ -54,10 +50,10 @@ function tokenCss(nombre: string): string {
 
 /**
  * Crea el logo dentro de `contenedor` (le agrega un `<canvas>`) y arranca
- * su bucle de dibujo y su audio de fondo. Ver `Logo.detener` para la
- * limpieza.
+ * su bucle de dibujo. `analizador` es el de la musica del menu (o null: el
+ * logo respira en reposo, sin espectro). Ver `Logo.detener` para la limpieza.
  */
-export function crearLogo(contenedor: HTMLElement): Logo {
+export function crearLogo(contenedor: HTMLElement, analizador: AnalyserNode | null): Logo {
   const canvas = document.createElement('canvas');
   canvas.className = 'tetra-logo';
   const dpr = window.devicePixelRatio || 1;
@@ -89,66 +85,7 @@ export function crearLogo(contenedor: HTMLElement): Logo {
   let tick = 0;
   let estadoPulso: EstadoPulso = ESTADO_PULSO_INICIAL;
 
-  // -- Audio del menu (ver el comentario de arriba de todo el archivo) --
-  let audioCtx: AudioContext | null = null;
-  let nodoFuente: AudioBufferSourceNode | null = null;
-  let analizador: AnalyserNode | null = null;
-  let datosFrecuencia = new Uint8Array(0);
-
-  async function iniciarAudio(): Promise<void> {
-    try {
-      const respuesta = await fetch(RUTA_AUDIO_CLICK);
-      if (!respuesta.ok || detenido) return;
-      const arrayBuffer = await respuesta.arrayBuffer();
-      if (detenido) return;
-
-      const ctx = new AudioContext();
-      const buffer = await ctx.decodeAudioData(arrayBuffer);
-      if (detenido) {
-        void ctx.close().catch(() => {});
-        return;
-      }
-
-      const fuente = ctx.createBufferSource();
-      fuente.buffer = buffer;
-      fuente.loop = true; // en bucle: es solo senal para el visualizador, no una cancion elegida (eso es de un ticket posterior)
-
-      const nodoAnalizador = ctx.createAnalyser();
-      // fftSize chico: 64 bins alcanzan de sobra para 10 barras por
-      // cuadrante (NUM_BARRAS_POR_CUADRANTE) y es barato de leer cada
-      // cuadro. No hace falta resolucion de frecuencia fina para un
-      // visualizador decorativo.
-      nodoAnalizador.fftSize = 128;
-
-      fuente.connect(nodoAnalizador);
-      nodoAnalizador.connect(ctx.destination);
-      fuente.start();
-
-      // Autoplay: si el navegador arranca el contexto en 'suspended' (sin
-      // gesto del usuario), se reintenta en el primer click o tecla que
-      // llegue a la pagina. En el e2e (apps/web/playwright.config.ts)
-      // Chromium corre con --autoplay-policy=no-user-gesture-required,
-      // asi que ahi arranca directo sin necesitar esto.
-      if (ctx.state === 'suspended') {
-        const reintentar = (): void => {
-          void ctx.resume();
-        };
-        window.addEventListener('pointerdown', reintentar, { once: true });
-        window.addEventListener('keydown', reintentar, { once: true });
-      }
-
-      audioCtx = ctx;
-      nodoFuente = fuente;
-      analizador = nodoAnalizador;
-      datosFrecuencia = new Uint8Array(nodoAnalizador.frequencyBinCount);
-    } catch {
-      // Sin audio (fetch fallido, decodeAudioData fallido, AudioContext no
-      // disponible en este entorno): el logo se queda en su respiracion de
-      // reposo, sin espectro. No es un error que valga la pena mostrarle a
-      // quien esta en el menu: es solo el visualizador, no bloquea jugar.
-    }
-  }
-  void iniciarAudio();
+  const datosFrecuencia = new Uint8Array(analizador?.frequencyBinCount ?? 0);
 
   function dibujar(angulo: number, escala: number, alturas: number[]): void {
     const mitad = TAMANO_CSS / 2;
@@ -198,7 +135,7 @@ export function crearLogo(contenedor: HTMLElement): Logo {
 
     // La marca al centro, en la face Display (docs/DISENO.md).
     ctx2d.globalAlpha = 1;
-    ctx2d.font = `600 22px ${tokenCss('--fuente-display')}`;
+    ctx2d.font = `600 ${Math.round(22 * ESCALA_TIPO)}px ${tokenCss('--fuente-display')}`;
     ctx2d.textAlign = 'center';
     ctx2d.textBaseline = 'middle';
     ctx2d.fillText('TETRA', 0, 1);
@@ -242,22 +179,6 @@ export function crearLogo(contenedor: HTMLElement): Logo {
     if (detenido) return;
     detenido = true;
     if (rafId !== 0) cancelAnimationFrame(rafId);
-    try {
-      nodoFuente?.stop();
-    } catch {
-      // ya estaba detenida o nunca llego a arrancar (por ejemplo, se llamo
-      // a detener() mientras iniciarAudio() todavia estaba cargando): no
-      // hay nada mas que hacer.
-    }
-    nodoFuente?.disconnect();
-    analizador?.disconnect();
-    if (audioCtx) {
-      void audioCtx.close().catch(() => {
-        // cerrar el contexto es best-effort, igual que en game.ts y
-        // song-select.ts: si el navegador ya lo cerro por su cuenta no hay
-        // nada que hacer.
-      });
-    }
   }
 
   return { detener };

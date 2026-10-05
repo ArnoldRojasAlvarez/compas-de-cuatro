@@ -2,15 +2,15 @@
 // pantalla que T-011 elimino: la reemplazo por el song select, que le dio
 // a esta parte su propio archivo. El click track sigue siendo el fixture
 // que prueba sincronia (ver apps/web/e2e/sincronia.spec.ts) y sigue
-// alimentando el audio del logo del menu (logo.ts), asi que necesita vivir
+// sonando en el menu con la biblioteca vacia (musica-menu.ts), asi que necesita vivir
 // en un lugar que ninguno de los dos "posea": ni el menu ni el song select
 // son mas dueños del click track que el otro.
 
 import type { Chart } from '@tetra/core';
 
 const RUTA_MAPA_CLICK = '/fixtures/click-120.json';
-// Tambien la usa logo.ts para la musica del menu (el mismo click track, en
-// bucle, solo como senal para el visualizador). Es el mismo archivo, una
+// Tambien la usa musica-menu.ts cuando la biblioteca esta vacia (el mismo
+// click track, en bucle, para que el logo tenga senal). Es el mismo archivo, una
 // sola constante: evita que las dos rutas se puedan ir desincronizando con
 // el tiempo.
 export const RUTA_AUDIO_CLICK = '/fixtures/click-120.wav';

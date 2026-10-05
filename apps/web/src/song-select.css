@@ -1,7 +1,10 @@
 /* Song select (song-select.ts). Cada pantalla tiene su CSS propio para que varios tickets puedan trabajar en paralelo sin chocar en un solo archivo.
 
-   T-022 (pasada grafica): tarjetas con portada y velo, estrellas por nivel,
-   perfil de skillsets legible, estado vacio con presencia.
+   T-022: estrellas por nivel, perfil de skillsets legible.
+   T-052: la escena. El fondo es la portada de la cancion enfocada
+   (fondo-escena.ts, detras de todo). A la izquierda la cancion enfocada, sin
+   caja, como protagonista; a la derecha la lista compacta. Una sola cosa
+   brilla: el boton Jugar y la tarjeta enfocada.
 
    Nota de especificidad: style.css restila TODO <button> con `#app button`
    (especificidad de id), asi que lo que aca pisa a un boton va con el
@@ -9,128 +12,370 @@
    elementos que no son botones. */
 
 /* ---------------------------------------------------------------------- */
-/* T-011/T-012: estructura de la pantalla (ver src/song-select.ts).        */
+/* Estructura: barra arriba, dos columnas debajo. Alto fijo (sin scroll de  */
+/* pagina); la lista y, si hace falta, el detalle scrollean por dentro.     */
 /* ---------------------------------------------------------------------- */
 
 .tetra-song-select {
+  position: relative;
   display: flex;
   flex-direction: column;
-  gap: var(--espacio-4);
-  width: min(94vw, 920px);
-  padding: var(--espacio-4) 0 var(--espacio-6);
+  gap: var(--espacio-3);
+  width: min(96vw, 1360px);
+  height: calc(100vh - var(--alto-header) - 32px);
   box-sizing: border-box;
 }
 
-.tetra-song-select-encabezado {
+.tetra-ss-barra {
   display: flex;
   align-items: center;
-  flex-wrap: wrap;
-  gap: var(--espacio-3);
+  gap: var(--espacio-2);
+  flex-shrink: 0;
 }
 
-.tetra-song-select-encabezado h1 {
+/* Titulo de la pantalla: chico y tenue, es una etiqueta (un h1 accesible, no
+   un encabezado que compita con la cancion). */
+.tetra-ss-titulo {
   margin: 0;
   font-family: var(--fuente-display);
-  font-weight: 600;
-  font-size: var(--tipo-xl);
-  color: var(--tinta);
-}
-
-.tetra-song-select-herramientas {
-  display: flex;
-  gap: var(--espacio-2);
-  margin-left: auto;
-  flex-wrap: wrap;
-}
-
-.tetra-song-select-buscar {
-  min-width: 220px;
+  font-weight: 500;
+  font-size: var(--tipo-xs);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--tinta-3);
 }
 
 .tetra-song-select-cuerpo {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(260px, 320px);
-  gap: var(--espacio-5);
-  align-items: start;
+  grid-template-columns: minmax(0, 1fr) minmax(320px, 400px);
+  gap: var(--espacio-6);
+  flex: 1;
+  min-height: 0;
 }
+
+/* ---------------------------------------------------------------------- */
+/* Izquierda: la cancion enfocada.                                         */
+/* ---------------------------------------------------------------------- */
+
+.tetra-song-select-detalle {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: var(--espacio-4);
+  min-height: 0;
+  max-width: 640px;
+  padding: 0 var(--espacio-2);
+  overflow-y: auto;
+  /* Sobre una portada clara el texto tiene que leerse igual. */
+  text-shadow: 0 1px 14px color-mix(in srgb, var(--fondo) 85%, transparent);
+}
+
+.tetra-ss-cabecera {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espacio-1);
+}
+
+.tetra-song-select-detalle-titulo {
+  margin: 0;
+  font-family: var(--fuente-display);
+  font-weight: 600;
+  font-size: clamp(1.75rem, 3.4vw, 3rem);
+  line-height: 1.1;
+  color: var(--tinta);
+  text-wrap: balance;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+  overflow: hidden;
+}
+
+.tetra-song-select-detalle-artista {
+  margin: 0;
+  color: var(--tinta-2);
+  font-size: var(--tipo-lg);
+}
+
+/* Una linea mono con creador, BPM, duracion y notas: los datos se lucen
+   (docs/DISENO.md) sin ocupar una grilla. */
+.tetra-ss-datos {
+  margin: var(--espacio-2) 0 0;
+  font-family: var(--fuente-datos);
+  font-size: var(--tipo-sm);
+  font-variant-numeric: tabular-nums;
+  color: var(--tinta-2);
+}
+
+.tetra-ss-fuente {
+  margin: 0;
+  font-size: var(--tipo-xs);
+  color: var(--tinta-3);
+}
+
+/* Dificultades como chips con la estrella coloreada. */
+.tetra-ss-dificultades {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--espacio-2);
+}
+
+#app .tetra-dificultad-item {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--espacio-2);
+  font-size: var(--tipo-sm);
+  padding: var(--espacio-1) var(--espacio-3);
+  background: color-mix(in srgb, var(--fondo) 60%, transparent);
+  border: 1px solid var(--linea);
+  color: var(--tinta-2);
+}
+
+#app .tetra-dificultad-item:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--superficie-2) 80%, transparent);
+  color: var(--tinta);
+}
+
+#app .tetra-dificultad-item-enfocada,
+#app .tetra-dificultad-item-enfocada:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--acento) 12%, var(--fondo));
+  border-color: var(--acento);
+  color: var(--tinta);
+}
+
+/* Dentro del chip la estrella no lleva caja propia (el chip ya es la
+   caja): solo el texto en el color de su nivel. */
+.tetra-dificultad-item .tetra-estrella {
+  padding: 0;
+  background: transparent;
+  border-color: transparent;
+}
+
+/* ---------------------------------------------------------------------- */
+/* Reproductor del preview: boton de pausa y barra fina de progreso.       */
+/* ---------------------------------------------------------------------- */
+
+.tetra-ss-reproductor {
+  display: flex;
+  align-items: center;
+  gap: var(--espacio-2);
+  transition: opacity 0.2s ease;
+}
+
+.tetra-ss-reproductor-inactivo {
+  opacity: 0.45;
+}
+
+/* El area clicable es alta (22px) aunque la linea sea fina, para poder
+   apuntarle con el mouse. */
+.tetra-ss-progreso {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  height: 22px;
+  cursor: pointer;
+}
+
+.tetra-ss-progreso::before,
+.tetra-ss-progreso-relleno {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 3px;
+  margin-top: -1.5px;
+  border-radius: 2px;
+  transition: height 0.12s ease, margin-top 0.12s ease;
+}
+
+.tetra-ss-progreso::before {
+  content: '';
+  background: color-mix(in srgb, var(--tinta) 22%, transparent);
+}
+
+.tetra-ss-progreso-relleno {
+  background: var(--tinta);
+  transform-origin: left center;
+  transform: scaleX(0);
+}
+
+.tetra-ss-progreso:hover::before,
+.tetra-ss-progreso:hover .tetra-ss-progreso-relleno {
+  height: 5px;
+  margin-top: -2.5px;
+}
+
+/* ---------------------------------------------------------------------- */
+/* Jugar y las acciones secundarias (botones-icono, sin texto).            */
+/* ---------------------------------------------------------------------- */
+
+.tetra-ss-acciones {
+  display: flex;
+  align-items: center;
+  gap: var(--espacio-1);
+}
+
+.tetra-song-select-jugar {
+  flex: 1;
+  margin-right: var(--espacio-2);
+  padding: var(--espacio-3) var(--espacio-4);
+  font-size: var(--tipo-base);
+}
+
+/* Borrar: el primer clic lo pone en rojo (confirmar), vuelve solo a los 3 s. */
+#app .tetra-boton-icono.tetra-ss-borrar-confirmando,
+#app .tetra-boton-icono.tetra-ss-borrar-confirmando:hover:not(:disabled) {
+  color: var(--j-miss);
+  border-color: var(--j-miss);
+  background: color-mix(in srgb, var(--j-miss) 12%, transparent);
+}
+
+/* ---------------------------------------------------------------------- */
+/* Perfil de skillsets (T-014/T-022), compacto: barras finas, sin titulo.  */
+/* ---------------------------------------------------------------------- */
+
+.tetra-song-select-perfil-calculando {
+  margin: 0;
+  color: var(--tinta-3);
+  font-size: var(--tipo-sm);
+}
+
+.tetra-song-select-perfil {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-width: 360px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.tetra-perfil-fila {
+  display: grid;
+  /* 11ch fijo: el nombre mas largo de los siete skillsets es
+     "jumpstream"/"handstream" (10 caracteres), asi las pistas de todas las
+     filas arrancan en la misma columna. */
+  grid-template-columns: 11ch minmax(0, 1fr) 4.5ch;
+  align-items: center;
+  gap: var(--espacio-3);
+  min-height: 17px;
+}
+
+.tetra-perfil-fila-nombre {
+  font-size: var(--tipo-xs);
+  color: var(--tinta-3);
+  text-transform: capitalize;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tetra-perfil-fila-pista {
+  display: block;
+  height: 4px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--tinta) 12%, transparent);
+  overflow: hidden;
+}
+
+.tetra-perfil-fila-barra {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--tinta-3);
+  transition: width 0.2s ease;
+}
+
+/* La barra del skillset dominante del mapa se destaca con el acento. */
+.tetra-perfil-fila-maxima .tetra-perfil-fila-barra {
+  background: var(--acento);
+}
+
+.tetra-perfil-fila-maxima .tetra-perfil-fila-nombre {
+  color: var(--tinta-2);
+}
+
+.tetra-perfil-fila-valor {
+  font-family: var(--fuente-datos);
+  font-size: var(--tipo-xs);
+  font-variant-numeric: tabular-nums;
+  color: var(--tinta-3);
+  text-align: right;
+}
+
+.tetra-perfil-fila-maxima .tetra-perfil-fila-valor {
+  color: var(--acento);
+}
+
+/* ---------------------------------------------------------------------- */
+/* Derecha: buscar, filtros, la lista y el pie.                            */
+/* ---------------------------------------------------------------------- */
 
 .tetra-song-select-columna-lista {
   display: flex;
   flex-direction: column;
-  gap: var(--espacio-3);
-  min-width: 0;
-}
-
-/* Zona de soltar .osz: borde punteado en reposo, acento al arrastrar encima. */
-.tetra-song-select-zona {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
   gap: var(--espacio-2);
-  padding: var(--espacio-4);
-  border: 2px dashed var(--linea);
-  border-radius: var(--radio-panel);
-  text-align: center;
-  color: var(--tinta-2);
-  transition:
-    border-color 0.15s ease,
-    color 0.15s ease,
-    background-color 0.15s ease;
+  min-width: 0;
+  min-height: 0;
 }
 
-/* Biblioteca vacia: la zona es lo que hay que usar, asi que se nota. */
-.tetra-song-select-zona-resaltada {
-  border-color: color-mix(in srgb, var(--acento) 45%, var(--linea));
-  background: color-mix(in srgb, var(--acento) 5%, transparent);
-  color: var(--tinta);
+.tetra-ss-fila-busqueda {
+  display: flex;
+  align-items: center;
+  gap: var(--espacio-1);
 }
 
-/* Despues de -resaltada a proposito: arrastrar encima gana siempre. */
-.tetra-song-select-zona-activa {
-  border-color: var(--acento);
-  background: color-mix(in srgb, var(--acento) 10%, transparent);
-  color: var(--acento);
+.tetra-song-select-buscar {
+  flex: 1;
+  min-width: 0;
+  background: color-mix(in srgb, var(--superficie) 75%, transparent);
 }
 
-.tetra-song-select-zona-texto {
-  margin: 0;
+/* Orden y filtro de estrellas: cerrados por defecto. */
+.tetra-ss-filtros {
+  display: none;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--espacio-2);
+}
+
+.tetra-ss-filtros-abiertos {
+  display: flex;
+}
+
+.tetra-song-select-filtro-estrellas {
+  display: flex;
+  align-items: center;
+  gap: var(--espacio-1);
+}
+
+.tetra-song-select-filtro-estrellas-etiqueta {
+  color: var(--tinta-3);
   font-size: var(--tipo-sm);
 }
 
-.tetra-song-select-zona-boton {
-  font-size: var(--tipo-xs);
+.tetra-song-select-filtro-estrellas-input {
+  width: 4.5ch;
 }
-
-.tetra-song-select-click-track {
-  align-self: flex-start;
-}
-
-.tetra-song-select-error {
-  min-height: 1.2em;
-  margin: 0;
-  color: var(--j-miss);
-  font-size: var(--tipo-sm);
-}
-
-/* ---------------------------------------------------------------------- */
-/* T-022: lista de canciones. Cada <li> es una tarjeta; el padding de la   */
-/* lista deja lugar al desplazamiento del hover y al glow de la enfocada,  */
-/* que de otro modo el overflow de la lista recortaria.                    */
-/* ---------------------------------------------------------------------- */
 
 .tetra-song-select-lista {
   list-style: none;
   margin: 0;
-  padding: var(--espacio-3);
+  /* El padding deja lugar al desplazamiento del hover y al glow de la
+     enfocada, que de otro modo el overflow de la lista recortaria. */
+  padding: var(--espacio-1) var(--espacio-2) var(--espacio-1) var(--espacio-1);
   display: flex;
   flex-direction: column;
-  gap: var(--espacio-2);
-  max-height: 52vh;
+  gap: var(--espacio-1);
+  flex: 1;
+  min-height: 0;
   overflow-x: hidden;
   overflow-y: auto;
-  border: 1px solid var(--linea);
-  border-radius: var(--radio-panel);
-  background: var(--fondo);
+  scrollbar-width: thin;
+  scrollbar-color: var(--linea) transparent;
 }
 
 .tetra-song-select-lista-vacia {
@@ -140,13 +385,184 @@
   text-align: center;
 }
 
-/* Estado vacio (sin ninguna cancion): bloque con presencia. */
-.tetra-song-select-vacio {
+/* Tarjeta compacta: miniatura, titulo y artista, estrella. El fondo es el de
+   la escena (translucido), sin portada de fondo por tarjeta. */
+.tetra-song-item {
+  position: relative;
+  border: 1px solid transparent;
+  border-left: 3px solid transparent;
+  border-radius: var(--radio-control);
+  background: color-mix(in srgb, var(--fondo) 55%, transparent);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+  transition:
+    transform 0.15s ease,
+    border-color 0.15s ease,
+    background-color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+/* Franja invisible a la izquierda: al desplazarse la tarjeta hacia la
+   derecha en el hover, el puntero que estaba en su borde izquierdo seguiria
+   adentro de ella en vez de salir y volver a entrar (parpadeo). */
+.tetra-song-item::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -6px;
+  width: 6px;
+}
+
+.tetra-song-item:hover {
+  background: color-mix(in srgb, var(--superficie) 80%, transparent);
+  transform: translateX(3px);
+}
+
+/* Foco: la cancion enfocada y el foco de teclado sobre su cabecera. Es la
+   unica cosa que brilla en la lista (docs/DISENO.md): borde izquierdo en el
+   acento y un glow muy tenue. */
+.tetra-song-item-enfocada,
+.tetra-song-item:has(.tetra-song-item-cabecera:focus-visible) {
+  border-color: color-mix(in srgb, var(--acento) 30%, var(--linea));
+  border-left-color: var(--acento);
+  background: color-mix(in srgb, var(--superficie) 85%, transparent);
+  box-shadow: 0 0 12px color-mix(in srgb, var(--acento) 14%, transparent);
+}
+
+#app .tetra-song-item-cabecera {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: var(--espacio-3);
+  width: 100%;
+  box-sizing: border-box;
+  padding: var(--espacio-2) var(--espacio-3) var(--espacio-2) var(--espacio-2);
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  text-align: left;
+}
+
+/* El hover lo pinta la tarjeta, no el boton. */
+#app .tetra-song-item-cabecera:hover:not(:disabled) {
+  background: transparent;
+}
+
+/* El anillo del boton se reemplaza por el borde y el glow de la tarjeta (ver
+   :has arriba): un anillo exterior quedaria pegado al borde y se leeria como
+   un segundo marco. */
+#app .tetra-song-item-cabecera:focus-visible {
+  outline: none;
+}
+
+.tetra-song-item-portada {
+  flex-shrink: 0;
+  width: 44px;
+  height: 44px;
+  border-radius: var(--radio-control);
+  background-color: var(--superficie-2);
+  background-image: var(--portada, none);
+  background-size: cover;
+  background-position: center;
+}
+
+.tetra-song-item-texto {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+
+.tetra-song-item-titulo {
+  max-width: 100%;
+  font-family: var(--fuente-display);
+  font-weight: 600;
+  font-size: var(--tipo-sm);
+  color: var(--tinta);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tetra-song-item-artista {
+  max-width: 100%;
+  font-size: var(--tipo-xs);
+  color: var(--tinta-2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Pie: el click track (chico, secundario) y el mensaje de error. */
+.tetra-ss-pie {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espacio-1);
+  flex-shrink: 0;
+}
+
+#app .tetra-song-select-click-track {
+  align-self: flex-start;
+  padding: var(--espacio-1) var(--espacio-2);
+  font-size: var(--tipo-xs);
+  background: transparent;
+  border-color: transparent;
+  color: var(--tinta-3);
+}
+
+#app .tetra-song-select-click-track:hover:not(:disabled) {
+  color: var(--tinta);
+}
+
+.tetra-song-select-error {
+  margin: 0;
+  color: var(--j-miss);
+  font-size: var(--tipo-sm);
+}
+
+.tetra-song-select-error:empty {
+  display: none;
+}
+
+/* ---------------------------------------------------------------------- */
+/* Estado vacio: una linea y el boton de importar. El panel pasa a una sola */
+/* columna (clase tetra-ss-esta-vacio, la pone song-select.ts).             */
+/* ---------------------------------------------------------------------- */
+
+.tetra-ss-vacio {
+  display: none;
+}
+
+.tetra-ss-esta-vacio .tetra-song-select-cuerpo {
+  grid-template-columns: minmax(0, 420px);
+  justify-content: center;
+  align-content: center;
+}
+
+.tetra-ss-esta-vacio .tetra-song-select-detalle,
+.tetra-ss-esta-vacio .tetra-ss-fila-busqueda,
+.tetra-ss-esta-vacio .tetra-ss-filtros,
+.tetra-ss-esta-vacio .tetra-song-select-lista {
+  display: none;
+}
+
+.tetra-ss-esta-vacio .tetra-song-select-columna-lista {
+  align-items: center;
+  gap: var(--espacio-4);
+}
+
+.tetra-ss-esta-vacio .tetra-ss-vacio {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: var(--espacio-2);
-  padding: var(--espacio-6) var(--espacio-4);
+  gap: var(--espacio-3);
+}
+
+.tetra-ss-esta-vacio .tetra-ss-pie {
+  align-items: center;
 }
 
 /* El cuatro de la marca, hecho con CSS: cuatro barras verticales. */
@@ -155,7 +571,6 @@
   align-items: flex-end;
   gap: 6px;
   height: 48px;
-  margin-bottom: var(--espacio-2);
 }
 
 .tetra-song-select-vacio-icono > span {
@@ -190,358 +605,53 @@
   color: var(--tinta);
 }
 
-.tetra-song-select-vacio-ayuda {
-  margin: 0;
-  max-width: 34ch;
-  font-size: var(--tipo-sm);
-  color: var(--tinta-2);
-  text-wrap: balance;
-}
-
-/* La tarjeta, sin overflow hidden: el borde redondeado recorta el fondo por
-   si solo, y un overflow recortaria la franja de ::after de mas abajo. Con
-   portada: la imagen de fondo (variable --portada, la pone JS) bajo un velo
-   en ::before. Sin portada: fondo de superficie y una franja vertical fina
-   a la izquierda (el borde izquierdo). */
-.tetra-song-item {
-  --velo-opacidad: 1;
-  position: relative;
-  isolation: isolate;
-  border: 1px solid var(--linea);
-  border-left: 3px solid transparent;
-  border-radius: var(--radio-control);
-  background-color: var(--superficie);
-  background-image: var(--portada, none);
-  background-size: cover;
-  background-position: center;
-  transition:
-    transform 0.15s ease,
-    border-color 0.15s ease,
-    box-shadow 0.15s ease;
-}
-
-/* Velo oscuro: de --fondo opaco a la izquierda a semitransparente a la
-   derecha, para que el texto se lea sobre cualquier portada. Al pasar el
-   mouse se aclara apenas (opacity < 1). */
-.tetra-song-item::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  z-index: -1;
-  border-radius: inherit;
-  background: linear-gradient(
-    90deg,
-    var(--fondo) 0%,
-    var(--fondo) 28%,
-    color-mix(in srgb, var(--fondo) 45%, transparent) 100%
-  );
-  opacity: var(--velo-opacidad);
-  transition: opacity 0.15s ease;
-  pointer-events: none;
-}
-
-/* Franja invisible a la izquierda: al desplazarse la tarjeta hacia la
-   derecha en el hover, el puntero que estaba en su borde izquierdo seguiria
-   adentro de ella en vez de salir y volver a entrar (parpadeo). Se mueve
-   junto con la tarjeta, asi que cubre ese hueco. */
-.tetra-song-item::after {
-  content: '';
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: -6px;
-  width: 6px;
-}
-
-.tetra-song-item-sin-portada {
-  border-left-color: var(--linea);
-  background-image: none;
-}
-
-/* Sin portada no hay nada que cubrir: el velo se apaga. */
-.tetra-song-item-sin-portada::before {
-  display: none;
-}
-
-.tetra-song-item:hover {
-  --velo-opacidad: 0.82;
-  transform: translateX(3px);
-}
-
-.tetra-song-item-sin-portada:hover {
-  background-color: var(--superficie-2);
-}
-
-/* Foco: la cancion enfocada y el foco de teclado sobre su cabecera. Es la
-   unica cosa que brilla en la lista (docs/DISENO.md): borde izquierdo en el
-   acento y un glow muy tenue. */
-.tetra-song-item-enfocada,
-.tetra-song-item:has(.tetra-song-item-cabecera:focus-visible) {
-  border-left-color: var(--acento);
-  box-shadow: 0 0 10px color-mix(in srgb, var(--acento) 16%, transparent);
-}
-
-#app .tetra-song-item-cabecera {
-  display: flex;
-  flex-direction: row;
-  align-items: center;
-  gap: var(--espacio-2);
-  width: 100%;
-  box-sizing: border-box;
-  padding: var(--espacio-3);
-  background: transparent;
-  border: none;
-  border-radius: 0;
-  text-align: left;
-}
-
-/* El hover lo pinta la tarjeta (velo y desplazamiento), no el boton. */
-#app .tetra-song-item-cabecera:hover:not(:disabled) {
-  background: transparent;
-}
-
-/* El anillo del boton se reemplaza por el borde y el glow de la tarjeta
-   (ver :has arriba): un anillo exterior quedaria pegado al borde de la
-   tarjeta y se leeria como un segundo marco. */
-#app .tetra-song-item-cabecera:focus-visible {
-  outline: none;
-}
-
-/* T-014: titulo + artista quedan en su propia columna (antes eran hijos
-   directos de la cabecera, que ahora tambien tiene la estrella al lado). */
-.tetra-song-item-texto {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 2px;
-  min-width: 0;
-  flex: 1;
-}
-
-.tetra-song-item-titulo {
-  max-width: 100%;
-  font-family: var(--fuente-display);
-  font-weight: 600;
-  font-size: var(--tipo-sm);
-  color: var(--tinta);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.tetra-song-item-artista {
-  max-width: 100%;
-  font-size: var(--tipo-xs);
-  color: var(--tinta-2);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-/* Dificultades como chips con la estrella coloreada. */
-.tetra-song-item-dificultades {
-  list-style: none;
-  margin: 0;
-  padding: 0 var(--espacio-3) var(--espacio-3);
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--espacio-1);
-}
-
-#app .tetra-dificultad-item {
+#app .tetra-ss-importar-vacio {
   display: inline-flex;
   align-items: center;
   gap: var(--espacio-2);
-  font-size: var(--tipo-xs);
-  padding: var(--espacio-1) var(--espacio-2);
-  background: color-mix(in srgb, var(--fondo) 70%, transparent);
-  border: 1px solid var(--linea);
-  color: var(--tinta-2);
-}
-
-#app .tetra-dificultad-item:hover:not(:disabled) {
-  background: var(--superficie-2);
-  color: var(--tinta);
-}
-
-#app .tetra-dificultad-item-enfocada,
-#app .tetra-dificultad-item-enfocada:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--acento) 12%, var(--fondo));
-  border-color: var(--acento);
-  color: var(--tinta);
-}
-
-/* Dentro del chip la estrella no lleva caja propia (el chip ya es la
-   caja): solo el texto en el color de su nivel. */
-.tetra-dificultad-item .tetra-estrella {
-  padding: 0;
-  background: transparent;
-  border-color: transparent;
+  padding: var(--espacio-2) var(--espacio-4);
+  font-size: var(--tipo-base);
 }
 
 /* ---------------------------------------------------------------------- */
-/* T-022: panel de detalle. Portada arriba (mismo velo, alto fijo) con     */
-/* titulo y artista superpuestos; debajo, el contenido con su padding.     */
+/* Velo de soltar: aparece al arrastrar un archivo sobre la ventana.       */
 /* ---------------------------------------------------------------------- */
 
-.tetra-song-select-detalle {
-  display: flex;
-  flex-direction: column;
-  background: var(--superficie);
-  border: 1px solid var(--linea);
-  border-radius: var(--radio-panel);
-  min-height: 200px;
-  box-sizing: border-box;
-  overflow: hidden;
-}
-
-.tetra-song-select-detalle-vacio {
-  margin: auto;
-  padding: var(--espacio-4);
-  color: var(--tinta-3);
-  font-size: var(--tipo-sm);
-  text-align: center;
-}
-
-.tetra-song-select-detalle-portada {
-  position: relative;
-  isolation: isolate;
-  display: flex;
-  flex-direction: column;
-  justify-content: flex-end;
-  gap: 2px;
-  flex-shrink: 0;
-  height: 160px;
-  box-sizing: border-box;
-  padding: var(--espacio-3) var(--espacio-4);
-  background-color: var(--superficie-2);
-  background-image: var(--portada, none);
-  background-size: cover;
-  background-position: center;
-}
-
-/* Mismo velo que las tarjetas (de --fondo opaco a la izquierda a
-   semitransparente a la derecha) mas un fundido hacia abajo, que es donde
-   va el texto. */
-.tetra-song-select-detalle-portada::before {
-  content: '';
-  position: absolute;
+.tetra-ss-velo {
+  position: fixed;
   inset: 0;
-  z-index: -1;
-  background:
-    linear-gradient(0deg, color-mix(in srgb, var(--fondo) 90%, transparent) 0%, transparent 65%),
-    linear-gradient(
-      90deg,
-      var(--fondo) 0%,
-      color-mix(in srgb, var(--fondo) 70%, transparent) 40%,
-      color-mix(in srgb, var(--fondo) 45%, transparent) 100%
-    );
+  z-index: 20;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  background: color-mix(in srgb, var(--fondo) 80%, transparent);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
   pointer-events: none;
 }
 
-/* Sin portada: fondo liso y la misma franja vertical que la tarjeta. */
-.tetra-song-select-detalle-portada-vacia {
-  border-left: 3px solid var(--linea);
-  border-bottom: 1px solid var(--linea);
-  background-image: none;
+.tetra-ss-velo::before {
+  content: '';
+  position: absolute;
+  inset: var(--espacio-5);
+  border: 2px dashed var(--acento);
+  border-radius: var(--radio-panel);
 }
 
-.tetra-song-select-detalle-portada-vacia::before {
-  display: none;
-}
-
-.tetra-song-select-detalle-contenido {
+.tetra-ss-velo-visible {
   display: flex;
-  flex-direction: column;
-  flex: 1;
-  gap: var(--espacio-3);
-  padding: var(--espacio-4);
 }
 
-.tetra-song-select-detalle-titulo {
+.tetra-ss-velo p {
   margin: 0;
   font-family: var(--fuente-display);
   font-weight: 600;
-  font-size: var(--tipo-lg);
-  color: var(--tinta);
-  text-wrap: balance;
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-  line-clamp: 2;
-  overflow: hidden;
-}
-
-.tetra-song-select-detalle-artista {
-  margin: 0;
-  color: var(--tinta-2);
-  font-size: var(--tipo-sm);
-}
-
-.tetra-song-select-detalle-dificultad-fila {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--espacio-2);
-}
-
-.tetra-song-select-detalle-dificultad {
-  margin: 0;
+  font-size: var(--tipo-xl);
   color: var(--acento);
-  font-size: var(--tipo-sm);
-}
-
-/* T-014: aviso de que las estrellas todavia no estan calibradas (ver
-   MODELO_CALIBRADO en @tetra/core). Discreto a proposito: no compite con
-   el acento ni con los datos reales del mapa (docs/DISENO.md, "una sola
-   cosa brilla por pantalla"). */
-.tetra-song-select-detalle-provisional {
-  margin: 0;
-  color: var(--tinta-3);
-  font-size: var(--tipo-xs);
-  font-style: italic;
-}
-
-/* Datos (BPM, duracion, notas...) como grilla de celdas mono. Cada celda es
-   un <div> con su dt/dd; la ultima (siete datos en dos columnas) ocupa todo
-   el ancho para no dejar un hueco. */
-.tetra-song-select-datos {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--espacio-2);
-  margin: 0;
-  font-family: var(--fuente-datos);
-  font-variant-numeric: tabular-nums;
-}
-
-.tetra-song-select-dato {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  padding: var(--espacio-2) var(--espacio-3);
-  background: var(--superficie-2);
-  border-radius: var(--radio-control);
-}
-
-.tetra-song-select-dato:last-child:nth-child(odd) {
-  grid-column: 1 / -1;
-}
-
-.tetra-song-select-datos dt {
-  font-size: var(--tipo-xs);
-  color: var(--tinta-3);
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-}
-
-.tetra-song-select-datos dd {
-  margin: 0;
-  font-size: var(--tipo-base);
-  color: var(--tinta);
 }
 
 /* ---------------------------------------------------------------------- */
-/* T-022: badge de estrellas. Color por nivel (nivelDeEstrellas en         */
+/* Badge de estrellas (T-022). Color por nivel (nivelDeEstrellas en        */
 /* song-select-logica.ts): fondo del color con alpha baja, borde y texto   */
 /* en el color. Ancho fijo en caracteres para que el estado "calculando"   */
 /* (···) no salte el layout cuando llega el resultado real.                */
@@ -608,157 +718,70 @@
 }
 
 /* ---------------------------------------------------------------------- */
-/* T-014, Parte C / T-022: perfil de siete skillsets. Barras horizontales, */
-/* no radar: se leen y se comparan mejor en una sola escala. Nombre de     */
-/* ancho fijo, pista visible, barra en tinta-3 y la dominante en acento.   */
+/* Ventanas bajas (1024x640): el detalle se compacta para que entre sin     */
+/* scroll. Angostas: una columna y la pagina vuelve a poder scrollear.      */
 /* ---------------------------------------------------------------------- */
 
-.tetra-song-select-perfil-titulo {
-  margin: var(--espacio-2) 0 0;
-  font-family: var(--fuente-display);
-  font-weight: 600;
-  font-size: var(--tipo-sm);
-  color: var(--tinta-2);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
+@media (max-height: 720px) {
+  .tetra-song-select-detalle {
+    gap: var(--espacio-3);
+  }
+
+  .tetra-song-select-detalle-titulo {
+    font-size: clamp(1.5rem, 2.8vw, 2.25rem);
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+  }
+
+  .tetra-song-select-detalle-artista {
+    font-size: var(--tipo-base);
+  }
+
+  .tetra-ss-datos {
+    margin-top: 0;
+  }
+
+  .tetra-perfil-fila {
+    min-height: 14px;
+  }
+
+  .tetra-song-select-jugar {
+    padding: var(--espacio-2) var(--espacio-4);
+  }
 }
 
-.tetra-song-select-perfil-calculando {
-  margin: 0;
-  color: var(--tinta-3);
-  font-size: var(--tipo-sm);
-}
+@media (max-width: 860px) {
+  .tetra-song-select {
+    height: auto;
+    min-height: calc(100vh - var(--alto-header) - 32px);
+  }
 
-.tetra-song-select-perfil {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: var(--espacio-1);
-}
-
-.tetra-perfil-fila {
-  display: grid;
-  /* 12ch fijo: el nombre mas largo de los siete skillsets es
-     "jumpstream"/"handstream" (10 caracteres), con aire de sobra para que
-     las pistas de todas las filas arranquen en la misma columna. */
-  grid-template-columns: 12ch minmax(0, 1fr) 5ch;
-  align-items: center;
-  gap: var(--espacio-3);
-  min-height: 26px;
-}
-
-.tetra-perfil-fila-nombre {
-  font-size: var(--tipo-xs);
-  color: var(--tinta-2);
-  text-transform: capitalize;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.tetra-perfil-fila-pista {
-  display: block;
-  height: 8px;
-  border-radius: 999px;
-  background: var(--superficie-2);
-  overflow: hidden;
-}
-
-.tetra-perfil-fila-barra {
-  display: block;
-  height: 100%;
-  border-radius: 999px;
-  background: var(--tinta-3);
-  transition: width 0.2s ease;
-}
-
-/* La barra del skillset dominante del mapa se destaca con el acento (ver
-   el ticket, "la del maximo destacada con el acento"): es la unica que
-   brilla dentro de este panel. */
-.tetra-perfil-fila-maxima .tetra-perfil-fila-barra {
-  background: var(--acento);
-}
-
-.tetra-perfil-fila-maxima .tetra-perfil-fila-nombre {
-  color: var(--tinta);
-}
-
-.tetra-perfil-fila-valor {
-  font-family: var(--fuente-datos);
-  font-size: var(--tipo-xs);
-  font-variant-numeric: tabular-nums;
-  color: var(--tinta-2);
-  text-align: right;
-}
-
-.tetra-perfil-fila-maxima .tetra-perfil-fila-valor {
-  color: var(--acento);
-}
-
-/* T-014: filtro por rango de estrellas, en la barra de herramientas. */
-.tetra-song-select-filtro-estrellas {
-  display: flex;
-  align-items: center;
-  gap: var(--espacio-1);
-}
-
-.tetra-song-select-filtro-estrellas-etiqueta {
-  color: var(--tinta-3);
-  font-size: var(--tipo-sm);
-}
-
-.tetra-song-select-filtro-estrellas-input {
-  width: 4.5ch;
-}
-
-.tetra-song-select-jugar {
-  margin-top: auto;
-  width: 100%;
-  padding: var(--espacio-3) var(--espacio-4);
-  font-size: var(--tipo-base);
-}
-
-/* ---------------------------------------------------------------------- */
-/* Responsive: el song select es lo unico con un layout de dos columnas,   */
-/* asi que es lo unico que necesita un quiebre para pantallas angostas.    */
-/* ---------------------------------------------------------------------- */
-
-@media (max-width: 720px) {
   .tetra-song-select-cuerpo {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 
-  .tetra-song-select-herramientas {
-    margin-left: 0;
-    width: 100%;
+  .tetra-song-select-detalle {
+    overflow-y: visible;
   }
 
-  .tetra-song-select-buscar {
-    min-width: 0;
-    flex: 1 1 100%;
+  .tetra-song-select-lista {
+    flex: none;
+    max-height: 50vh;
   }
 }
 
 /* Sin desplazamientos ni transiciones de movimiento para quien las pide
-   reducidas: el hover sigue aclarando el velo, pero sin mover la tarjeta. */
+   reducidas: el hover sigue aclarando la tarjeta, pero sin moverla. */
 @media (prefers-reduced-motion: reduce) {
   .tetra-song-item,
-  .tetra-song-item::before,
   .tetra-perfil-fila-barra,
-  .tetra-song-select-zona {
+  .tetra-ss-reproductor,
+  .tetra-ss-progreso::before,
+  .tetra-ss-progreso-relleno {
     transition: none;
   }
 
   .tetra-song-item:hover {
     transform: none;
   }
-}
-
-/* T-032: boton secundario bajo "Jugar" para abrir la dificultad en el mapeador. */
-#app .tetra-song-select-editar {
-  width: 100%;
-  margin-top: var(--espacio-2);
-  padding: var(--espacio-2) var(--espacio-4);
 }

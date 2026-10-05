@@ -1,24 +1,31 @@
 // T-010: menu principal. Primera pantalla con identidad visual propia (ver
-// docs/DISENO.md, el contrato de diseno completo): el logo que respira
-// (logo.ts) mas los dos accesos que pide T-011, "menu": Jugar (song select)
-// y Ajustes.
+// docs/DISENO.md): el logo que respira (logo.ts) y los accesos a Jugar,
+// Mapeador y Ajustes.
 //
-// T-011 le saca el panel del cargador de desarrollo que tenia embebido
-// (ver el ticket, "menu": "se le quita el panel del cargador... el cargador
-// se reemplaza entero por el song select y ajustes"). El menu queda limpio:
-// logo + titulo + lema + Jugar + Ajustes, nada mas.
+// T-052 lo deja minimo: sin titulo ni lema (el logo ya dice TETRA), el logo
+// mas grande (un clic en el es Jugar), y abajo a la izquierda, discreto, lo
+// que esta sonando (musica-menu.ts: una cancion de la biblioteca) con pausa y
+// siguiente. El fondo de la escena es la imagen de la cancion que suena.
 
+import type { SongId } from '@tetra/storage';
+import { fondoEscena } from './fondo-escena.js';
+import { crearBotonIcono, cambiarBotonIcono } from './iconos.js';
 import { crearLogo, type Logo } from './logo.js';
+import { textoDeLoQueSuena } from './musica-menu-logica.js';
+import { crearMusicaMenu, type MusicaMenu } from './musica-menu.js';
 
 /** Gancho de navegacion que le pasa el router (ver router.ts). */
 export interface OpcionesMenu {
-  /** Ir al song select ("Jugar"). */
-  aJugar: () => void;
+  /** Ir al song select ("Jugar"), con la cancion que sonaba en el menu enfocada (si sonaba una de la biblioteca). */
+  aJugar: (cancionInicial?: SongId) => void;
   /** Ir a ajustes. */
   aAjustes: () => void;
   /** Ir al mapeador (editor de mapas, manual y automatico). */
   aMapeador: () => void;
 }
+
+/** Fondo del menu: la imagen se ve, pero el logo y los botones mandan. */
+const FONDO_DEL_MENU = { oscuridad: 0.7, desenfoque: 2 };
 
 /**
  * Muestra el menu principal dentro de `contenedor`, reemplazando lo que
@@ -30,43 +37,56 @@ export function mostrarMenu(contenedor: HTMLElement, opciones: OpcionesMenu): vo
   const menu = document.createElement('div');
   menu.className = 'tetra-menu';
 
-  const encabezado = document.createElement('div');
-  encabezado.className = 'tetra-menu-encabezado';
+  // Titulo accesible, sin verse: la pantalla sigue teniendo un h1 para quien
+  // navega con lector, pero la marca visible es el logo.
+  const tituloOculto = document.createElement('h1');
+  tituloOculto.className = 'tetra-solo-lector';
+  tituloOculto.textContent = 'Tetra';
+  menu.appendChild(tituloOculto);
 
   const zonaLogo = document.createElement('div');
   zonaLogo.className = 'tetra-menu-logo';
-  encabezado.appendChild(zonaLogo);
+  menu.appendChild(zonaLogo);
 
-  const titulo = document.createElement('h1');
-  titulo.className = 'tetra-menu-titulo';
-  titulo.textContent = 'Tetra';
-  encabezado.appendChild(titulo);
-
-  const lema = document.createElement('p');
-  lema.className = 'tetra-menu-lema';
-  lema.textContent = 'Instrumento de precision. Media tu timing al milisegundo.';
-  encabezado.appendChild(lema);
-
-  menu.appendChild(encabezado);
-
-  // El logo se crea recien con zonaLogo ya en el documento (crearLogo le
-  // agrega un <canvas> adentro). Si fallara por lo que sea (por ejemplo un
-  // navegador sin CanvasRenderingContext2D), no debe tumbar el menu
-  // entero: el menu tiene que seguir siendo usable, el logo es la pieza de
-  // identidad, no una dependencia dura de "se puede jugar".
-  let logo: Logo | null = null;
+  // La musica se crea antes que el logo: el logo lee su analizador. Si fallara
+  // por lo que sea (un navegador sin AudioContext), el menu tiene que seguir
+  // siendo usable: la musica y el logo son identidad, no una dependencia dura
+  // de "se puede jugar".
+  let musica: MusicaMenu | null = null;
   try {
-    logo = crearLogo(zonaLogo);
+    musica = crearMusicaMenu();
   } catch {
-    // sin logo: el menu sigue siendo usable, el hueco visual queda vacio.
+    // sin musica: el menu sigue.
   }
 
-  // Al salir del menu (a song-select o a ajustes) hay que apagar el logo:
-  // su bucle de dibujo y su audio de fondo quedarian corriendo detras de la
-  // pantalla nueva si no (ver logo.ts, `Logo.detener`, y el ticket,
-  // "Cuidado con lo que ya funciona": "nada de audios colgados ni dos
-  // loops"). No hace falta esperar a "empezar una partida" para esto como
-  // antes de T-011: alcanza con dejar el menu.
+  // El logo se crea recien con zonaLogo ya en el documento (crearLogo le
+  // agrega un <canvas> adentro).
+  let logo: Logo | null = null;
+  contenedor.appendChild(menu);
+  try {
+    logo = crearLogo(zonaLogo, musica?.analizador ?? null);
+  } catch {
+    // sin logo: el hueco visual queda vacio.
+  }
+
+  /** Apaga todo lo que corre detras del menu: el rAF del logo y el audio. Se llama al salir por cualquier camino. */
+  function apagar(): void {
+    logo?.detener();
+    musica?.detener();
+  }
+
+  // Un clic en el logo es Jugar. Sin rol de boton a proposito: el boton
+  // "Jugar" de abajo es el control accesible (con teclado y lector), esto es
+  // solo comodidad para el mouse, y un segundo "Jugar" duplicaria el nombre.
+  zonaLogo.classList.add('tetra-menu-logo-clicable');
+  function jugar(): void {
+    const inicial = musica?.actual?.id;
+    apagar();
+    // El song select pone su propio fondo: no se limpia aca para no parpadear.
+    opciones.aJugar(inicial);
+  }
+  zonaLogo.addEventListener('click', jugar);
+
   const accesos = document.createElement('div');
   accesos.className = 'tetra-menu-accesos';
 
@@ -74,34 +94,69 @@ export function mostrarMenu(contenedor: HTMLElement, opciones: OpcionesMenu): vo
   botonJugar.type = 'button';
   botonJugar.className = 'tetra-menu-boton tetra-boton-primario';
   botonJugar.textContent = 'Jugar';
-  botonJugar.addEventListener('click', () => {
-    logo?.detener();
-    opciones.aJugar();
-  });
+  botonJugar.addEventListener('click', jugar);
   accesos.appendChild(botonJugar);
+
+  // Entre Jugar y Ajustes: crear es parte del juego, ajustar no.
+  const botonMapeador = document.createElement('button');
+  botonMapeador.type = 'button';
+  botonMapeador.className = 'tetra-menu-boton';
+  botonMapeador.textContent = 'Mapeador';
+  botonMapeador.addEventListener('click', () => {
+    apagar();
+    fondoEscena().limpiar();
+    opciones.aMapeador();
+  });
+  accesos.appendChild(botonMapeador);
 
   const botonAjustes = document.createElement('button');
   botonAjustes.type = 'button';
   botonAjustes.className = 'tetra-menu-boton';
   botonAjustes.textContent = 'Ajustes';
   botonAjustes.addEventListener('click', () => {
-    logo?.detener();
+    apagar();
+    fondoEscena().limpiar();
     opciones.aAjustes();
   });
   accesos.appendChild(botonAjustes);
 
-  const botonMapeador = document.createElement('button');
-  botonMapeador.type = 'button';
-  botonMapeador.className = 'tetra-menu-boton';
-  botonMapeador.textContent = 'Mapeador';
-  botonMapeador.addEventListener('click', () => {
-    logo?.detener();
-    opciones.aMapeador();
-  });
-  // Entre Jugar y Ajustes: crear es parte del juego, ajustar no.
-  accesos.insertBefore(botonMapeador, botonAjustes);
-
   menu.appendChild(accesos);
 
-  contenedor.appendChild(menu);
+  // -- Lo que suena: una linea y dos botones-icono, abajo a la izquierda. --
+  if (musica !== null) {
+    // Contenedor fijo (hijo directo de #app, que anima su entrada) y una fila
+    // adentro: el fundido de "ya suena algo" va en la fila, porque la animacion
+    // de entrada de #app > * fijaria la opacidad del contenedor en 1.
+    const sonando = document.createElement('div');
+    sonando.className = 'tetra-menu-sonando';
+    const fila = document.createElement('div');
+    fila.className = 'tetra-menu-sonando-fila';
+    sonando.appendChild(fila);
+
+    const botonPausa = crearBotonIcono('pausa', 'Pausar la musica');
+    const botonSiguiente = crearBotonIcono('siguiente', 'Siguiente cancion');
+    const texto = document.createElement('span');
+    texto.className = 'tetra-menu-sonando-texto';
+    fila.append(botonPausa, botonSiguiente, texto);
+    contenedor.appendChild(sonando);
+
+    const m = musica;
+    botonPausa.addEventListener('click', () => m.alternarPausa());
+    botonSiguiente.addEventListener('click', () => void m.siguiente());
+
+    function pintar(): void {
+      // Hasta que suena algo (la biblioteca se lee y la cancion se decodifica)
+      // no se muestra nada: evita un "Click track" fugaz antes del titulo real.
+      fila.classList.add('tetra-menu-sonando-visible');
+      const cancion = m.actual;
+      // Sin cancion de la biblioteca suena el click track: se nombra tal cual.
+      const t = cancion ? textoDeLoQueSuena(cancion.titulo, cancion.artista) : 'Click track';
+      if (texto.textContent !== t) texto.textContent = t;
+      texto.title = t;
+      if (m.pausada) cambiarBotonIcono(botonPausa, 'reproducir', 'Reanudar la musica');
+      else cambiarBotonIcono(botonPausa, 'pausa', 'Pausar la musica');
+      fondoEscena().poner(cancion?.background, FONDO_DEL_MENU);
+    }
+    m.alCambiar(pintar);
+  }
 }

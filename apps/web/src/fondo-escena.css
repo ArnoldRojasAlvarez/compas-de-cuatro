@@ -1,0 +1,49 @@
+/* T-052: capa de fondo de la escena (fondo-escena.ts). Fija detras de #app:
+   con z-index negativo queda sobre el fondo de `body` (el halo y la rejilla de
+   T-024, que siguen siendo el fondo por defecto) y bajo todo el contenido.
+   Sin imagen el contenedor esta a opacidad 0 y se ve el fondo por defecto. */
+
+.tetra-fondo-escena {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  overflow: hidden;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 400ms var(--curva-salida);
+}
+
+.tetra-fondo-escena-visible {
+  opacity: 1;
+}
+
+/* El desenfoque deja el borde de la imagen translucido: las capas se pasan
+   del contenedor (que recorta) para que no se vea ese borde. */
+.tetra-fondo-capa {
+  position: absolute;
+  inset: -40px;
+  background-position: center;
+  background-size: cover;
+  background-repeat: no-repeat;
+  opacity: 0;
+  transition:
+    opacity 400ms var(--curva-salida),
+    filter 400ms var(--curva-salida);
+  will-change: opacity;
+}
+
+.tetra-fondo-capa-visible {
+  opacity: 1;
+}
+
+/* Oscurece con el color de fondo de la marca (no negro puro) y deja las
+   esquinas un poco mas cerradas para que el centro respire. */
+.tetra-fondo-velo {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse at 50% 40%, transparent 30%, color-mix(in srgb, var(--fondo) 55%, transparent) 100%),
+    var(--fondo);
+  opacity: 0.6;
+  transition: opacity 400ms var(--curva-salida);
+}
