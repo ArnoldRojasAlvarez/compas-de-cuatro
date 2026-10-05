@@ -38,3 +38,6 @@ export {
 } from './mapeador/grilla.js';
 export type { NivelAuto, PresetAuto, OpcionesAutomapa } from './mapeador/automapa.js';
 export { PRESETS_AUTO, generarNotas } from './mapeador/automapa.js';
+
+export type { Rango, PartidaJugada, RecordDeMapa } from './records.js';
+export { rangoDePrecision, mejorRango, combinarRecord } from './records.js';

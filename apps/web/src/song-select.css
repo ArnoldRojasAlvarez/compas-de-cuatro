@@ -861,3 +861,165 @@
     transform: none;
   }
 }
+
+/* ---------------------------------------------------------------------- */
+/* T-055: records. Sin caja: el rango, los datos en mono y una linea de     */
+/* conteos con el color de cada juicio. Sin record no hay nada en pantalla. */
+/* ---------------------------------------------------------------------- */
+
+/* Color por rango: SS y S en el ambar, A en el acento, B/C/D en la
+   paleta de juicio (los mismos tokens que los conteos). */
+.tetra-rango-SS,
+.tetra-rango-S {
+  color: var(--acento-2);
+}
+
+.tetra-rango-A {
+  color: var(--acento);
+}
+
+.tetra-rango-B {
+  color: var(--j-200);
+}
+
+.tetra-rango-C {
+  color: var(--j-100);
+}
+
+.tetra-rango-D {
+  color: var(--j-miss);
+}
+
+.tetra-ss-record {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espacio-1);
+  margin-top: var(--espacio-2);
+}
+
+.tetra-ss-record-resumen {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: var(--espacio-1) var(--espacio-3);
+  font-family: var(--fuente-datos);
+  font-size: var(--tipo-sm);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.tetra-ss-record-rango {
+  align-self: center;
+  font-family: var(--fuente-display);
+  font-weight: 700;
+  font-size: var(--tipo-2xl);
+  line-height: 1;
+  text-shadow: 0 0 24px color-mix(in srgb, currentColor 30%, transparent);
+}
+
+.tetra-ss-record-precision {
+  color: var(--tinta);
+}
+
+.tetra-ss-record-score {
+  color: var(--tinta-2);
+}
+
+.tetra-ss-record-intentos {
+  font-family: var(--fuente-cuerpo);
+  font-size: var(--tipo-xs);
+  color: var(--tinta-3);
+  cursor: help;
+}
+
+.tetra-ss-record-conteos {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 var(--espacio-1);
+  margin: 0;
+  font-family: var(--fuente-datos);
+  font-size: var(--tipo-xs);
+  font-variant-numeric: tabular-nums;
+}
+
+/* El separador va entre conteos, no despues del ultimo. */
+.tetra-ss-record-conteo + .tetra-ss-record-conteo::before {
+  content: '\00b7';
+  margin-right: var(--espacio-1);
+  color: var(--tinta-3);
+}
+
+.tetra-ss-record-etiqueta {
+  color: var(--tinta-3);
+}
+
+.tetra-ss-record-conteo-max .tetra-ss-record-numero {
+  color: var(--j-max);
+}
+
+.tetra-ss-record-conteo-perfect .tetra-ss-record-numero {
+  color: var(--j-300);
+}
+
+.tetra-ss-record-conteo-great .tetra-ss-record-numero {
+  color: var(--j-200);
+}
+
+.tetra-ss-record-conteo-good .tetra-ss-record-numero {
+  color: var(--j-100);
+}
+
+.tetra-ss-record-conteo-bad .tetra-ss-record-numero {
+  color: var(--j-50);
+}
+
+.tetra-ss-record-conteo-miss .tetra-ss-record-numero {
+  color: var(--j-miss);
+}
+
+/* La letra chica del chip de dificultad y de la tarjeta de la lista. */
+.tetra-dificultad-item-rango,
+.tetra-song-item-rango {
+  font-family: var(--fuente-display);
+  font-weight: 700;
+  line-height: 1;
+}
+
+.tetra-dificultad-item-rango {
+  font-size: var(--tipo-sm);
+}
+
+.tetra-song-item-rango {
+  flex-shrink: 0;
+  min-width: 1.5ch;
+  text-align: center;
+  font-size: var(--tipo-sm);
+}
+
+/* El aviso arriba de la pantalla de resultados (lo agrega song-select.ts). */
+.tetra-record-aviso {
+  display: flex;
+  align-items: baseline;
+  gap: var(--espacio-2);
+  margin: 0;
+  font-family: var(--fuente-display);
+  font-size: var(--tipo-sm);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--acento);
+}
+
+.tetra-record-aviso-diferencia {
+  font-family: var(--fuente-datos);
+  font-weight: 500;
+  letter-spacing: 0;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+@media (max-height: 720px) {
+  .tetra-ss-record-rango {
+    font-size: var(--tipo-xl);
+  }
+}

@@ -5,19 +5,9 @@
 import type { Judgement } from '@tetra/core';
 import { JUDGEMENTS } from '@tetra/core';
 
-export type Rango = 'S' | 'A' | 'B' | 'C' | 'D';
-
-/**
- * Rango de una partida segun su precision (0 a 1): S >= 0.95, A >= 0.90,
- * B >= 0.80, C >= 0.70, D el resto. Los bordes son inclusivos: 0.95 justo es S.
- */
-export function rangoDePrecision(accuracy: number): Rango {
-  if (accuracy >= 0.95) return 'S';
-  if (accuracy >= 0.9) return 'A';
-  if (accuracy >= 0.8) return 'B';
-  if (accuracy >= 0.7) return 'C';
-  return 'D';
-}
+// El rango vive en core desde T-055 (records.ts, con SS); se reexporta para no romper a quien lo importaba de aca.
+export type { Rango } from '@tetra/core';
+export { rangoDePrecision } from '@tetra/core';
 
 /**
  * Fraccion 0..1 de cada juicio sobre el total de juicios. Con total 0 (no

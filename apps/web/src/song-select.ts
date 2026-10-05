@@ -15,12 +15,14 @@
 // terminar o abortar una partida se vuelve a esta misma pantalla (no al
 // menu), reconstruida entera con `mostrarSongSelect` de nuevo.
 
-import type { Chart, DifficultyResult } from '@tetra/core';
+import type { Chart, DifficultyResult, Rango, RecordDeMapa, ScoreState } from '@tetra/core';
 import { MODELO_CALIBRADO, SKILLSETS } from '@tetra/core';
 import {
   borrarCancion,
   exportarCancion,
+  guardarPartida,
   importarOsz,
+  leerRecords,
   listarCanciones,
   nombreSeguro,
   type CancionGuardada,
@@ -50,6 +52,18 @@ import {
   type CriterioDeOrden,
 } from './song-select-logica.js';
 import { crearClienteDificultad } from './dificultad-worker-cliente.js';
+import {
+  avisoDeRecord,
+  claseDeRango,
+  claveDeRecord,
+  detalleDeUltima,
+  formatearMiles,
+  formatearPrecision,
+  mejorRangoDeCancion,
+  parejasDeConteos,
+  partidaDesdeScore,
+  textoDeIntentos,
+} from './records-logica.js';
 
 /** Fondo de la escena en el song select: la portada se nota, pero desenfocada para que el texto mande. */
 const FONDO_DEL_SONG_SELECT = { desenfoque: 12, oscuridad: 0.65 };
@@ -96,6 +110,8 @@ interface EstadoSongSelect {
   /** T-014: filtro por rango de estrellas. null de cada lado quiere decir "sin cota" (ver filtrarPorRangoDeEstrellas). */
   filtroEstrellasMin: number | null;
   filtroEstrellasMax: number | null;
+  /** T-055: records por clave de dificultad (ver claveDeRecord). Se vuelven a leer en cada carga de la biblioteca. */
+  records: ReadonlyMap<string, RecordDeMapa>;
 }
 
 /**
@@ -121,6 +137,7 @@ export function mostrarSongSelect(contenedor: HTMLElement, opciones: OpcionesSon
     dificultadEnfocadaIndice: 0,
     filtroEstrellasMin: null,
     filtroEstrellasMax: null,
+    records: new Map(),
   };
 
   /** true despues de `desmontar`: todo lo asincrono que llegue tarde (lecturas de la base, resultados del worker) se descarta. */
@@ -139,6 +156,33 @@ export function mostrarSongSelect(contenedor: HTMLElement, opciones: OpcionesSon
 
   function obtenerEstrellas(chart: Chart): number | undefined {
     return resultadosDificultad.get(chart)?.overall;
+  }
+
+  // -- T-055: records. La clave (hash del contenido) se calcula una vez por
+  // Chart (recorre todas las notas) y no en cada render. --
+  const clavesDeRecord = new WeakMap<Chart, string>();
+
+  function claveDe(chart: Chart): string {
+    let clave = clavesDeRecord.get(chart);
+    if (clave === undefined) {
+      clave = claveDeRecord(chart);
+      clavesDeRecord.set(chart, clave);
+    }
+    return clave;
+  }
+
+  function recordDe(chart: Chart): RecordDeMapa | undefined {
+    return estado.records.get(claveDe(chart));
+  }
+
+  /** Lee los records de todas las dificultades de la biblioteca. Un fallo de la base (o un registro roto, que `leerRecords` ya ignora) deja el song select sin records, nunca roto. */
+  async function leerRecordsDeLaBiblioteca(canciones: readonly CancionGuardada[]): Promise<void> {
+    const claves = canciones.flatMap((cancion) => cancion.dificultades.map(claveDe));
+    try {
+      estado.records = await leerRecords(claves);
+    } catch {
+      estado.records = new Map();
+    }
   }
 
   /**
@@ -596,7 +640,10 @@ export function mostrarSongSelect(contenedor: HTMLElement, opciones: OpcionesSon
     const leidas = await listarCanciones();
     if (desmontado) return;
     // T-054: de la mas facil a la mas dificil; el indice de la dificultad enfocada se refiere a esta lista.
-    estado.todas = leidas.map(conDificultadesOrdenadas);
+    const ordenadas = leidas.map(conDificultadesOrdenadas);
+    await leerRecordsDeLaBiblioteca(ordenadas);
+    if (desmontado) return;
+    estado.todas = ordenadas;
     // Los Blob de portada de la lectura anterior ya no se usan (esta lectura
     // trae objetos nuevos): se revocan sus URLs antes del proximo render,
     // que crea las nuevas bajo demanda.
@@ -656,6 +703,58 @@ export function mostrarSongSelect(contenedor: HTMLElement, opciones: OpcionesSon
     const algunaCalculada = cancion.dificultades.some((d) => resultadosDificultad.has(d));
     aplicarEstrellaABadge(badge, algunaCalculada ? estrellasDeCancion(cancion, obtenerEstrellas) : undefined);
     return badge;
+  }
+
+  /** La letra de un rango, con su color por clase (song-select.css). `extra` es la clase de tamano/lugar. */
+  function crearLetraDeRango(rango: Rango, extra: string): HTMLElement {
+    const letra = document.createElement('span');
+    letra.className = `${extra} ${claseDeRango(rango)}`;
+    letra.textContent = rango;
+    return letra;
+  }
+
+  /**
+   * El record de la dificultad enfocada: rango grande, precision y score en
+   * mono, la linea de conteos con el color de cada juicio y los intentos en
+   * tenue (con el detalle de la ultima partida en el `title`). Sin caja.
+   */
+  function crearBloqueDeRecord(record: RecordDeMapa): HTMLElement {
+    const bloque = document.createElement('div');
+    bloque.className = 'tetra-ss-record';
+    bloque.setAttribute('aria-label', 'Record');
+
+    const resumen = document.createElement('div');
+    resumen.className = 'tetra-ss-record-resumen';
+    const mejor = record.mejor;
+    const precision = document.createElement('span');
+    precision.className = 'tetra-ss-record-precision';
+    precision.textContent = formatearPrecision(mejor.accuracy);
+    const score = document.createElement('span');
+    score.className = 'tetra-ss-record-score';
+    score.textContent = formatearMiles(mejor.score);
+    const intentos = document.createElement('span');
+    intentos.className = 'tetra-ss-record-intentos';
+    intentos.textContent = textoDeIntentos(record.intentos);
+    intentos.title = detalleDeUltima(record);
+    resumen.append(crearLetraDeRango(mejor.rango, 'tetra-ss-record-rango'), precision, score, intentos);
+
+    const conteos = document.createElement('p');
+    conteos.className = 'tetra-ss-record-conteos';
+    for (const { juicio, etiqueta, cantidad } of parejasDeConteos(mejor.counts)) {
+      const par = document.createElement('span');
+      par.className = `tetra-ss-record-conteo tetra-ss-record-conteo-${juicio}`;
+      const nombre = document.createElement('span');
+      nombre.className = 'tetra-ss-record-etiqueta';
+      nombre.textContent = etiqueta;
+      const numero = document.createElement('span');
+      numero.className = 'tetra-ss-record-numero';
+      numero.textContent = String(cantidad);
+      par.append(nombre, ' ', numero);
+      conteos.appendChild(par);
+    }
+
+    bloque.append(resumen, conteos);
+    return bloque;
   }
 
   /** Perfil de skillsets de la dificultad en foco: barras finas, sin titulo ni parrafos. */
@@ -804,6 +903,10 @@ export function mostrarSongSelect(contenedor: HTMLElement, opciones: OpcionesSon
     datos.textContent = formatearLineaDeDatos(chart);
     cabecera.appendChild(datos);
 
+    // T-055: sin record, nada (ni un "sin jugar").
+    const recordEnfocado = recordDe(chart);
+    if (recordEnfocado !== undefined) cabecera.appendChild(crearBloqueDeRecord(recordEnfocado));
+
     const fuente = chart.metadata.source;
     if (fuente !== undefined && fuente !== '') {
       const fuenteEl = document.createElement('p');
@@ -830,6 +933,12 @@ export function mostrarSongSelect(contenedor: HTMLElement, opciones: OpcionesSon
       nombre.textContent = dificultad.metadata.difficultyName;
       boton.appendChild(nombre);
       boton.appendChild(crearBadgeEstrellaDeDificultad(dificultad));
+      const recordDeChip = recordDe(dificultad);
+      if (recordDeChip !== undefined) {
+        const letra = crearLetraDeRango(recordDeChip.mejor.rango, 'tetra-dificultad-item-rango');
+        letra.title = `Mejor rango: ${recordDeChip.mejor.rango}`;
+        boton.appendChild(letra);
+      }
       boton.addEventListener('click', () => enfocarDificultad(indice));
       li.appendChild(boton);
       chips.appendChild(li);
@@ -959,6 +1068,13 @@ export function mostrarSongSelect(contenedor: HTMLElement, opciones: OpcionesSon
       // T-014: estrella "de la cancion" (el maximo de sus dificultades ya
       // calculadas), para ubicar de un vistazo las mas dificiles.
       cabecera.appendChild(crearBadgeEstrellaDeCancion(cancion));
+      // T-055: el mejor rango entre las dificultades de la cancion, si hay.
+      const mejorDeLaCancion = mejorRangoDeCancion(cancion.dificultades.map(claveDe), estado.records);
+      if (mejorDeLaCancion !== undefined) {
+        const letra = crearLetraDeRango(mejorDeLaCancion, 'tetra-song-item-rango');
+        letra.title = `Mejor rango: ${mejorDeLaCancion}`;
+        cabecera.appendChild(letra);
+      }
 
       item.appendChild(cabecera);
       listaEl.appendChild(item);
@@ -993,6 +1109,37 @@ export function mostrarSongSelect(contenedor: HTMLElement, opciones: OpcionesSon
     raizApp().appendChild(boton);
   }
 
+  /**
+   * T-055: guarda la partida terminada y, si mejoro (o es la primera), agrega
+   * el aviso arriba de la pantalla de resultados. Un fallo al guardar no
+   * estorba: el jugador ve igual sus resultados, solo que sin record. Solo se
+   * llama con partidas completadas (una abandonada o reintentada no cuenta).
+   */
+  async function registrarPartida(chart: Chart, score: ScoreState): Promise<void> {
+    try {
+      const partida = partidaDesdeScore(score, new Date().toISOString());
+      const guardada = await guardarPartida(claveDe(chart), partida);
+      const aviso = avisoDeRecord(guardada.esMejor, guardada.anterior, partida);
+      const panel = raizApp().querySelector('.tetra-resultados');
+      if (aviso === undefined || panel === null) return;
+      const el = document.createElement('p');
+      el.className = 'tetra-record-aviso';
+      el.setAttribute('role', 'status');
+      const texto = document.createElement('span');
+      texto.textContent = aviso.texto;
+      el.appendChild(texto);
+      if (aviso.diferencia !== undefined) {
+        const diferencia = document.createElement('span');
+        diferencia.className = 'tetra-record-aviso-diferencia';
+        diferencia.textContent = aviso.diferencia;
+        el.appendChild(diferencia);
+      }
+      panel.prepend(el);
+    } catch {
+      // Sin record esta vez: la partida ya termino y sus resultados estan en pantalla.
+    }
+  }
+
   /** Id que estaba enfocado al empezar a jugar: al volver, el song select reabre en esa cancion. */
   let idAlJugar: SongId | null = null;
 
@@ -1022,6 +1169,9 @@ export function mostrarSongSelect(contenedor: HTMLElement, opciones: OpcionesSon
       resultado = await runGame(chart, audio, undefined, opcionesPartida);
     }
     if (resultado.estado === 'completado') {
+      // Solo las canciones de la biblioteca llevan record: el click track (sin
+      // escena) es un diagnostico, no un mapa que se vaya a ver en la lista.
+      if (escena !== undefined) await registrarPartida(chart, resultado.score);
       mostrarBotonVolverDesdeResultados();
     } else {
       volverAlSongSelect();

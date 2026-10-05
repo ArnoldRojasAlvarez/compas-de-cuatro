@@ -13,7 +13,13 @@
 // Todo lo demas (unzip, parseo, IndexedDB) es detalle interno repartido
 // entre osz.ts y db.ts.
 
-import { escribirOsu, type Chart, type DifficultyResult } from '@tetra/core';
+import {
+  escribirOsu,
+  type Chart,
+  type DifficultyResult,
+  type PartidaJugada,
+  type RecordDeMapa,
+} from '@tetra/core';
 import { ponerDificultad, quitarDificultad } from './dificultades.js';
 import { esVideoReproducible, extraerCancionDeOsz } from './osz.js';
 import { construirOsz, type EntradaOsz } from './osz-escritor.js';
@@ -27,6 +33,8 @@ import {
   listarSkinsDeLaBase,
   guardarDificultadCacheada,
   leerDificultadCacheada,
+  guardarPartidaEnLaBase,
+  leerRecordsDeLaBase,
 } from './db.js';
 import type { SongId, CancionGuardada, SkinId, SkinGuardada } from './db.js';
 
@@ -171,9 +179,27 @@ export async function borrarDificultad(id: SongId, difficultyName: string): Prom
   return false;
 }
 
-/** Borra una cancion de la biblioteca (con todas sus dificultades, audio, fondo y video). No hace nada si el id no existe. */
+/** Borra una cancion de la biblioteca (con todas sus dificultades, audio, fondo, video y los records de sus dificultades). No hace nada si el id no existe. */
 export function borrarCancion(id: SongId): Promise<void> {
   return borrarCancionDeLaBase(id);
+}
+
+/**
+ * Guarda una partida terminada (T-055): conserva la mejor, guarda la ultima y
+ * cuenta un intento mas. `hash` es `String(hashMapa(chart))`. `esMejor` dice si
+ * esta partida paso a ser el record; `anterior` es el mejor que habia (ausente
+ * en la primera partida del mapa).
+ */
+export function guardarPartida(
+  hash: string,
+  partida: PartidaJugada,
+): Promise<{ record: RecordDeMapa; esMejor: boolean; anterior?: PartidaJugada }> {
+  return guardarPartidaEnLaBase(hash, partida);
+}
+
+/** Records de varios mapas de una vez, por hash. Un registro corrupto no aparece; nunca lanza por su contenido. */
+export function leerRecords(hashes: readonly string[]): Promise<Map<string, RecordDeMapa>> {
+  return leerRecordsDeLaBase(hashes);
 }
 
 async function bytesDe(blob: Blob): Promise<Uint8Array> {

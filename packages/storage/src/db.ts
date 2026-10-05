@@ -5,7 +5,9 @@
 // usuario real va a tener en desarrollo (T-011, "Rendimiento": no hace
 // falta virtualizar para esa escala).
 
-import type { Chart, DifficultyResult, Ms } from '@tetra/core';
+import { combinarRecord, hashMapa } from '@tetra/core';
+import type { Chart, DifficultyResult, Ms, PartidaJugada, RecordDeMapa } from '@tetra/core';
+import { normalizarRecord } from './records-validacion.js';
 import type { ImagenesDeSkin } from './osk.js';
 
 const NOMBRE_BASE = 'tetra-mapas';
@@ -31,11 +33,18 @@ const NOMBRE_BASE = 'tetra-mapas';
 // DificultadCacheada mas abajo): version 4. Mismo patron de guard con
 // `contains`, mismo razonamiento: quien ya tenia 1, 2 o 3 llega aca con
 // 'mapas'/'skins'/'canciones' intactas y solo se crea la tienda nueva.
-const VERSION_BASE = 4;
+//
+// T-055 agrega 'records' (mejor partida, ultima e intentos por mapa, ver
+// RecordDeMapa en @tetra/core): version 5, mismo guard con `contains`. Quien
+// viene de 1 a 4 conserva todo lo que tenia y solo gana la tienda nueva. La
+// clave es el hash del mapa como texto (el mismo `hashMapa` de la cache de
+// dificultad), asi que una dificultad editada en el mapeador empieza de cero.
+const VERSION_BASE = 5;
 const NOMBRE_TIENDA_MAPAS_LEGADO = 'mapas';
 const NOMBRE_TIENDA_SKINS = 'skins';
 const NOMBRE_TIENDA_CANCIONES = 'canciones';
 const NOMBRE_TIENDA_DIFICULTADES = 'dificultades';
+const NOMBRE_TIENDA_RECORDS = 'records';
 
 export type SongId = string;
 
@@ -109,6 +118,9 @@ function abrirBaseDeDatos(): Promise<IDBDatabase> {
       if (!db.objectStoreNames.contains(NOMBRE_TIENDA_DIFICULTADES)) {
         db.createObjectStore(NOMBRE_TIENDA_DIFICULTADES, { keyPath: 'clave' });
       }
+      if (!db.objectStoreNames.contains(NOMBRE_TIENDA_RECORDS)) {
+        db.createObjectStore(NOMBRE_TIENDA_RECORDS, { keyPath: 'hash' });
+      }
     };
 
     peticion.onsuccess = () => resolve(peticion.result);
@@ -165,20 +177,142 @@ export async function leerCancionDeLaBase(id: SongId): Promise<CancionGuardada |
   }
 }
 
-/** Borra una cancion entera. No hace nada si el id no existe. */
+/** hashMapa como texto (la clave de 'records'), o `undefined` si el chart esta tan roto que no se puede hashear. */
+function claveDeRecord(chart: Chart): string | undefined {
+  try {
+    return String(hashMapa(chart));
+  } catch {
+    return undefined;
+  }
+}
+
+/** Las claves de record de todas las dificultades de una cancion (las que se puedan calcular). */
+function clavesDeRecordsDe(cancion: CancionGuardada | undefined): Set<string> {
+  const claves = new Set<string>();
+  const dificultades: unknown = cancion?.dificultades;
+  if (!Array.isArray(dificultades)) return claves;
+  for (const chart of dificultades as Chart[]) {
+    const clave = claveDeRecord(chart);
+    if (clave !== undefined) claves.add(clave);
+  }
+  return claves;
+}
+
+/**
+ * Borra una cancion entera y, en la misma transaccion, los records de sus
+ * dificultades (T-055). Un record solo se conserva si OTRA cancion de la
+ * biblioteca tiene una dificultad con el mismo hash (el mismo .osz importado
+ * dos veces): ese record sigue valiendo para la que queda. No hace nada si el
+ * id no existe.
+ */
 export async function borrarCancionDeLaBase(id: SongId): Promise<void> {
   const db = await abrirBaseDeDatos();
   try {
     await new Promise<void>((resolve, reject) => {
-      const tx = db.transaction(NOMBRE_TIENDA_CANCIONES, 'readwrite');
-      tx.objectStore(NOMBRE_TIENDA_CANCIONES).delete(id);
+      const tx = db.transaction([NOMBRE_TIENDA_CANCIONES, NOMBRE_TIENDA_RECORDS], 'readwrite');
+      const canciones = tx.objectStore(NOMBRE_TIENDA_CANCIONES);
+      const records = tx.objectStore(NOMBRE_TIENDA_RECORDS);
       tx.oncomplete = () => resolve();
       tx.onerror = () => reject(tx.error ?? new Error('No se pudo borrar la cancion.'));
       tx.onabort = () => reject(tx.error ?? new Error('Se aborto el borrado de la cancion.'));
+
+      const lectura = canciones.get(id);
+      lectura.onsuccess = () => {
+        const aBorrar = clavesDeRecordsDe(lectura.result as CancionGuardada | undefined);
+        canciones.delete(id);
+        if (aBorrar.size === 0) return;
+        // Las que otra cancion todavia usa se salvan del borrado.
+        const recorrido = canciones.openCursor();
+        recorrido.onsuccess = () => {
+          const cursor = recorrido.result;
+          if (cursor !== null) {
+            if (cursor.key !== id) {
+              for (const clave of clavesDeRecordsDe(cursor.value as CancionGuardada)) {
+                aBorrar.delete(clave);
+              }
+            }
+            cursor.continue();
+            return;
+          }
+          for (const clave of aBorrar) records.delete(clave);
+        };
+      };
     });
   } finally {
     db.close();
   }
+}
+
+/**
+ * Guarda una partida terminada de un mapa (T-055): lee el record previo (si
+ * esta corrupto se trata como inexistente), lo combina con `combinarRecord`
+ * y lo escribe, todo en una transaccion. `esMejor` es true si la partida
+ * nueva quedo como `mejor`; `anterior` es el mejor que habia (ausente si era
+ * la primera partida del mapa).
+ */
+export async function guardarPartidaEnLaBase(
+  hash: string,
+  partida: PartidaJugada,
+): Promise<{ record: RecordDeMapa; esMejor: boolean; anterior?: PartidaJugada }> {
+  const db = await abrirBaseDeDatos();
+  try {
+    return await new Promise((resolve, reject) => {
+      const tx = db.transaction(NOMBRE_TIENDA_RECORDS, 'readwrite');
+      const tienda = tx.objectStore(NOMBRE_TIENDA_RECORDS);
+      let resultado:
+        | { record: RecordDeMapa; esMejor: boolean; anterior?: PartidaJugada }
+        | undefined;
+      tx.oncomplete = () => {
+        if (resultado) resolve(resultado);
+        else reject(new Error('No se pudo guardar la partida.'));
+      };
+      tx.onerror = () => reject(tx.error ?? new Error('No se pudo guardar la partida.'));
+      tx.onabort = () => reject(tx.error ?? new Error('Se aborto el guardado de la partida.'));
+
+      const lectura = tienda.get(hash);
+      lectura.onsuccess = () => {
+        const previo = normalizarRecord(lectura.result);
+        const record = combinarRecord(previo, hash, partida);
+        tienda.put(record);
+        resultado = {
+          record,
+          esMejor: record.mejor === partida,
+          ...(previo !== undefined && { anterior: previo.mejor }),
+        };
+      };
+    });
+  } finally {
+    db.close();
+  }
+}
+
+/** Lee los records de varios mapas de una vez. Los registros corruptos se ignoran; nunca lanza por el contenido. */
+export async function leerRecordsDeLaBase(
+  hashes: readonly string[],
+): Promise<Map<string, RecordDeMapa>> {
+  const encontrados = new Map<string, RecordDeMapa>();
+  if (hashes.length === 0) return encontrados;
+  const db = await abrirBaseDeDatos();
+  try {
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction(NOMBRE_TIENDA_RECORDS, 'readonly');
+      const tienda = tx.objectStore(NOMBRE_TIENDA_RECORDS);
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error ?? new Error('No se pudieron leer los records.'));
+      tx.onabort = () => reject(tx.error ?? new Error('Se aborto la lectura de los records.'));
+      for (const hash of new Set(hashes)) {
+        const peticion = tienda.get(hash);
+        peticion.onsuccess = () => {
+          const record = normalizarRecord(peticion.result);
+          // La clave manda: un registro cuyo `hash` no coincide con su clave es raro y se ignora.
+          if (record !== undefined && record.hash === hash) encontrados.set(hash, record);
+        };
+      }
+    });
+  } finally {
+    db.close();
+  }
+  return encontrados;
 }
 
 /** Guarda (o reemplaza si el id ya existia) una skin completa. */

@@ -9,24 +9,16 @@ function conteos(valores: Partial<Record<Judgement, number>>): Record<Judgement,
   return { max: 0, perfect: 0, great: 0, good: 0, bad: 0, miss: 0, ...valores };
 }
 
-describe('rangoDePrecision', () => {
-  it('el borde de cada rango es inclusivo hacia arriba', () => {
+// Los umbrales y el SS se prueban en core (records.test.ts); aca solo que el reexport siga conectado.
+describe('rangoDePrecision (reexport de core)', () => {
+  it('sigue disponible desde resultados-logica y conserva los umbrales', () => {
     expect(rangoDePrecision(0.95)).toBe('S');
     expect(rangoDePrecision(0.9)).toBe('A');
-    expect(rangoDePrecision(0.8)).toBe('B');
-    expect(rangoDePrecision(0.7)).toBe('C');
-  });
-
-  it('justo debajo de cada borde cae al rango de abajo', () => {
-    expect(rangoDePrecision(0.9499)).toBe('A');
-    expect(rangoDePrecision(0.8999)).toBe('B');
-    expect(rangoDePrecision(0.7999)).toBe('C');
     expect(rangoDePrecision(0.6999)).toBe('D');
   });
 
-  it('los extremos: 1 es S y 0 es D', () => {
-    expect(rangoDePrecision(1)).toBe('S');
-    expect(rangoDePrecision(0)).toBe('D');
+  it('con precision 1 es SS', () => {
+    expect(rangoDePrecision(1)).toBe('SS');
   });
 });
 
