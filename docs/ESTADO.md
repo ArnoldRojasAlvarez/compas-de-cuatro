@@ -1,6 +1,6 @@
 # Estado del proyecto
 
-Ultima actualizacion: 3 de octubre de 2026.
+Ultima actualizacion: 5 de octubre de 2026.
 
 Estado corto y siempre al dia. **Si sos una sesion NUEVA, empeza por
 `docs/HANDOFF.md`** (metodo de trabajo, reglas, lecciones), despues
@@ -8,7 +8,8 @@ Estado corto y siempre al dia. **Si sos una sesion NUEVA, empeza por
 
 ## Donde esta todo
 
-- `main`: limpio, verde, 640 tests + 4 e2e (sincronia, pausa x2, mapeador).
+- `main`: limpio, verde, 951 tests + 9 e2e (sincronia, pausa x2, mapeador, partida x5).
+- Estado demo: menu con musica de la biblioteca, song select sobre la escena, partida con fondo y video, cuatro skins propias, cancion demo sembrada.
 - En curso: nada.
 
 ## Hecho
@@ -46,6 +47,12 @@ Estado corto y siempre al dia. **Si sos una sesion NUEVA, empeza por
 | T-032 | Reabrir una cancion de la biblioteca en el mapeador (boton "Editar en el mapeador" en el song select), guardar reemplaza o agrega dificultades sobre la misma cancion, conserva tempos y velocidades originales, boton "Nuevo" |
 | T-035 | "Probar desde el cabezal" (`runGame` acepta `inicioMs` como cuarto parametro opcional: solo cuentan las notas desde ahi, sin misses de las anteriores) y compensacion de latencia al grabar en vivo (offset de calibracion + latencia de salida, mismo ajuste que `clock.now()`) |
 | T-040 | E2E de pausa (reloj congelado, cuenta regresiva, reintentar) y del mapeador de punta a punta (cargar audio, generar, editar, deshacer, guardar, reabrir), estables 3 de 3; tests de rendimiento sin depender de la carga; CI con un job `e2e` aparte (nunca corrio en GitHub: no hay repositorio remoto) |
+| T-049 | `parseOsu` lee fondo y video de `[Events]`, Source y Tags; busqueda tolerante en el zip; video mp4/webm; `borrarCancion`, `exportarCancion`, almacenamiento persistente |
+| T-050 | Cuatro skins propias (Tetra, Barras, Circulos, Diamantes) dibujadas con Canvas; destello al golpe, glow de la linea de juicio, opacidad de pista |
+| T-051 | Cancion demo "Primer Compas" compuesta por codigo y sintetizada en el navegador (82 s, 128 BPM), Facil 1.1, Normal 2.3, Dificil 3.9 estrellas, fondo generativo; se siembra sola una vez |
+| T-052 | Escena: fondo de la cancion a pantalla completa; menu con musica de la biblioteca (pausa, siguiente); song select minimalista con preview visible, exportar y borrar, importar soltando en cualquier parte |
+| T-053 | Partida a pantalla completa con fondo atenuado y video sincronizado al reloj, intro, HUD limpio, volumen; resultados con fondo; ajustes con poco texto, skins en miniatura, atenuacion y video |
+| T-054 | Pulido: legibilidad sobre portadas, dificultades de facil a dificil, audio de cualquier dificultad, errores cerrables, fondo del menu inmediato |
 
 La prueba de feel de Arnold ya se hizo: en una cancion real sus golpes salieron
 centrados en cero. El motor esta bien sincronizado.
@@ -91,9 +98,12 @@ centrados en cero. El motor esta bien sincronizado.
 - **Cambios de velocidad (SV):** se parsean del `.osu` pero no se aplican al
   dibujo. Todo se ve a multiplicador 1.
 - **Bono por combo:** el score es proporcional a la precision, sin bono.
-- **Musica del menu:** hoy es el click track en bucle; falta elegir pista y
-  volumen. Y el logo arranca quieto hasta el primer clic (politica de autoplay
-  del navegador).
+- **Musica del menu:** suena la biblioteca (T-052). El logo y la musica
+  arrancan con el primer clic o tecla (politica de autoplay del navegador).
+- **Canciones viejas sin fondo:** las importadas antes de T-049 no guardaron el
+  `.osz`; para ver su fondo hay que reimportarlas.
+- **Sintesis de la demo:** 5 a 13 s en una maquina cargada (en segundo plano, no
+  bloquea). Facil queda en 1.1 estrellas: con negras puras el modelo no llega a 1.5.
 
 ## Decisiones pendientes de Arnold
 
