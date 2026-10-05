@@ -10,6 +10,7 @@ import './style.css';
 import { iniciarRouter } from './router.js';
 import { montarHeader } from './header.js';
 import { instalarPresentacion } from './presentacion.js';
+import { asegurarCancionDemo } from './demo/index.js';
 
 const contenedor = document.getElementById('app');
 if (!contenedor) {
@@ -20,3 +21,5 @@ montarHeader();
 instalarPresentacion();
 
 iniciarRouter(contenedor);
+// T-051: siembra la cancion demo la primera vez (no bloquea el arranque).
+void asegurarCancionDemo();
