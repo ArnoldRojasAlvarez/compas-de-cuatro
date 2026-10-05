@@ -269,4 +269,37 @@ describe('AudioClock', () => {
     // subirle el jitter hasta que el contador ingenuo si se despegue.
     expect(derivaContadorIngenuo).toBeGreaterThan(5);
   });
+  it('conecta el source al destino pedido (un GainNode de volumen), no a ctx.destination', () => {
+    const { ctx, sources, raw } = crearContextoFalso();
+    const ganancia = { gain: { value: 0.5 } } as unknown as AudioNode;
+    const clock = createAudioClock(ctx, crearBufferFalso(60), { destino: ganancia });
+
+    clock.start(0);
+    clock.seek(1000); // un seek crea otro source: tambien tiene que ir al destino pedido
+
+    expect(sources.length).toBeGreaterThanOrEqual(2);
+    for (const source of sources) {
+      expect(source.connect).toHaveBeenCalledWith(ganancia);
+      expect(source.connect).not.toHaveBeenCalledWith(raw.destination);
+    }
+  });
+
+  it('sin destino pedido, conecta a ctx.destination como siempre', () => {
+    const { ctx, sources, raw } = crearContextoFalso();
+    const clock = createAudioClock(ctx, crearBufferFalso(60));
+
+    clock.start(0);
+
+    expect(sources[0]!.connect).toHaveBeenCalledWith(raw.destination);
+  });
+
+  it('el destino no altera la posicion del reloj', () => {
+    const { ctx, raw } = crearContextoFalso();
+    const clock = createAudioClock(ctx, crearBufferFalso(60), { destino: {} as AudioNode });
+
+    clock.start(0);
+    raw.currentTime = 2.5;
+
+    expect(clock.now()).toBeCloseTo(2500, 6);
+  });
 });

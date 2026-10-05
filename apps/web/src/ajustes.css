@@ -1,6 +1,7 @@
-/* Ajustes (ajustes.ts). T-023: cuatro tarjetas numeradas (Juego, Teclas,
-   Graficos, Apariencia) en rejilla, filas de control consistentes y teclas
-   como keycaps.
+/* Ajustes (ajustes.ts). T-023: tarjetas numeradas en rejilla, filas de
+   control consistentes y teclas como keycaps. T-053: cuatro tarjetas (Juego,
+   Teclas, Apariencia, Presentacion), etiqueta corta + control, sin parrafos
+   (las explicaciones van en `title`), skins como tarjetas con miniatura.
 
    Los controles base (button, input, select) viven en style.css con
    selectores `#app ...`, que pesan mas que cualquier selector de clase. Por
@@ -15,7 +16,7 @@
   flex-direction: column;
   gap: var(--espacio-4);
   width: min(92vw, 960px);
-  padding: var(--espacio-4) 0 var(--espacio-6);
+  padding: var(--espacio-4) 0 var(--espacio-4);
 }
 
 /* ---------------------------------------------------------------------- */
@@ -54,12 +55,21 @@
   }
 }
 
+/* Desde 900px, Apariencia y Presentacion ocupan todo el ancho: asi entra
+   todo en 1280x800 sin bajar. */
+@media (min-width: 900px) {
+  .tetra-ajustes-seccion-apariencia,
+  .tetra-ajustes-seccion-presentacion {
+    grid-column: 1 / -1;
+  }
+}
+
 .tetra-ajustes-seccion {
   display: flex;
   flex-direction: column;
   gap: var(--espacio-4);
   min-width: 0;
-  padding: var(--espacio-5);
+  padding: var(--espacio-4) var(--espacio-5);
   background: var(--superficie);
   border: 1px solid var(--linea);
   border-radius: var(--radio-panel);
@@ -105,15 +115,9 @@
   border-top: 1px solid var(--linea);
 }
 
-.tetra-ajustes-fila-texto {
-  display: flex;
-  flex: 1 1 200px;
-  flex-direction: column;
-  gap: var(--espacio-1);
-  min-width: 0;
-}
-
 .tetra-ajustes-fila-nombre {
+  flex: 1 1 auto;
+  min-width: 0;
   font-size: var(--tipo-sm);
   font-weight: 500;
   color: var(--tinta);
@@ -132,10 +136,6 @@
   flex-direction: column;
   align-items: stretch;
   flex-wrap: nowrap;
-}
-
-.tetra-ajustes-fila-apilada .tetra-ajustes-fila-texto {
-  flex: 0 0 auto;
 }
 
 .tetra-ajustes-fila-apilada .tetra-ajustes-fila-control {
@@ -158,6 +158,24 @@
 .tetra-ajustes-valor {
   font-family: var(--fuente-datos);
   color: var(--tinta);
+}
+
+/* Dato vivo junto a un control ("1200 ms", "80%"): mono, tenue, ancho fijo para que no baile. */
+.tetra-ajustes-dato {
+  min-width: 5ch;
+  font-size: var(--tipo-sm);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  color: var(--tinta-2);
+}
+
+/* Deslizador (volumen, atenuacion): el acento del navegador en teal, ancho fijo. */
+.tetra-ajustes-rango {
+  width: 140px;
+  height: var(--alto-control);
+  margin: 0;
+  accent-color: var(--acento);
+  cursor: pointer;
 }
 
 /* ---------------------------------------------------------------------- */
@@ -325,16 +343,12 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
   gap: var(--espacio-3);
 }
 
-.tetra-ajustes-teclas-pie .tetra-ajustes-ayuda {
-  flex: 1 1 200px;
-}
-
 /* ---------------------------------------------------------------------- */
-/* Interruptor de FPS: se mantiene .tetra-toggle de style.css              */
+/* Interruptores: se mantiene .tetra-toggle de style.css                   */
 /* ---------------------------------------------------------------------- */
 
 .tetra-ajustes .tetra-toggle {
@@ -342,23 +356,125 @@
 }
 
 /* ---------------------------------------------------------------------- */
-/* Skin: selector y boton de importar en la misma fila                     */
+/* Skin: grilla de tarjetas con miniatura                                  */
 /* ---------------------------------------------------------------------- */
 
-.tetra-ajustes-skin-controles {
+.tetra-skins-grilla {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(132px, 1fr));
+  gap: var(--espacio-3);
+}
+
+#app .tetra-ajustes .tetra-skins-grilla .tetra-skin {
   display: flex;
-  flex-wrap: wrap;
+  flex-direction: column;
   align-items: center;
   gap: var(--espacio-2);
+  box-sizing: border-box;
+  min-width: 0;
+  height: auto;
+  padding: var(--espacio-2);
+  background: var(--superficie-2);
+  border: 2px solid var(--linea);
+  border-radius: var(--radio-control);
 }
 
-.tetra-ajustes-skin-controles select {
-  flex: 1 1 160px;
+#app .tetra-ajustes .tetra-skins-grilla .tetra-skin:hover:not(:disabled) {
+  border-color: var(--tinta-3);
 }
 
-.tetra-ajustes-skin-controles button {
-  flex: 0 0 auto;
+#app .tetra-ajustes .tetra-skins-grilla .tetra-skin-activa,
+#app .tetra-ajustes .tetra-skins-grilla .tetra-skin-activa:hover:not(:disabled) {
+  border-color: var(--acento);
+}
+
+.tetra-skin-miniatura {
+  display: block;
+  max-width: 100%;
+  background: var(--fondo);
+  border-radius: 2px;
+}
+
+.tetra-skin-nombre {
+  max-width: 100%;
+  overflow: hidden;
+  font-size: var(--tipo-xs);
+  text-overflow: ellipsis;
   white-space: nowrap;
+  color: var(--tinta-2);
+}
+
+.tetra-skin-activa .tetra-skin-nombre {
+  color: var(--tinta);
+}
+
+/* Tarjeta "+": del mismo tamano que una con miniatura, con borde punteado. */
+#app .tetra-ajustes .tetra-skins-grilla .tetra-skin-importar {
+  justify-content: center;
+  min-height: calc(84px + var(--espacio-2) * 2 + 4px + 1.4rem);
+  background: transparent;
+  border-style: dashed;
+}
+
+.tetra-skin-mas {
+  font-family: var(--fuente-datos);
+  font-size: var(--tipo-2xl);
+  line-height: 1;
+  color: var(--tinta-3);
+}
+
+/* ---------------------------------------------------------------------- */
+/* Presentacion: la lista "Antes de presentar" va plegada                  */
+/* ---------------------------------------------------------------------- */
+
+.tetra-ajustes-grupo {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espacio-3);
+}
+
+/* Los controles de debajo de las skins, en una fila de tres. */
+.tetra-ajustes-controles-fila {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--espacio-4) var(--espacio-5);
+  padding-top: var(--espacio-4);
+  border-top: 1px solid var(--linea);
+}
+
+.tetra-ajustes-controles-fila .tetra-ajustes-fila + .tetra-ajustes-fila {
+  padding-top: 0;
+  border-top: 0;
+}
+
+@media (min-width: 900px) {
+  .tetra-ajustes-controles-fila {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .tetra-ajustes-controles-fila .tetra-ajustes-rango {
+    width: 110px;
+  }
+
+  .tetra-ajustes-seccion-presentacion .tetra-ajustes-grupo {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+  }
+}
+
+.tetra-ajustes-pliegue summary {
+  font-size: var(--tipo-xs);
+  cursor: pointer;
+  color: var(--tinta-3);
+}
+
+.tetra-ajustes-pliegue summary:hover {
+  color: var(--tinta-2);
+}
+
+.tetra-ajustes-pliegue .tetra-presentacion-lista {
+  margin-top: var(--espacio-2);
 }
 
 /* ---------------------------------------------------------------------- */

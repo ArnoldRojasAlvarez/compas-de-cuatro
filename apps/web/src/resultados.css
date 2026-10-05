@@ -5,6 +5,8 @@
 
 .tetra-resultados {
   --color-juicio: var(--tinta-2);
+  position: relative;
+  z-index: 1;
   box-sizing: border-box;
   width: 100%;
   max-width: 800px;
@@ -40,13 +42,54 @@
   }
 }
 
+/* T-053: el fondo de la cancion detras (borroso y atenuado). Cuelga de #app
+   como hermano del panel; el panel va por encima (z-index 1). */
+.tetra-resultados-fondo {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  background: var(--fondo);
+}
+
+/* El escalado esconde el borde claro que deja el blur en las orillas. */
+.tetra-resultados-fondo-imagen {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  filter: blur(10px);
+  transform: scale(1.06);
+}
+
+.tetra-resultados-fondo::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: color-mix(in srgb, var(--fondo) 78%, transparent);
+}
+
+/* Titulo de la cancion y su dificultad, en una linea chica. */
+.tetra-resultados-cabecera {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--espacio-1) var(--espacio-3);
+  min-width: 0;
+}
+
 .tetra-resultados-titulo {
   margin: 0;
   font-family: var(--fuente-display);
-  font-size: var(--tipo-xl);
+  font-size: var(--tipo-lg);
   font-weight: 600;
   color: var(--tinta);
   text-wrap: balance;
+}
+
+.tetra-resultados-autoria {
+  font-family: var(--fuente-cuerpo);
+  font-size: var(--tipo-sm);
+  color: var(--tinta-2);
 }
 
 /* -- Etiquetas y valores, compartidos por todas las celdas de dato -- */
@@ -242,16 +285,6 @@
   display: flex;
   flex-direction: column;
   gap: var(--espacio-2);
-}
-
-.tetra-resultados-subtitulo {
-  margin: 0;
-  font-family: var(--fuente-cuerpo);
-  font-size: var(--tipo-xs);
-  font-weight: 500;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--tinta-3);
 }
 
 .tetra-resultados-grafico-caja {

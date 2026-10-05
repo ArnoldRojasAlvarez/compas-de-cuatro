@@ -61,6 +61,12 @@ export interface ClockOptions {
    * reporta. Por defecto true.
    */
   useOutputLatency?: boolean;
+  /**
+   * Nodo al que se conecta el audio de la cancion. Por defecto
+   * `ctx.destination`. Sirve para intercalar un `GainNode` de volumen sin que
+   * el reloj sepa nada de volumen: la posicion no depende de a donde suene.
+   */
+  destino?: AudioNode;
 }
 
 /**
@@ -72,6 +78,7 @@ export interface ClockOptions {
 class AudioContextClock implements AudioClock {
   private readonly ctx: AudioContext;
   private readonly buffer: AudioBuffer;
+  private readonly destino: AudioNode;
 
   private source: AudioBufferSourceNode | null = null;
   /** Valor de ctx.currentTime (segundos) en el que la posicion vale 0. */
@@ -87,6 +94,7 @@ class AudioContextClock implements AudioClock {
   constructor(ctx: AudioContext, buffer: AudioBuffer, options: ClockOptions = {}) {
     this.ctx = ctx;
     this.buffer = buffer;
+    this.destino = options.destino ?? ctx.destination;
     this.duration = buffer.duration * 1000;
     this.userOffset = options.userOffset ?? 0;
     this.outputLatency = this.calcularLatenciaSalida(options);
@@ -162,7 +170,7 @@ class AudioContextClock implements AudioClock {
   private crearSource(): AudioBufferSourceNode {
     const source = this.ctx.createBufferSource();
     source.buffer = this.buffer;
-    source.connect(this.ctx.destination);
+    source.connect(this.destino);
     return source;
   }
 

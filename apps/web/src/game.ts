@@ -20,6 +20,11 @@ import { leerOffset } from './offset.js';
 import { leerVelocidad, velocidadAScrollDuration } from './velocidad.js';
 import { leerKeyMap } from './keymap.js';
 import { leerMostrarFps } from './graficos.js';
+import { leerAtenuacion, leerVideoDeFondo, opacidadDePistaSegunAtenuacion } from './apariencia.js';
+import { gananciaDeVolumen, leerVolumen } from './volumen.js';
+import { liberarTexturasDeSkin, resolverSkinDePartida } from './skin-activa.js';
+import { crearFondoDePartida, crearIntroDePartida } from './escena.js';
+import { medidasDePista, type EscenaPartida } from './escena-logica.js';
 import { CLASE_EN_JUEGO, EVENTO_TIEMPO_JUGADO } from './header.js';
 import { sumarTiempoJugado } from './tiempo-jugado.js';
 import { crearMenuPausa, type MenuPausa } from './pausa.js';
@@ -36,14 +41,10 @@ import {
 
 // scrollDuration no es fijo desde T-008: sale de la velocidad guardada por
 // el jugador (ver apps/web/src/velocidad.ts) y se calcula una sola vez al
-// arrancar la partida, igual que el offset. El resto de PlayfieldOptions
-// (tamano de pista, ancho de columna) si sigue fijo: no hay ticket que pida
-// hacerlo configurable.
-const OPCIONES_PISTA_BASE = {
-  height: 600,
-  columnWidth: 110,
-  receptorOffset: 120,
-} as const;
+// arrancar la partida, igual que el offset. Desde T-053 el tamano de la pista
+// tampoco es fijo: ocupa el alto de la ventana y el ancho del carril escala
+// con el (ver `medidasDePista` en escena-logica.ts); se recalcula al
+// redimensionar la ventana.
 
 const LEAD_IN_MS: Ms = 1500;
 
@@ -75,6 +76,8 @@ export type ResultadoPartida =
 interface GanchoDeDepuracion {
   clock: import('@tetra/audio').AudioClock;
   ctx: AudioContext;
+  /** T-053: la ganancia de volumen por la que pasa la musica (el e2e comprueba que ajustes la afecta). */
+  volumen: GainNode;
 }
 
 declare global {
@@ -110,7 +113,6 @@ interface CacheHud {
   escalaCombo: number;
   score: number;
   precision: number;
-  comboMax: number;
   hp: number;
   nivelVida: NivelDeVida;
   progreso: number;
@@ -123,7 +125,6 @@ interface HudPartida {
   comboValor: HTMLElement;
   score: HTMLElement;
   precision: HTMLElement;
-  comboMax: HTMLElement;
   vida: HTMLElement;
   vidaRelleno: HTMLElement;
   progresoRelleno: HTMLElement;
@@ -140,22 +141,23 @@ function crearElemento(etiqueta: string, clase: string, texto?: string): HTMLEle
   return el;
 }
 
-/** Un dato con etiqueta chica arriba y valor abajo; devuelve fila y valor. */
+/** Un dato del HUD, solo el valor (sin etiqueta: se entiende por su tamano y su lugar). */
 function crearDato(
   modificador: string,
-  etiqueta: string,
   inicial: string,
 ): { fila: HTMLElement; valor: HTMLElement } {
   const fila = crearElemento('div', `tetra-dato tetra-dato--${modificador}`);
   const valor = crearElemento('div', 'tetra-dato-valor', inicial);
-  fila.append(crearElemento('div', 'tetra-dato-etiqueta', etiqueta), valor);
+  fila.appendChild(valor);
   return { fila, valor };
 }
 
 /**
- * Ensambla el HUD de la partida como DOM plano superpuesto a la pista: combo
- * grande sobre la pista, precision / score / combo maximo y vida al costado,
- * progreso de la cancion arriba, y FPS/ms opcional. Nada de React aca (ver
+ * Ensambla el HUD de la partida como DOM plano superpuesto a la pista (T-053):
+ * combo centrado sobre la pista, precision arriba a la derecha de la pantalla
+ * con el score chico debajo, vida fina pegada al borde derecho de la pista,
+ * progreso como linea finisima arriba de todo, y FPS/ms opcional. El combo
+ * maximo ya no se muestra aca: queda en los resultados. Nada de React aca (ver
  * CLAUDE.md, regla 4): un re-render de React a mitad de un stream es un frame
  * perdido, y este HUD se actualiza una vez por frame. Todos los elementos se
  * crean y se guardan aca, una sola vez: `actualizarHud` no hace
@@ -172,7 +174,7 @@ function crearDato(
 function crearHud(envoltorio: HTMLElement, mostrarFps: boolean): HudPartida {
   const hud = crearElemento('div', 'tetra-hud');
 
-  // Progreso: barra fina arriba de la pista.
+  // Progreso: linea finisima arriba de todo.
   const progreso = crearElemento('div', 'tetra-progreso');
   const progresoRelleno = crearElemento('div', 'tetra-progreso-relleno');
   progreso.appendChild(progresoRelleno);
@@ -180,14 +182,13 @@ function crearHud(envoltorio: HTMLElement, mostrarFps: boolean): HudPartida {
   // Combo: oculto hasta COMBO_MINIMO_VISIBLE (opacity 0 por CSS).
   const comboRaiz = crearElemento('div', 'tetra-combo');
   const comboValor = crearElemento('span', 'tetra-combo-valor', '0');
-  comboRaiz.append(comboValor, crearElemento('span', 'tetra-combo-etiqueta', 'Combo'));
+  comboRaiz.append(comboValor);
 
-  // Precision, score y combo maximo: columna a la derecha de la pista.
-  const precision = crearDato('precision', 'Precision', formatearPrecision(0));
-  const score = crearDato('score', 'Score', formatearScore(0));
-  const comboMax = crearDato('combo-max', 'Combo max', '0');
+  // Precision grande y score chico debajo, arriba a la derecha de la pantalla.
+  const precision = crearDato('precision', formatearPrecision(0));
+  const score = crearDato('score', formatearScore(0));
   const datos = crearElemento('div', 'tetra-hud-datos');
-  datos.append(precision.fila, score.fila, comboMax.fila);
+  datos.append(precision.fila, score.fila);
 
   // Vida: barra vertical pegada al borde derecho de la pista.
   const vida = crearElemento('div', 'tetra-vida');
@@ -212,7 +213,6 @@ function crearHud(envoltorio: HTMLElement, mostrarFps: boolean): HudPartida {
     comboValor,
     score: score.valor,
     precision: precision.valor,
-    comboMax: comboMax.valor,
     vida,
     vidaRelleno,
     progresoRelleno,
@@ -226,7 +226,6 @@ function crearHud(envoltorio: HTMLElement, mostrarFps: boolean): HudPartida {
       escalaCombo: 1,
       score: 0,
       precision: 0,
-      comboMax: 0,
       hp: 1,
       nivelVida: 'ok',
       progreso: 0,
@@ -296,10 +295,6 @@ function actualizarHud(
     cache.precision = estado.accuracy;
     hud.precision.textContent = formatearPrecision(estado.accuracy);
   }
-  if (estado.maxCombo !== cache.comboMax) {
-    cache.comboMax = estado.maxCombo;
-    hud.comboMax.textContent = String(estado.maxCombo);
-  }
 
   // Vida: scaleY con origen abajo (no `height`, para no forzar layout). El
   // nivel de alerta solo se reescribe cuando cambia de nivel.
@@ -347,16 +342,21 @@ function actualizarHud(
 export interface OpcionesPartida {
   /** Empieza la partida en este instante (ms) de la cancion, con el aire de siempre antes de la primera nota. */
   inicioMs?: Ms;
+  /** T-053: fondo, video e intro de la cancion (y el fondo de los resultados). Sin esto, la partida se ve como siempre. */
+  escena?: EscenaPartida;
 }
+
+export type { EscenaPartida };
 
 /**
  * T-009: `skin` son texturas ya resueltas (ver @tetra/engine,
  * `cargarTexturasDeSkin`), no el .osk crudo ni los Blob que guarda
- * @tetra/storage: quien llama (song-select.ts, ver
- * `resolverTexturasDeSkinActiva`) es responsable de resolver la skin activa
- * antes de arrancar la partida, una sola vez (ver el ticket, "Rendimiento").
- * Si no hay skin activa, `skin` queda `undefined` y createPlayfield cae al
- * fallback de rectangulos (ver packages/engine/src/playfield.ts).
+ * @tetra/storage. Quien las pasa es dueno de ellas y las libera.
+ *
+ * T-053: si `skin` es `undefined`, la partida resuelve la skin activa por su
+ * cuenta (`resolverSkinDePartida`, ver skin-activa.ts) con el ancho de carril
+ * real de la pista, y libera esas texturas al terminar (completada, abortada
+ * o reintentada): el playfield no las destruye.
  */
 export function runGame(
   chartCompleto: Chart,
@@ -386,19 +386,36 @@ export function runGame(
     // offset (ver el comentario de leerOffset() mas abajo): no hay pausa ni
     // ajuste en caliente en el alcance de este ticket, solo elegirla antes
     // de jugar.
+    const medidasIniciales = medidasDePista(window.innerHeight);
     const opcionesPista: PlayfieldOptions = {
-      ...OPCIONES_PISTA_BASE,
+      height: medidasIniciales.alto,
+      columnWidth: medidasIniciales.anchoCarril,
+      receptorOffset: medidasIniciales.receptorOffset,
       scrollDuration: velocidadAScrollDuration(leerVelocidad()),
     };
+    const escena = opciones.escena;
+    const atenuacion = leerAtenuacion();
+    const usarVideo = leerVideoDeFondo();
 
     // T-019: envoltorio relativo que contiene el lienzo de Pixi y el HUD
     // superpuesto (ver hud.css, `.tetra-partida`).
     const partida = document.createElement('div');
     partida.className = 'tetra-partida';
+    partida.style.setProperty('--ancho-carril', `${opcionesPista.columnWidth}px`);
     const lienzo = document.createElement('div');
     lienzo.className = 'tetra-lienzo';
     partida.appendChild(lienzo);
     const hud = crearHud(partida, leerMostrarFps());
+    // T-053: el fondo de la cancion va detras de todo (primer hijo); la intro, encima.
+    const fondo = crearFondoDePartida(partida, escena, { atenuacion, usarVideo });
+    const intro = crearIntroDePartida(
+      partida,
+      escena,
+      inicioMs > 0 ? inicioDeLaCancion(inicioMs, LEAD_IN_MS) : 0,
+    );
+    // Con fondo propio la pista deja ver la imagen; sin el, el lienzo lleva su superficie de siempre.
+    const hayFondoVisible = fondo !== null;
+    partida.classList.toggle('tetra-partida--sin-fondo', !hayFondoVisible);
     contenedor.appendChild(partida);
 
     // Contexto de audio dedicado a la reproduccion y al reloj de juego. El
@@ -411,9 +428,14 @@ export function runGame(
     // apps/web/src/offset.ts; al arrancar una partida se lee y se pasa
     // como userOffset, para que el reloj arranque ya corregido en vez de
     // con el offset en 0 de siempre.
-    const clock = createAudioClock(ctx, audio, { userOffset: leerOffset() });
+    // T-053: el volumen de la musica (ajustes) se aplica con una ganancia entre
+    // el reloj y la salida; el reloj no sabe de volumen, su posicion no cambia.
+    const volumen = ctx.createGain();
+    volumen.gain.value = gananciaDeVolumen(leerVolumen());
+    volumen.connect(ctx.destination);
+    const clock = createAudioClock(ctx, audio, { userOffset: leerOffset(), destino: volumen });
     const engine = createJudgeEngine(chart);
-    window.__tetraDebug = { clock, ctx };
+    window.__tetraDebug = { clock, ctx, volumen };
 
     const desviaciones: Desviacion[] = [];
     function registrar(resultado: HitResult | null): void {
@@ -447,6 +469,19 @@ export function runGame(
     // abortar() para limpiar, declarada afuera porque las dos pueden correr
     // antes de que el `.then()` termine de armar la pista.
     let playfieldParaLimpieza: ReturnType<typeof createPlayfield> | null = null;
+    // T-053: si quien llama no paso skin, las texturas las pedimos nosotros y las
+    // liberamos al terminar. Se piden ya, en paralelo con app.init(), al ancho de
+    // carril real de la pista.
+    const skinPropiaPendiente: Promise<TexturasDeSkin> | null =
+      skin === undefined ? resolverSkinDePartida(opcionesPista.columnWidth) : null;
+    let skinPropiaLiberada = false;
+    function liberarSkinPropia(): void {
+      if (skinPropiaPendiente === null || skinPropiaLiberada) return;
+      skinPropiaLiberada = true;
+      // Despues de playfield.destroy(): asi ningun sprite las usa cuando se destruyen.
+      void skinPropiaPendiente.then(liberarTexturasDeSkin);
+    }
+
     let ultimoT = inicioMs > 0 ? inicioDeLaCancion(inicioMs, LEAD_IN_MS) : -LEAD_IN_MS;
     // true desde que app.init() resuelve: distingue, dentro de abortar(), si
     // ya hay que destruir la Application de Pixi (partida en curso) o si
@@ -474,9 +509,13 @@ export function runGame(
       cerrarCuenta();
       menuPausa?.destruir();
       menuPausa = null;
+      fondo?.destruir();
+      intro?.destruir();
       clock.stop();
       input?.destroy();
       window.removeEventListener('keydown', manejarEscape);
+      window.removeEventListener('resize', ajustarAlVentana);
+      volumen.disconnect();
       delete window.__tetraDebug;
       void ctx.close().catch(() => {
         // cerrar el contexto es best-effort: si el navegador ya lo cerro
@@ -493,9 +532,10 @@ export function runGame(
       const offsetDeEstaPartida = clock.userOffset;
       limpiar();
       playfieldParaLimpieza?.destroy();
+      liberarSkinPropia();
       app.destroy(true, { children: true });
       contenedor.innerHTML = '';
-      mostrarResultados(contenedor, estadoFinal, desviaciones, offsetDeEstaPartida);
+      mostrarResultados(contenedor, estadoFinal, desviaciones, offsetDeEstaPartida, escena);
       resolve({ estado: 'completado', score: estadoFinal });
     }
 
@@ -516,6 +556,7 @@ export function runGame(
         playfieldParaLimpieza?.destroy();
         app.destroy(true, { children: true });
       }
+      liberarSkinPropia();
       // Si todavia no terminaba app.init(), el `.then()` de mas abajo ve
       // `detenido` en true apenas resuelve y destruye la app ahi: no hace
       // falta hacer nada mas con ella desde aca.
@@ -560,6 +601,7 @@ export function runGame(
         rafId = 0;
       }
       void ctx.suspend();
+      fondo?.pausar();
       menuPausa = crearMenuPausa(partida, {
         continuar: () => iniciarCuenta(),
         reintentar: () => reintentar(),
@@ -611,6 +653,7 @@ export function runGame(
       soltarTeclas?.();
       void ctx.resume().then(() => {
         if (detenido) return;
+        fondo?.reanudar();
         ultimoT = clock.now();
         reanudarBucle?.();
       });
@@ -625,6 +668,7 @@ export function runGame(
         playfieldParaLimpieza?.destroy();
         app.destroy(true, { children: true });
       }
+      liberarSkinPropia();
       contenedor.innerHTML = '';
       resolve({ estado: 'reintentar' });
     }
@@ -644,14 +688,34 @@ export function runGame(
     // puede abortar incluso mientras app.init() todavia esta cargando.
     window.addEventListener('keydown', manejarEscape);
 
-    app
-      .init({
+    // T-053: la pista ocupa el alto de la ventana. Al redimensionar se recalculan
+    // las medidas y se le avisa al renderer y al playfield. Los dibujos de la
+    // skin se hicieron para el ancho de carril inicial: si la ventana cambia
+    // mucho se escalan un poco, no se vuelven a dibujar en caliente.
+    function ajustarAlVentana(): void {
+      if (detenido || !appInicializada) return;
+      const medidas = medidasDePista(window.innerHeight);
+      opcionesPista.height = medidas.alto;
+      opcionesPista.columnWidth = medidas.anchoCarril;
+      opcionesPista.receptorOffset = medidas.receptorOffset;
+      partida.style.setProperty('--ancho-carril', `${medidas.anchoCarril}px`);
+      app.renderer.resize(medidas.anchoCarril * 4, medidas.alto);
+      playfieldParaLimpieza?.resize(medidas.anchoCarril * 4, medidas.alto);
+    }
+    window.addEventListener('resize', ajustarAlVentana);
+
+    Promise.all([
+      app.init({
         width: opcionesPista.columnWidth * 4,
         height: opcionesPista.height,
         backgroundAlpha: 0,
         antialias: true,
-      })
-      .then(() => {
+        resolution: Math.min(window.devicePixelRatio || 1, 2),
+        autoDensity: true,
+      }),
+      skinPropiaPendiente ?? Promise.resolve(skin),
+    ])
+      .then(([, texturasDeSkin]) => {
         appInicializada = true;
         if (detenido) {
           // Se pidio abortar mientras se inicializaba: abortar() no pudo
@@ -662,8 +726,17 @@ export function runGame(
         }
 
         lienzo.appendChild(app.canvas);
-        const playfield = createPlayfield(app, chart, opcionesPista, skin);
+        // Con fondo de cancion la pista se vuelve mas transparente cuanto mas se atenua.
+        const playfield = createPlayfield(
+          app,
+          chart,
+          opcionesPista,
+          texturasDeSkin,
+          hayFondoVisible ? { opacidadPista: opacidadDePistaSegunAtenuacion(atenuacion) } : undefined,
+        );
         playfieldParaLimpieza = playfield;
+        // La ventana pudo cambiar de tamano mientras cargaba.
+        ajustarAlVentana();
         input = createKeyboardInput(window, toGameTime);
         // T-012 "Parte B": el remapeo de teclas se edita en ajustes.ts y se
         // persiste con apps/web/src/keymap.ts; se lee y se aplica aca, una
@@ -710,6 +783,9 @@ export function runGame(
 
           // 4. El dibujo.
           playfield.render(t);
+          // El video de fondo se pone en hora contra el reloj de audio (y la intro se desvanece con el).
+          fondo?.sincronizar(t);
+          intro?.actualizar(t);
 
           // 5. El HUD.
           actualizarHud(hud, engine.state, t, clock.duration, t - ultimoT);
@@ -742,6 +818,7 @@ export function runGame(
       })
       .catch((error: unknown) => {
         limpiar();
+        liberarSkinPropia();
         reject(error instanceof Error ? error : new Error(String(error)));
       });
   });

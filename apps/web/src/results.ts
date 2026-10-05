@@ -18,6 +18,8 @@ import {
 } from './estadisticas.js';
 import { guardarOffset } from './offset.js';
 import { colorConAlpha, fraccionesDeJuicio, rangoDePrecision } from './resultados-logica.js';
+import { agregarImagenDeFondo } from './escena.js';
+import { lineaDeAutoria, type EscenaPartida } from './escena-logica.js';
 
 export interface Desviacion {
   /** Tiempo de la nota en la pista (no el momento de la pulsacion). */
@@ -319,7 +321,7 @@ function crearBloqueEstadisticas(desviaciones: readonly Desviacion[]): HTMLEleme
   bloque.className = 'tetra-resultados-estadisticas';
   bloque.append(
     crearCelda('Media', `${Math.round(mediaError)} ms`, sesgo ?? undefined),
-    crearCelda('Desv. estandar', `${Math.round(desviacion)} ms`),
+    crearCelda('Desv.', `${Math.round(desviacion)} ms`),
     crearCelda('Temprano', String(conteo.temprano)),
     crearCelda('Tarde', String(conteo.tarde)),
   );
@@ -348,13 +350,14 @@ function crearBotonCorregirOffset(
   const boton = document.createElement('button');
   boton.type = 'button';
   boton.className = 'tetra-resultados-corregir';
-  boton.textContent = `Corregir offset segun esta partida (media ${formatearMedia(mediaError)})`;
+  boton.textContent = 'Corregir offset';
+  boton.title = `Ajusta el offset segun la media de esta partida (${formatearMedia(mediaError)}). Se aplica en la proxima.`;
 
   boton.addEventListener('click', () => {
     const offsetNuevo = Math.round(calcularOffsetCorregido(offsetActual, mediaError));
     guardarOffset(offsetNuevo);
     boton.disabled = true;
-    boton.textContent = `Offset actualizado a ${offsetNuevo} ms. Se aplica en la proxima partida.`;
+    boton.textContent = `Offset: ${offsetNuevo} ms`;
   });
 
   return boton;
@@ -390,7 +393,7 @@ function crearBloquePrincipal(estado: ScoreState): HTMLElement {
   secundarios.className = 'tetra-resultados-secundarios';
   secundarios.append(
     crearCelda('Score', String(estado.score)),
-    crearCelda('Combo maximo', String(estado.maxCombo)),
+    crearCelda('Combo max', String(estado.maxCombo)),
   );
 
   datos.append(precision, secundarios);
@@ -406,22 +409,47 @@ function crearBloquePrincipal(estado: ScoreState): HTMLElement {
  * `offsetActual` es el `userOffset` con el que se jugo esta partida (ver
  * game.ts): hace falta para que el boton de "corregir offset" de T-007
  * sepa a partir de que valor calcular el offset nuevo.
+ *
+ * T-053: con `escena`, el fondo de la cancion queda detras (borroso y
+ * atenuado) y arriba van el titulo y la dificultad en una linea chica. La
+ * capa de fondo cuelga de `contenedor`: se va cuando la siguiente pantalla lo
+ * vacia, y su URL temporal se suelta apenas carga la imagen.
  */
 export function mostrarResultados(
   contenedor: HTMLElement,
   estado: ScoreState,
   desviaciones: readonly Desviacion[],
   offsetActual: Ms,
+  escena?: EscenaPartida,
 ): void {
   contenedor.innerHTML = '';
+
+  if (escena?.fondo !== undefined) {
+    const capa = document.createElement('div');
+    capa.className = 'tetra-resultados-fondo';
+    capa.setAttribute('aria-hidden', 'true');
+    agregarImagenDeFondo(capa, escena.fondo, 'tetra-resultados-fondo-imagen');
+    contenedor.appendChild(capa);
+  }
 
   const panel = document.createElement('div');
   panel.className = 'tetra-resultados';
 
+  // Titulo de la cancion y su dificultad en una linea chica; sin escena, "Resultados".
+  const cabecera = document.createElement('header');
+  cabecera.className = 'tetra-resultados-cabecera';
   const titulo = document.createElement('h1');
   titulo.className = 'tetra-resultados-titulo';
-  titulo.textContent = 'Resultados';
-  panel.appendChild(titulo);
+  titulo.textContent = escena?.titulo?.trim() || 'Resultados';
+  cabecera.appendChild(titulo);
+  const autoria = escena === undefined ? '' : lineaDeAutoria(escena);
+  if (autoria !== '') {
+    const lineaEl = document.createElement('span');
+    lineaEl.className = 'tetra-resultados-autoria';
+    lineaEl.textContent = autoria;
+    cabecera.appendChild(lineaEl);
+  }
+  panel.appendChild(cabecera);
 
   panel.appendChild(crearBloquePrincipal(estado));
 
@@ -438,18 +466,17 @@ export function mostrarResultados(
   detalle.append(conteos, crearBloqueEstadisticas(desviaciones));
   panel.appendChild(detalle);
 
+  // El grafico se explica solo con sus ejes (ms, tarde/temprano, miss): sin subtitulo.
   const seccionGrafico = document.createElement('section');
   seccionGrafico.className = 'tetra-resultados-seccion-grafico';
-
-  const subtituloGrafico = document.createElement('h2');
-  subtituloGrafico.className = 'tetra-resultados-subtitulo';
-  subtituloGrafico.textContent = 'Desviacion de cada golpe en el tiempo';
-  seccionGrafico.appendChild(subtituloGrafico);
 
   const cajaGrafico = document.createElement('div');
   cajaGrafico.className = 'tetra-resultados-grafico-caja';
   const canvas = document.createElement('canvas');
   canvas.className = 'tetra-resultados-grafico';
+  canvas.setAttribute('role', 'img');
+  canvas.setAttribute('aria-label', 'Desviacion de cada golpe en el tiempo');
+  canvas.title = 'Desviacion de cada golpe en el tiempo';
   cajaGrafico.appendChild(canvas);
   seccionGrafico.appendChild(cajaGrafico);
   panel.appendChild(seccionGrafico);

@@ -1,5 +1,7 @@
-// T-009: persistencia de que skin esta activa (o ninguna: rectangulos, el
-// default). Mismo patron que el offset (T-007, ver offset.ts) y la
+// T-009: persistencia de que skin esta activa. Desde T-053 el valor guardado
+// puede ser "propia:<id>" (una skin propia de T-050) ademas de un SkinId de
+// `.osk`; quien lo interpreta es skin-activa-logica.ts, aca solo se lee y se
+// escribe el string crudo (null = nada guardado). Mismo patron que el offset (T-007, ver offset.ts) y la
 // velocidad (T-008, ver velocidad.ts): localStorage inyectable, default a
 // `localStorage`, para poder testear sin navegador real (ver
 // vitest.config.ts, entorno node).

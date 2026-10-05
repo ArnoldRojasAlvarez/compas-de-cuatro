@@ -1,24 +1,39 @@
-/* HUD de la partida (game.ts, T-019). Se lee como un instrumento de medicion
-   (docs/DISENO.md): datos en JetBrains Mono con tabular-nums, una sola cosa
-   que brilla (el combo), acento teal, ambar de apoyo. Solo tokens de
-   tokens.css. */
+/* Partida y HUD (game.ts, T-019; T-053: pista a pantalla completa y HUD mas
+   limpio). Se lee como un instrumento de medicion (docs/DISENO.md): datos en
+   JetBrains Mono con tabular-nums, una sola cosa que brilla (el combo), acento
+   teal, ambar de apoyo. Solo tokens de tokens.css. */
 
-/* Envoltorio de la partida: el lienzo de Pixi define su tamano, y el HUD se
-   superpone con posiciones absolutas relativas a esta caja. */
+/* Envoltorio de la partida: cubre la ventana. Dentro, de atras hacia adelante:
+   el fondo de la cancion (escena.css), el lienzo de Pixi centrado, el HUD y la
+   intro. --ancho-carril lo escribe game.ts y lo usa el HUD para pegarse a la pista. */
 .tetra-partida {
+  --ancho-carril: 100px;
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.tetra-lienzo {
   position: relative;
-  width: fit-content;
+  line-height: 0;
 }
 
 .tetra-lienzo canvas {
   display: block;
-  background: var(--superficie);
-  border: 1px solid var(--linea);
 }
 
-/* Capa del HUD: cubre la pista pero deja pasar los clics (y el foco) de todo
-   lo que hay debajo. Los hijos se colocan solos, dentro o al costado de la
-   pista. */
+/* Sin fondo de cancion la pista lleva su superficie de siempre; con fondo, el
+   lienzo es transparente y es el playfield quien dibuja la opacidad del carril. */
+.tetra-partida--sin-fondo .tetra-lienzo canvas {
+  background: var(--superficie);
+}
+
+/* Capa del HUD: cubre la ventana pero deja pasar los clics (y el foco) de todo
+   lo que hay debajo. Los hijos se colocan solos respecto de la pantalla o de
+   la pista (centrada, de 4 carriles de --ancho-carril). */
 .tetra-hud {
   position: absolute;
   inset: 0;
@@ -39,7 +54,6 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: var(--espacio-1);
   opacity: 0;
   transition: opacity 0.15s ease;
 }
@@ -53,13 +67,6 @@
   text-shadow: 0 0 var(--espacio-5) color-mix(in srgb, var(--acento) 45%, transparent);
   transform-origin: center;
   will-change: transform;
-}
-
-.tetra-combo-etiqueta {
-  font-size: var(--tipo-xs);
-  letter-spacing: 0.24em;
-  text-transform: uppercase;
-  color: var(--tinta-3);
 }
 
 /* Destello al cortarse el combo: el ultimo numero se tine de --j-miss y se
@@ -83,30 +90,18 @@
   }
 }
 
-/* -- Precision, score y combo maximo: arriba a la derecha, fuera del lienzo -- */
+/* -- Precision grande y score chico: arriba a la derecha de la pantalla -- */
 
 .tetra-hud-datos {
   position: absolute;
-  top: 0;
-  left: calc(100% + var(--espacio-5));
+  top: var(--espacio-4);
+  right: var(--espacio-5);
   display: flex;
   flex-direction: column;
-  gap: var(--espacio-4);
-  min-width: 10ch;
-  white-space: nowrap;
-}
-
-.tetra-dato {
-  display: flex;
-  flex-direction: column;
+  align-items: flex-end;
   gap: var(--espacio-1);
-}
-
-.tetra-dato-etiqueta {
-  font-size: var(--tipo-xs);
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-  color: var(--tinta-3);
+  white-space: nowrap;
+  text-shadow: 0 1px 10px rgb(0 0 0 / 0.6);
 }
 
 .tetra-dato-valor {
@@ -114,19 +109,14 @@
 }
 
 .tetra-dato--precision .tetra-dato-valor {
-  font-size: var(--tipo-xl);
+  font-size: var(--tipo-2xl);
   font-weight: 500;
   color: var(--tinta);
 }
 
 .tetra-dato--score .tetra-dato-valor {
-  font-size: var(--tipo-lg);
-  color: var(--tinta-2);
-}
-
-.tetra-dato--combo-max .tetra-dato-valor {
   font-size: var(--tipo-sm);
-  color: var(--tinta-3);
+  color: var(--tinta-2);
 }
 
 /* -- Barra de vida: vertical, fina, pegada al borde derecho de la pista -- */
@@ -135,9 +125,9 @@
   position: absolute;
   top: 0;
   bottom: 0;
-  left: calc(100% + var(--espacio-1));
-  width: var(--espacio-1);
-  background: var(--superficie-2);
+  left: calc(50% + var(--ancho-carril) * 2 + var(--espacio-2));
+  width: 3px;
+  background: color-mix(in srgb, var(--superficie-2) 70%, transparent);
   overflow: hidden;
 }
 
@@ -161,33 +151,32 @@
   background: var(--j-miss);
 }
 
-/* -- Progreso de la cancion: barra fina arriba de la pista, del ancho de la pista -- */
+/* -- Progreso de la cancion: linea finisima arriba de todo, del ancho de la ventana -- */
 
 .tetra-progreso {
   position: absolute;
+  top: 0;
   left: 0;
   right: 0;
-  bottom: calc(100% + var(--espacio-2));
-  height: 3px;
-  background: var(--superficie-2);
+  height: 2px;
   overflow: hidden;
 }
 
 .tetra-progreso-relleno {
   width: 100%;
   height: 100%;
-  background: color-mix(in srgb, var(--acento) 45%, transparent);
+  background: color-mix(in srgb, var(--acento) 70%, transparent);
   transform: scaleX(0);
   transform-origin: left;
   will-change: transform;
 }
 
-/* -- FPS / ms (interruptor de ajustes): chico y tenue, en una esquina -- */
+/* -- FPS / ms (interruptor de ajustes): chico y tenue, en la esquina inferior derecha -- */
 
 .tetra-fps {
   position: absolute;
-  left: calc(100% + var(--espacio-5));
-  bottom: 0;
+  right: var(--espacio-5);
+  bottom: var(--espacio-4);
   font-size: var(--tipo-xs);
   color: var(--tinta-3);
   white-space: nowrap;

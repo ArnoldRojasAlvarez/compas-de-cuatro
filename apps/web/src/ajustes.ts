@@ -2,21 +2,29 @@
 // skin) existian desde T-007/T-008/T-009 pero vivian sueltos dentro de la
 // pantalla del cargador de desarrollo (T-006, eliminada en T-011, ver el
 // ticket, "el problema que resuelve": todo aplastado en un solo lugar);
-// esta pantalla es simplemente esos mismos tres controles, con la misma
-// logica de persistencia (offset.ts, velocidad.ts, skin.ts) y el mismo
-// comportamiento de siempre, movidos a su propio lugar en la navegacion.
+// esta pantalla es simplemente esos mismos controles, con la misma logica de
+// persistencia (offset.ts, velocidad.ts, skin.ts) y el mismo comportamiento
+// de siempre, movidos a su propio lugar en la navegacion.
 //
-// T-012 "Pulir ajustes" suma tres cosas mas (ver el ticket): remapeo de
-// teclas (keymap.ts + teclas.ts), el interruptor de FPS/ms (graficos.ts), y
-// el restilado de todos los controles con los tokens de tokens.css. Tambien
-// reorganiza la pantalla en secciones con titulo: Juego, Teclas, Graficos,
-// Apariencia (ver el ticket, "Parte D", ultimo parrafo).
+// T-012 suma remapeo de teclas (keymap.ts + teclas.ts), el interruptor de
+// FPS/ms (graficos.ts) y el restilado de todos los controles con los tokens.
+// T-023 las presenta como tarjetas numeradas en una rejilla.
+//
+// T-053: minimalismo. Cada control es una etiqueta corta mas el control; las
+// explicaciones largas pasan a `title` (tooltip) y a lo sumo queda un dato
+// vivo en mono (por ejemplo "1200 ms" junto a la velocidad). Cuatro tarjetas:
+// Juego (offset, velocidad, volumen), Teclas, Apariencia (skin con
+// miniaturas, atenuacion del fondo, video de fondo, FPS) y Presentacion.
 
 import { importarOsk, listarSkins, type SkinGuardada } from '@tetra/storage';
-import { CODIGOS_TECLAS_POR_DEFECTO } from '@tetra/engine';
+import {
+  CODIGOS_TECLAS_POR_DEFECTO,
+  SKINS_PROPIAS,
+  dibujarMiniaturaDeSkin,
+  type IdSkinPropia,
+} from '@tetra/engine';
 import { mensajeDeErrorDeCarga } from './cargador-logica.js';
 import { guardarOffset, leerOffset } from './offset.js';
-import { guardarSkinActiva, leerSkinActiva } from './skin.js';
 import { guardarMostrarFps, leerMostrarFps } from './graficos.js';
 import { intentarAsignarCodigo, leerKeyMap, guardarKeyMap, type KeyMap } from './keymap.js';
 import { nombreLegibleDeCodigo } from './teclas.js';
@@ -28,6 +36,21 @@ import {
   leerVelocidad,
   velocidadAScrollDuration,
 } from './velocidad.js';
+import { guardarVolumen, leerVolumen } from './volumen.js';
+import {
+  formatearPorcentaje,
+  guardarAtenuacion,
+  guardarVideoDeFondo,
+  leerAtenuacion,
+  leerVideoDeFondo,
+} from './apariencia.js';
+import {
+  guardarSeleccionDeSkin,
+  leerSeleccionDeSkin,
+  CATALOGO_PROPIAS,
+  type SeleccionDeSkin,
+} from './skin-activa.js';
+import { seleccionesIguales } from './skin-activa-logica.js';
 import {
   PASOS_PREVIOS,
   alternarPresentacion,
@@ -76,12 +99,12 @@ function crearSeccion(
 }
 
 interface OpcionesFila {
-  /** Nombre del ajuste (a la izquierda, en `--tinta`). Sin nombre, la fila es solo control. */
+  /** Nombre corto del ajuste (a la izquierda, en `--tinta`). Sin nombre, la fila es solo control. */
   nombre?: string;
   /** `id` del control al que apunta el `<label>` del nombre. Sin `id`, el nombre es un `<span>`. */
   idControl?: string;
-  /** Parrafos de ayuda, debajo del nombre (en `--tinta-2`, chica). */
-  ayudas?: HTMLElement[];
+  /** Explicacion larga: va como tooltip (`title`) de toda la fila, no como texto visible. */
+  ayuda?: string;
   /** Lo que va a la derecha de la fila. */
   controles: HTMLElement[];
   /** El control ocupa todo el ancho debajo del texto (teclas, skin) en vez de ir a la derecha. */
@@ -89,32 +112,25 @@ interface OpcionesFila {
 }
 
 /**
- * Fila de ajuste consistente (T-023): texto a la izquierda (nombre y ayuda)
- * y control(es) a la derecha, con el mismo alto de control en todas.
+ * Fila de ajuste consistente (T-023): etiqueta corta a la izquierda y
+ * control(es) a la derecha, con el mismo alto de control en todas. La ayuda,
+ * si hay, es el tooltip de la fila entera.
  */
 function crearFila(opciones: OpcionesFila): HTMLElement {
   const fila = document.createElement('div');
   fila.className = opciones.apilada
     ? 'tetra-ajustes-fila tetra-ajustes-fila-apilada'
     : 'tetra-ajustes-fila';
+  if (opciones.ayuda !== undefined) fila.title = opciones.ayuda;
 
-  const ayudas = opciones.ayudas ?? [];
-  if (opciones.nombre !== undefined || ayudas.length > 0) {
-    const texto = document.createElement('div');
-    texto.className = 'tetra-ajustes-fila-texto';
-    if (opciones.nombre !== undefined) {
-      const nombre = document.createElement(opciones.idControl !== undefined ? 'label' : 'span');
-      nombre.className = 'tetra-ajustes-fila-nombre';
-      nombre.textContent = opciones.nombre;
-      if (nombre instanceof HTMLLabelElement && opciones.idControl !== undefined) {
-        nombre.htmlFor = opciones.idControl;
-      }
-      texto.appendChild(nombre);
+  if (opciones.nombre !== undefined) {
+    const nombre = document.createElement(opciones.idControl !== undefined ? 'label' : 'span');
+    nombre.className = 'tetra-ajustes-fila-nombre';
+    nombre.textContent = opciones.nombre;
+    if (nombre instanceof HTMLLabelElement && opciones.idControl !== undefined) {
+      nombre.htmlFor = opciones.idControl;
     }
-    for (const ayuda of ayudas) {
-      texto.appendChild(ayuda);
-    }
-    fila.appendChild(texto);
+    fila.appendChild(nombre);
   }
 
   const controles = document.createElement('div');
@@ -124,6 +140,22 @@ function crearFila(opciones: OpcionesFila): HTMLElement {
   }
   fila.appendChild(controles);
   return fila;
+}
+
+/** Agrupa varias filas en una sola fila horizontal de la tarjeta (en angosto se apilan). */
+function agruparEnFila(...filas: HTMLElement[]): HTMLElement {
+  const grupo = document.createElement('div');
+  grupo.className = 'tetra-ajustes-controles-fila';
+  for (const fila of filas) grupo.appendChild(fila);
+  return grupo;
+}
+
+/** Dato vivo en mono, junto a un control ("1200 ms", "80%"). */
+function crearDatoVivo(texto: string): HTMLElement {
+  const dato = document.createElement('span');
+  dato.className = 'tetra-ajustes-valor tetra-ajustes-dato';
+  dato.textContent = texto;
+  return dato;
 }
 
 /** Botones de mas y menos pegados al input numerico: un solo control segmentado. */
@@ -140,6 +172,29 @@ function crearSegmentado(
   return grupo;
 }
 
+/** Deslizador 0 a 100 (en pasos de 1) con su valor en vivo; `alCambiar` recibe la fraccion 0 a 1. */
+function crearDeslizador(
+  id: string,
+  inicial: number,
+  alCambiar: (fraccion: number) => void,
+): { entrada: HTMLInputElement; dato: HTMLElement } {
+  const entrada = document.createElement('input');
+  entrada.type = 'range';
+  entrada.id = id;
+  entrada.className = 'tetra-ajustes-rango';
+  entrada.min = '0';
+  entrada.max = '100';
+  entrada.step = '1';
+  entrada.value = String(Math.round(inicial * 100));
+  const dato = crearDatoVivo(formatearPorcentaje(inicial));
+  entrada.addEventListener('input', () => {
+    const fraccion = Number(entrada.value) / 100;
+    dato.textContent = formatearPorcentaje(fraccion);
+    alCambiar(fraccion);
+  });
+  return { entrada, dato };
+}
+
 const PASO_OFFSET_MS = 1;
 
 /**
@@ -151,8 +206,8 @@ const PASO_OFFSET_MS = 1;
  * El signo lo define el reloj (packages/audio/src/clock.ts) y el motor de
  * juicio: subir el offset mueve los golpes hacia temprano (puntos mas abajo
  * en el grafico de resultados), bajarlo hacia tarde. Lo mas comodo es el
- * boton "corregir segun esta partida" de la pantalla de resultados, que
- * hace justo eso a partir de la media medida.
+ * boton "corregir offset" de la pantalla de resultados, que hace justo eso a
+ * partir de la media medida.
  */
 function crearControlDeOffset(): HTMLElement {
   const botonMenos = document.createElement('button');
@@ -169,11 +224,6 @@ function crearControlDeOffset(): HTMLElement {
   const botonMas = document.createElement('button');
   botonMas.type = 'button';
   botonMas.textContent = `+${PASO_OFFSET_MS} ms`;
-
-  const ayuda = document.createElement('p');
-  ayuda.className = 'tetra-ajustes-ayuda';
-  ayuda.textContent =
-    'Si en los resultados pegas temprano (puntos abajo), baja el offset; si pegas tarde (arriba), subilo.';
 
   function fijarOffset(valor: number): void {
     entrada.value = String(valor);
@@ -192,9 +242,10 @@ function crearControlDeOffset(): HTMLElement {
   });
 
   return crearFila({
-    nombre: 'Offset (ms)',
+    nombre: 'Offset',
     idControl: 'tetra-offset-valor',
-    ayudas: [ayuda],
+    ayuda:
+      'Offset en ms. Si en los resultados pegas temprano (puntos abajo), bajalo; si pegas tarde (arriba), subilo.',
     controles: [crearSegmentado(botonMenos, entrada, botonMas)],
   });
 }
@@ -207,7 +258,8 @@ const PASO_VELOCIDAD = 1;
  * arriba. Muestra el concepto natural del jugador (mas numero = mas rapido
  * = menos notas en pantalla a la vez), no los ms de `scrollDuration`: ese
  * numero se guarda tal cual en localStorage y game.ts lo convierte a ms
- * recien al arrancar la partida, con `velocidadAScrollDuration`.
+ * recien al arrancar la partida, con `velocidadAScrollDuration`. Junto al
+ * control queda, en vivo, lo que dura una nota en cruzar la pista.
  */
 function crearControlDeVelocidad(): HTMLElement {
   const botonMenos = document.createElement('button');
@@ -227,21 +279,17 @@ function crearControlDeVelocidad(): HTMLElement {
   botonMas.type = 'button';
   botonMas.textContent = `+${PASO_VELOCIDAD}`;
 
-  const ayuda = document.createElement('p');
-  ayuda.className = 'tetra-ajustes-ayuda';
-
-  function actualizarAyuda(velocidad: number): void {
-    ayuda.textContent =
-      `Mas alto, las notas caen mas rapido y hay menos en pantalla a la vez ` +
-      `(rango ${VELOCIDAD_MIN} a ${VELOCIDAD_MAX}; ahora mismo: ${velocidadAScrollDuration(velocidad)}ms por nota).`;
+  const dato = crearDatoVivo('');
+  function actualizarDato(velocidad: number): void {
+    dato.textContent = `${velocidadAScrollDuration(velocidad)} ms`;
   }
-  actualizarAyuda(leerVelocidad());
+  actualizarDato(leerVelocidad());
 
   function fijarVelocidad(valor: number): void {
     const recortado = clampVelocidad(valor);
     entrada.value = String(recortado);
     guardarVelocidad(recortado);
-    actualizarAyuda(recortado);
+    actualizarDato(recortado);
   }
 
   botonMenos.addEventListener('click', () => {
@@ -258,8 +306,21 @@ function crearControlDeVelocidad(): HTMLElement {
   return crearFila({
     nombre: 'Velocidad',
     idControl: 'tetra-velocidad-valor',
-    ayudas: [ayuda],
-    controles: [crearSegmentado(botonMenos, entrada, botonMas)],
+    ayuda: `Mas alto, las notas caen mas rapido y hay menos en pantalla a la vez (de ${VELOCIDAD_MIN} a ${VELOCIDAD_MAX}). El dato es lo que tarda una nota en cruzar la pista.`,
+    controles: [dato, crearSegmentado(botonMenos, entrada, botonMas)],
+  });
+}
+
+/** Volumen de la musica (T-053): deslizador 0 a 100 %, compartido con el menu y el preview. */
+function crearControlDeVolumen(): HTMLElement {
+  const { entrada, dato } = crearDeslizador('tetra-volumen-valor', leerVolumen(), (fraccion) => {
+    guardarVolumen(fraccion);
+  });
+  return crearFila({
+    nombre: 'Volumen',
+    idControl: entrada.id,
+    ayuda: 'Volumen de la musica en la partida, el menu y la previa de las canciones.',
+    controles: [entrada, dato],
   });
 }
 
@@ -386,7 +447,8 @@ function crearControlDeTeclas(onError: (mensaje: string) => void): HTMLElement {
   const botonReset = document.createElement('button');
   botonReset.type = 'button';
   botonReset.className = 'tetra-tecla-reset';
-  botonReset.textContent = 'Volver a D, F, J, K';
+  botonReset.textContent = 'Restablecer';
+  botonReset.title = 'Volver a D, F, J, K';
   botonReset.addEventListener('click', () => {
     if (columnaCapturando !== null) terminarCaptura();
     mapa = CODIGOS_TECLAS_POR_DEFECTO;
@@ -395,70 +457,276 @@ function crearControlDeTeclas(onError: (mensaje: string) => void): HTMLElement {
     actualizarBotones();
   });
 
-  const ayuda = document.createElement('p');
-  ayuda.className = 'tetra-ajustes-ayuda';
-  ayuda.textContent = 'Clic en una columna y pulsa la tecla nueva. Escape cancela sin guardar.';
-
   actualizarBotones();
 
   const pie = document.createElement('div');
   pie.className = 'tetra-ajustes-teclas-pie';
-  pie.appendChild(ayuda);
   pie.appendChild(botonReset);
 
-  return crearFila({ controles: [grilla, pie], apilada: true });
+  const fila = crearFila({
+    ayuda: 'Clic en una columna y pulsa la tecla nueva. Escape cancela sin guardar.',
+    controles: [grilla, pie],
+    apilada: true,
+  });
+  return fila;
 }
 
 /**
- * Interruptor de FPS/ms (T-012, "Parte C"). Un solo checkbox restilado
- * como interruptor (ver style.css, `.tetra-toggle`): no hay ningun otro
- * control de graficos a proposito (ver el ticket: nada de opciones de
- * "multithreading", el render del navegador corre en un solo hilo).
+ * Interruptor con etiqueta corta (T-012, "Parte C"; T-053 lo generaliza). Un
+ * `<input type=checkbox>` restilado como switch (ver style.css,
+ * `.tetra-toggle`): accesible, funciona con teclado y lector de pantalla.
  */
-function crearControlDeFps(): HTMLElement {
+function crearInterruptor(
+  id: string,
+  nombre: string,
+  ayuda: string,
+  inicial: boolean,
+  alCambiar: (encendido: boolean) => void,
+): HTMLElement {
   const etiqueta = document.createElement('label');
   etiqueta.className = 'tetra-toggle';
 
   const casilla = document.createElement('input');
   casilla.type = 'checkbox';
-  casilla.id = 'tetra-fps-casilla';
-  casilla.checked = leerMostrarFps();
-  casilla.addEventListener('change', () => {
-    guardarMostrarFps(casilla.checked);
-  });
+  casilla.id = id;
+  casilla.checked = inicial;
+  casilla.addEventListener('change', () => alCambiar(casilla.checked));
   etiqueta.appendChild(casilla);
 
-  const ayuda = document.createElement('p');
-  ayuda.className = 'tetra-ajustes-ayuda';
-  ayuda.textContent = 'Muestra los cuadros por segundo y los ms por cuadro durante la partida.';
+  return crearFila({ nombre, idControl: id, ayuda, controles: [etiqueta] });
+}
+
+const ANCHO_MINIATURA = 112;
+const ALTO_MINIATURA = 84;
+
+/** Canvas de miniatura nitido: el lienzo se escala por devicePixelRatio y se dibuja en coordenadas logicas. */
+function crearLienzoDeMiniatura(
+  dibujar: (ctx: CanvasRenderingContext2D, ancho: number, alto: number) => void,
+): HTMLCanvasElement {
+  const canvas = document.createElement('canvas');
+  canvas.className = 'tetra-skin-miniatura';
+  const dpr = Math.max(1, window.devicePixelRatio || 1);
+  canvas.width = Math.round(ANCHO_MINIATURA * dpr);
+  canvas.height = Math.round(ALTO_MINIATURA * dpr);
+  canvas.style.width = `${ANCHO_MINIATURA}px`;
+  canvas.style.height = `${ALTO_MINIATURA}px`;
+  const ctx = canvas.getContext('2d');
+  if (ctx) {
+    ctx.scale(dpr, dpr);
+    dibujar(ctx, ANCHO_MINIATURA, ALTO_MINIATURA);
+  }
+  return canvas;
+}
+
+/**
+ * Miniatura de una `.osk` importada: sus notas y receptores en los cuatro
+ * carriles, con las imagenes que traiga (las que falten simplemente no se
+ * dibujan: el motor las suple con rectangulos).
+ */
+async function dibujarMiniaturaDeOsk(
+  ctx: CanvasRenderingContext2D,
+  skin: SkinGuardada,
+  ancho: number,
+  alto: number,
+): Promise<void> {
+  const cw = ancho / 4;
+  const claves = ['note1', 'note2', 'key1', 'key2'] as const;
+  const imagenes = new Map<string, ImageBitmap>();
+  for (const clave of claves) {
+    const blob = skin.imagenes[clave];
+    if (blob === undefined) continue;
+    try {
+      imagenes.set(clave, await createImageBitmap(blob));
+    } catch {
+      // una imagen ilegible se omite.
+    }
+  }
+  const pegar = (clave: string, centroX: number, centroY: number): void => {
+    const img = imagenes.get(clave);
+    if (img === undefined) return;
+    const escala = Math.min((cw * 0.86) / img.width, (alto * 0.2) / img.height);
+    const w = img.width * escala;
+    const h = img.height * escala;
+    ctx.drawImage(img, centroX - w / 2, centroY - h / 2, w, h);
+  };
+  const interior = (col: number): boolean => col === 1 || col === 2;
+  for (let col = 0; col < 4; col++) {
+    const cx = col * cw + cw / 2;
+    pegar(interior(col) ? 'note2' : 'note1', cx, alto * (col % 2 === 0 ? 0.35 : 0.55));
+    pegar(interior(col) ? 'key2' : 'key1', cx, alto * 0.8);
+  }
+}
+
+/**
+ * Elegir skin (T-053): una grilla de tarjetas con miniatura. Primero las
+ * cuatro propias de Tetra (T-050), despues una por cada `.osk` importado (con
+ * su nombre) y al final una tarjeta "+" que abre el selector de archivos
+ * `.osk`. La activa lleva borde en acento; elegir una la guarda al instante
+ * y se usa desde la proxima partida.
+ *
+ * El `<input type=file>` nativo queda oculto (ver style.css,
+ * `.tetra-input-archivo-oculto`) y se dispara con `.click()` desde la tarjeta.
+ */
+function crearControlDeSkin(onError: (mensaje: string) => void): HTMLElement {
+  const grilla = document.createElement('div');
+  grilla.className = 'tetra-skins-grilla';
+
+  interface Tarjeta {
+    seleccion: SeleccionDeSkin;
+    boton: HTMLButtonElement;
+  }
+  const tarjetas: Tarjeta[] = [];
+  /** Skins `.osk` que existen hoy en la base: la activa guardada que no este aca cae a la propia por defecto. */
+  let idsOsk = new Set<string>();
+
+  function seleccionVigente(): SeleccionDeSkin {
+    const guardada = leerSeleccionDeSkin();
+    if (guardada.tipo === 'osk' && !idsOsk.has(guardada.id)) {
+      return { tipo: 'propia', id: CATALOGO_PROPIAS.porDefecto };
+    }
+    return guardada;
+  }
+
+  function marcarActiva(): void {
+    const vigente = seleccionVigente();
+    for (const tarjeta of tarjetas) {
+      const activa = seleccionesIguales(tarjeta.seleccion, vigente);
+      tarjeta.boton.classList.toggle('tetra-skin-activa', activa);
+      tarjeta.boton.setAttribute('aria-pressed', String(activa));
+    }
+  }
+
+  function crearTarjeta(
+    seleccion: SeleccionDeSkin,
+    nombre: string,
+    lienzo: HTMLCanvasElement,
+  ): HTMLButtonElement {
+    const boton = document.createElement('button');
+    boton.type = 'button';
+    boton.className = 'tetra-skin';
+    boton.title = nombre;
+    boton.appendChild(lienzo);
+    const rotulo = document.createElement('span');
+    rotulo.className = 'tetra-skin-nombre';
+    rotulo.textContent = nombre;
+    boton.appendChild(rotulo);
+    boton.addEventListener('click', () => {
+      guardarSeleccionDeSkin(seleccion);
+      marcarActiva();
+    });
+    tarjetas.push({ seleccion, boton });
+    return boton;
+  }
+
+  for (const propia of SKINS_PROPIAS) {
+    const id: IdSkinPropia = propia.id;
+    const lienzo = crearLienzoDeMiniatura((ctx, ancho, alto) => {
+      dibujarMiniaturaDeSkin(ctx, id, ancho, alto);
+    });
+    grilla.appendChild(crearTarjeta({ tipo: 'propia', id }, propia.nombre, lienzo));
+  }
+
+  // Tarjeta "+": importar una .osk.
+  const entradaArchivo = document.createElement('input');
+  entradaArchivo.type = 'file';
+  entradaArchivo.accept = '.osk';
+  entradaArchivo.id = 'tetra-skin-archivo';
+  entradaArchivo.className = 'tetra-input-archivo-oculto';
+
+  const botonImportar = document.createElement('button');
+  botonImportar.type = 'button';
+  botonImportar.className = 'tetra-skin tetra-skin-importar';
+  botonImportar.title = 'Importar una skin .osk de osu!mania. Si le falta alguna imagen, se suple con la skin base.';
+  botonImportar.setAttribute('aria-label', 'Importar skin .osk');
+  const mas = document.createElement('span');
+  mas.className = 'tetra-skin-mas';
+  mas.setAttribute('aria-hidden', 'true');
+  mas.textContent = '+';
+  botonImportar.appendChild(mas);
+  botonImportar.addEventListener('click', () => entradaArchivo.click());
+  grilla.appendChild(botonImportar);
+
+  // Repuebla las tarjetas de `.osk` con lo que hay en IndexedDB (que no tiene
+  // notificaciones de cambio): se llama al armar el control y tras cada importacion.
+  async function refrescarOsk(): Promise<void> {
+    let skins: SkinGuardada[] = [];
+    try {
+      skins = await listarSkins();
+    } catch {
+      // sin base de datos solo quedan las propias.
+    }
+    for (let i = tarjetas.length - 1; i >= 0; i--) {
+      const tarjeta = tarjetas[i]!;
+      if (tarjeta.seleccion.tipo === 'osk') {
+        tarjeta.boton.remove();
+        tarjetas.splice(i, 1);
+      }
+    }
+    idsOsk = new Set(skins.map((skin) => skin.id));
+    for (const skin of skins) {
+      const lienzo = crearLienzoDeMiniatura((ctx, ancho, alto) => {
+        void dibujarMiniaturaDeOsk(ctx, skin, ancho, alto);
+      });
+      const boton = crearTarjeta({ tipo: 'osk', id: skin.id }, skin.nombre, lienzo);
+      grilla.insertBefore(boton, botonImportar);
+    }
+    marcarActiva();
+  }
+  marcarActiva();
+  void refrescarOsk();
+
+  entradaArchivo.addEventListener('change', () => {
+    const archivo = entradaArchivo.files?.[0];
+    entradaArchivo.value = '';
+    if (!archivo) return;
+    void (async () => {
+      try {
+        const id = await importarOsk(archivo);
+        guardarSeleccionDeSkin({ tipo: 'osk', id });
+        await refrescarOsk();
+      } catch (error) {
+        onError(mensajeDeErrorDeCarga(error));
+      }
+    })();
+  });
 
   return crearFila({
-    nombre: 'Mostrar FPS y ms',
-    idControl: casilla.id,
-    ayudas: [ayuda],
-    controles: [etiqueta],
+    ayuda: 'Skin de las notas y los receptores. Se usa desde la proxima partida.',
+    controles: [grilla, entradaArchivo],
+    apilada: true,
+  });
+}
+
+/** Atenuacion del fondo de la cancion detras de la pista (0 a 100 %, 80 % por defecto). */
+function crearControlDeAtenuacion(): HTMLElement {
+  const { entrada, dato } = crearDeslizador('tetra-atenuacion-valor', leerAtenuacion(), (fraccion) => {
+    guardarAtenuacion(fraccion);
+  });
+  return crearFila({
+    nombre: 'Atenuar fondo',
+    idControl: entrada.id,
+    ayuda:
+      'Cuanto se oscurece la imagen o el video de fondo de la cancion detras de la pista. Mas atenuacion, la pista se lee mejor.',
+    controles: [entrada, dato],
   });
 }
 
 /**
  * Modo presentacion (T-037): boton para entrar y salir (pantalla completa, sin
  * header ni textos de ayuda, cursor que se oculta) y la lista "Antes de
- * presentar", que solo recuerda y no bloquea nada.
+ * presentar", que solo recuerda y no bloquea nada. T-053: la lista va
+ * plegada para no sumar texto a la pantalla.
  */
 function crearControlDePresentacion(): HTMLElement {
   const boton = document.createElement('button');
   boton.type = 'button';
   const pintar = (): void => {
-    boton.textContent = presentacionActiva() ? 'Salir del modo presentacion' : 'Entrar al modo presentacion';
+    boton.textContent = presentacionActiva() ? 'Salir' : 'Entrar';
   };
   pintar();
   boton.addEventListener('click', () => {
     void alternarPresentacion().then(pintar);
   });
-
-  const ayuda = document.createElement('p');
-  ayuda.className = 'tetra-ajustes-ayuda';
-  ayuda.textContent = 'Pantalla completa, sin header ni avisos, y el cursor se oculta solo. Atajo: F.';
 
   const lista = document.createElement('ul');
   lista.className = 'tetra-presentacion-lista';
@@ -478,130 +746,20 @@ function crearControlDePresentacion(): HTMLElement {
     lista.appendChild(item);
   }
 
-  const fila = crearFila({ nombre: 'Modo presentacion', ayudas: [ayuda], controles: [boton] });
-  const filaLista = crearFila({ nombre: 'Antes de presentar', controles: [lista], apilada: true });
+  const fila = crearFila({
+    nombre: 'Presentacion',
+    ayuda: 'Pantalla completa, sin header ni avisos, y el cursor se oculta solo. Atajo: F.',
+    controles: [boton],
+  });
+  const pliegue = document.createElement('details');
+  pliegue.className = 'tetra-ajustes-pliegue';
+  const resumen = document.createElement('summary');
+  resumen.textContent = 'Antes de presentar';
+  pliegue.append(resumen, lista);
   const envoltorio = document.createElement('div');
   envoltorio.className = 'tetra-ajustes-grupo';
-  envoltorio.append(fila, filaLista);
+  envoltorio.append(fila, pliegue);
   return envoltorio;
-}
-
-/** Valor de `<option>` para "sin skin, rectangulos" (el default): no puede ser un SkinId real (crypto.randomUUID() nunca da string vacio). */
-const OPCION_SIN_SKIN = '';
-
-/**
- * Control de skins (T-009): elegir un `.osk` y un `<select>` para elegir
- * entre "sin skin (rectangulos)" y las skins ya importadas. La skin
- * elegida se persiste con apps/web/src/skin.ts; song-select.ts la vuelve a
- * leer al resolver las texturas antes de arrancar una partida.
- *
- * T-012 "Parte D": el `<input type=file>` nativo queda oculto (ver
- * style.css, `.tetra-input-archivo-oculto`) y se dispara con
- * `entradaArchivo.click()` desde un boton restilado: el "Choose File" gris
- * del navegador era justo lo que Arnold señalo que desentonaba.
- */
-function crearControlDeSkin(onError: (mensaje: string) => void): HTMLElement {
-  const select = document.createElement('select');
-  select.id = 'tetra-skin-select';
-
-  const entradaArchivo = document.createElement('input');
-  entradaArchivo.type = 'file';
-  entradaArchivo.accept = '.osk';
-  entradaArchivo.id = 'tetra-skin-archivo';
-  entradaArchivo.className = 'tetra-input-archivo-oculto';
-
-  const botonImportar = document.createElement('button');
-  botonImportar.type = 'button';
-  botonImportar.textContent = 'Importar .osk...';
-  botonImportar.addEventListener('click', () => entradaArchivo.click());
-
-  const ayuda = document.createElement('p');
-  ayuda.className = 'tetra-ajustes-ayuda';
-  ayuda.textContent =
-    'Opcional: importar un archivo .osk de skin de osu!mania. Sin skin (o si le ' +
-    'falta alguna imagen), se ven los rectangulos de siempre.';
-
-  // Nombre de la skin activa, visible debajo de la ayuda (T-023). Se lee
-  // del <select>, que es lo que el jugador ve elegido.
-  const activa = document.createElement('p');
-  activa.className = 'tetra-ajustes-ayuda tetra-ajustes-skin-activa';
-
-  function actualizarActiva(): void {
-    const nombre = select.selectedOptions[0]?.textContent ?? '';
-    activa.textContent = nombre === '' ? '' : 'Activa: ';
-    if (nombre === '') return;
-    const valor = document.createElement('span');
-    valor.className = 'tetra-ajustes-valor';
-    valor.textContent = nombre;
-    activa.appendChild(valor);
-  }
-
-  // Repuebla el <select> con "sin skin" + las skins guardadas, y deja
-  // seleccionada la que esta activa. Se llama al armar el control y de
-  // nuevo cada vez que se importa una skin nueva: es la unica forma de que
-  // el <select> refleje lo que hay en IndexedDB, que no tiene
-  // notificaciones de cambio.
-  async function refrescarLista(): Promise<void> {
-    const skins: SkinGuardada[] = await listarSkins();
-    const idActiva = leerSkinActiva();
-
-    select.innerHTML = '';
-    const opcionSinSkin = document.createElement('option');
-    opcionSinSkin.value = OPCION_SIN_SKIN;
-    opcionSinSkin.textContent = 'Sin skin (rectangulos)';
-    select.appendChild(opcionSinSkin);
-
-    for (const skin of skins) {
-      const opcion = document.createElement('option');
-      opcion.value = skin.id;
-      opcion.textContent = skin.nombre;
-      select.appendChild(opcion);
-    }
-
-    // Si la skin activa guardada ya no aparece entre las opciones (por
-    // ejemplo, se borro la base de IndexedDB a mano entre una carga y la
-    // otra), el <select> cae solo a la primera opcion ("sin skin"): no
-    // hace falta un caso aparte para eso.
-    select.value = idActiva ?? OPCION_SIN_SKIN;
-    actualizarActiva();
-  }
-  void refrescarLista();
-
-  select.addEventListener('change', () => {
-    guardarSkinActiva(select.value === OPCION_SIN_SKIN ? null : select.value);
-    actualizarActiva();
-  });
-
-  entradaArchivo.addEventListener('change', () => {
-    const archivo = entradaArchivo.files?.[0];
-    entradaArchivo.value = '';
-    if (!archivo) return;
-    void (async () => {
-      try {
-        const id = await importarOsk(archivo);
-        await refrescarLista();
-        select.value = id;
-        guardarSkinActiva(id);
-        actualizarActiva();
-      } catch (error) {
-        onError(mensajeDeErrorDeCarga(error));
-      }
-    })();
-  });
-
-  const controles = document.createElement('div');
-  controles.className = 'tetra-ajustes-skin-controles';
-  controles.appendChild(select);
-  controles.appendChild(botonImportar);
-  controles.appendChild(entradaArchivo);
-
-  return crearFila({
-    nombre: 'Skin',
-    idControl: select.id,
-    ayudas: [ayuda, activa],
-    controles: [controles],
-    apilada: true,
-  });
 }
 
 /** Gancho de navegacion que le pasa el router (ver router.ts). */
@@ -612,9 +770,9 @@ export interface OpcionesAjustes {
 
 /**
  * Muestra la pantalla de ajustes dentro de `contenedor`, reemplazando lo
- * que hubiera. T-012 la organiza en secciones (ver el ticket, "Parte D"):
- * Juego (offset, velocidad), Teclas, Graficos (FPS), Apariencia (skin).
- * T-023 las presenta como cuatro tarjetas numeradas en una rejilla.
+ * que hubiera. Cuatro tarjetas numeradas en una rejilla (T-023, T-053): Juego
+ * (offset, velocidad, volumen), Teclas, Apariencia (skin, atenuacion, video,
+ * FPS) y Presentacion.
  */
 export function mostrarAjustes(contenedor: HTMLElement, opciones: OpcionesAjustes): void {
   contenedor.innerHTML = '';
@@ -652,13 +810,44 @@ export function mostrarAjustes(contenedor: HTMLElement, opciones: OpcionesAjuste
   const rejilla = document.createElement('div');
   rejilla.className = 'tetra-ajustes-rejilla';
   rejilla.appendChild(
-    crearSeccion(1, 'Juego', 'juego', crearControlDeOffset(), crearControlDeVelocidad()),
+    crearSeccion(
+      1,
+      'Juego',
+      'juego',
+      crearControlDeOffset(),
+      crearControlDeVelocidad(),
+      crearControlDeVolumen(),
+    ),
   );
   rejilla.appendChild(crearSeccion(2, 'Teclas', 'teclas', crearControlDeTeclas(mostrarError)));
-  rejilla.appendChild(crearSeccion(3, 'Graficos', 'graficos', crearControlDeFps()));
-  rejilla.appendChild(crearSeccion(4, 'Apariencia', 'apariencia', crearControlDeSkin(mostrarError)));
   rejilla.appendChild(
-    crearSeccion(5, 'Presentacion', 'presentacion', crearControlDePresentacion()),
+    crearSeccion(
+      3,
+      'Apariencia',
+      'apariencia',
+      crearControlDeSkin(mostrarError),
+      // Los tres controles de debajo de las skins van en una sola fila (ver ajustes.css).
+      agruparEnFila(
+        crearControlDeAtenuacion(),
+        crearInterruptor(
+          'tetra-video-casilla',
+          'Video de fondo',
+          'Reproduce el video de fondo de la cancion, si trae uno. Apagado, se ve solo la imagen.',
+          leerVideoDeFondo(),
+          guardarVideoDeFondo,
+        ),
+        crearInterruptor(
+          'tetra-fps-casilla',
+          'Mostrar FPS',
+          'Muestra los cuadros por segundo y los ms por cuadro durante la partida.',
+          leerMostrarFps(),
+          guardarMostrarFps,
+        ),
+      ),
+    ),
+  );
+  rejilla.appendChild(
+    crearSeccion(4, 'Presentacion', 'presentacion', crearControlDePresentacion()),
   );
   panel.appendChild(rejilla);
 
