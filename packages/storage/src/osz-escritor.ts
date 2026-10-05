@@ -19,6 +19,10 @@ export interface EntradaOsz {
   /** Nombre del archivo de audio dentro del zip. Tiene que coincidir con AudioFilename del .osu. */
   audioNombre: string;
   audio: Uint8Array;
+  /** Imagen de fondo (T-049). `nombre` es la ruta dentro del zip y tiene que coincidir con la del .osu. */
+  fondo?: { nombre: string; bytes: Uint8Array };
+  /** Video de fondo (T-049). Igual que `fondo`: el nombre coincide con el de la linea Video del .osu. */
+  video?: { nombre: string; bytes: Uint8Array };
   dificultades: readonly DificultadParaOsz[];
 }
 
@@ -52,6 +56,12 @@ export function construirOsz(entrada: EntradaOsz): Uint8Array {
     [entrada.audioNombre]: [entrada.audio, { level: 0 }],
   };
   const usados = new Set<string>([entrada.audioNombre]);
+  // Imagen y video tambien vienen comprimidos: se guardan sin recomprimir.
+  for (const extra of [entrada.fondo, entrada.video]) {
+    if (extra === undefined) continue;
+    archivos[extra.nombre] = [extra.bytes, { level: 0 }];
+    usados.add(extra.nombre);
+  }
   for (const dificultad of entrada.dificultades) {
     let nombre = nombreDeOsu(entrada, dificultad.version);
     // Dos dificultades con el mismo nombre se pisarian dentro del zip.

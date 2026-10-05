@@ -99,3 +99,54 @@ describe('construirOsz', () => {
     );
   });
 });
+
+// T-049: fondo y video dentro del .osz.
+describe('construirOsz: fondo y video (T-049)', () => {
+  const base = {
+    titulo: 'T',
+    artista: 'A',
+    creador: 'C',
+    audioNombre: 'audio.mp3',
+    audio: AUDIO,
+    dificultades: [{ version: 'Normal', texto: 'x' }],
+  };
+
+  it('mete fondo y video al zip con sus nombres y bytes', () => {
+    const zip = unzipSync(
+      construirOsz({
+        ...base,
+        fondo: { nombre: 'img/bg.jpg', bytes: new Uint8Array([1, 2, 3]) },
+        video: { nombre: 'vid.mp4', bytes: new Uint8Array([4, 5]) },
+      }),
+    );
+    expect(Array.from(zip['img/bg.jpg']!)).toEqual([1, 2, 3]);
+    expect(Array.from(zip['vid.mp4']!)).toEqual([4, 5]);
+    expect(Array.from(zip['audio.mp3']!)).toEqual(Array.from(AUDIO));
+  });
+
+  it('sin fondo ni video el zip no trae nada de mas', () => {
+    const nombres = Object.keys(unzipSync(construirOsz(base)));
+    expect(nombres.sort()).toEqual(['A - T (C) [Normal].osu', 'audio.mp3']);
+  });
+
+  it('no recomprime el fondo ni el video (level 0)', () => {
+    // 20000 ceros comprimirian a unos pocos bytes con deflate: si el zip
+    // pesa mas que los datos, se guardaron tal cual.
+    const grande = new Uint8Array(20000);
+    const bytes = construirOsz({
+      ...base,
+      fondo: { nombre: 'bg.png', bytes: grande },
+      video: { nombre: 'v.webm', bytes: grande },
+    });
+    expect(bytes.length).toBeGreaterThan(40000);
+  });
+
+  it('un .osu cuyo nombre choca con el del fondo no lo pisa', () => {
+    const bytes = construirOsz({
+      ...base,
+      fondo: { nombre: 'A - T (C) [Normal].osu', bytes: new Uint8Array([1]) },
+    });
+    const nombres = Object.keys(unzipSync(bytes));
+    expect(nombres).toHaveLength(3);
+  });
+});

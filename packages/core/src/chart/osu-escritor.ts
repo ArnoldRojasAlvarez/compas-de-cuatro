@@ -4,9 +4,10 @@
 // un .osz, ver @tetra/storage).
 //
 // Solo escribe lo que parseOsu lee y lo que osu! necesita para abrir el
-// mapa: [General], [Metadata], [Difficulty], [Events] vacio, [TimingPoints]
-// y [HitObjects]. Un parse del resultado devuelve un Chart equivalente
-// (mismas notas, mismos tiempos, mismos puntos de tiempo).
+// mapa: [General], [Metadata], [Difficulty], [Events] (solo fondo y video,
+// si el chart los declara), [TimingPoints] y [HitObjects]. Un parse del
+// resultado devuelve un Chart equivalente (mismas notas, mismos tiempos,
+// mismos puntos de tiempo, mismo fondo, video, Source y Tags).
 
 import type { Chart, Note, SpeedPoint, TimingPoint } from '../types.js';
 import { COLUMN_COUNT } from '../types.js';
@@ -43,6 +44,23 @@ function lineaNota(nota: Note): string {
     return `${x},192,${time},128,0,${Math.round(nota.endTime)}:0:0:0:0:`;
   }
   return `${x},192,${time},1,0,0:0:0:0:`;
+}
+
+/** Nombre de archivo apto para ir entre comillas en [Events]: sin comillas ni saltos de linea. */
+function rutaEvento(ruta: string): string {
+  return limpiar(ruta).replace(/"/g, '');
+}
+
+/** Lineas de [Events]: fondo y video, solo los que el chart declara. */
+function lineasEventos(m: Chart['metadata']): string[] {
+  const lineas: string[] = [];
+  if (m.backgroundFile !== undefined && rutaEvento(m.backgroundFile) !== '') {
+    lineas.push(`0,0,"${rutaEvento(m.backgroundFile)}",0,0`);
+  }
+  if (m.videoFile !== undefined && rutaEvento(m.videoFile) !== '') {
+    lineas.push(`Video,${Math.round(m.videoOffset ?? 0)},"${rutaEvento(m.videoFile)}"`);
+  }
+  return lineas;
 }
 
 /** Texto completo de un .osu (mania, 4 columnas) para `chart`. */
@@ -83,8 +101,8 @@ export function escribirOsu(chart: Chart): string {
     `ArtistUnicode:${artista}`,
     `Creator:${limpiar(m.creator)}`,
     `Version:${limpiar(m.difficultyName)}`,
-    'Source:',
-    'Tags:tetra',
+    `Source:${limpiar(m.source ?? '')}`,
+    `Tags:${limpiar(m.tags ?? '') === '' ? 'tetra' : limpiar(m.tags ?? '')}`,
     '',
     '[Difficulty]',
     `HPDrainRate:${numero(chart.hpDrain)}`,
@@ -96,6 +114,7 @@ export function escribirOsu(chart: Chart): string {
     '',
     '[Events]',
     '//Background and Video events',
+    ...lineasEventos(m),
     '',
     '[TimingPoints]',
     ...puntos.map((p) => p.linea),

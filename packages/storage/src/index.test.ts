@@ -19,9 +19,18 @@ import 'fake-indexeddb/auto';
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { beforeEach, describe, expect, it } from 'vitest';
-import { zipSync } from 'fflate';
-import { importarOsz, listarCanciones, importarOsk, listarSkins } from './index.js';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { unzipSync, zipSync } from 'fflate';
+import {
+  borrarCancion,
+  estimarAlmacenamiento,
+  exportarCancion,
+  importarOsz,
+  listarCanciones,
+  importarOsk,
+  listarSkins,
+  pedirAlmacenamientoPersistente,
+} from './index.js';
 
 const OSU_DE_PRUEBA = `osu file format v14
 
@@ -296,5 +305,265 @@ describe('con el .osk real del fixture de T-009', () => {
       expect(blob?.type).toBe('image/png');
       expect(blob?.size).toBeGreaterThan(0);
     }
+  });
+});
+
+// T-049: biblioteca persistente (borrar, exportar, almacenamiento) y fondo/video al importar.
+
+/** .osu con una dificultad (`version`), eventos propios y notas propias. */
+function osuConEventos(version: string, eventos: string[], notas: string[]): Uint8Array {
+  const texto = OSU_DE_PRUEBA.replace('Version:Normal', `Version:${version}`)
+    .replace('[TimingPoints]', `[Events]\n${eventos.join('\n')}\n\n[TimingPoints]`)
+    .replace(/\[HitObjects\][\s\S]*$/, `[HitObjects]\n${notas.join('\n')}\n`);
+  return new TextEncoder().encode(texto);
+}
+
+const AUDIO_BYTES = new Uint8Array([9, 8, 7, 6, 5]);
+const FONDO_BYTES = new Uint8Array([1, 1, 2, 2, 3, 3]);
+const VIDEO_BYTES = new Uint8Array([4, 4, 4, 5, 5, 5, 5]);
+
+/** Un .osz completo: dos dificultades, fondo con otra capitalizacion y video mp4. */
+function oszCompleto(): Blob {
+  return armarOsz({
+    'Easy.osu': osuConEventos(
+      'Easy',
+      ['0,0,"bg.jpg",0,0', 'Video,-120,"vid.mp4"'],
+      ['64,192,0,1,0,0:0:0:0:', '320,192,500,128,0,900:0:0:0:0:'],
+    ),
+    'Hard.osu': osuConEventos(
+      'Hard',
+      ['0,0,"bg.jpg",0,0', 'Video,-120,"vid.mp4"'],
+      ['64,192,0,1,0,0:0:0:0:', '192,192,250,1,0,0:0:0:0:', '448,192,500,1,0,0:0:0:0:'],
+    ),
+    'audio.wav': AUDIO_BYTES,
+    'BG.JPG': FONDO_BYTES,
+    'vid.mp4': VIDEO_BYTES,
+  });
+}
+
+async function bytesDeBlob(blob: Blob): Promise<number[]> {
+  return Array.from(new Uint8Array(await blob.arrayBuffer()));
+}
+
+describe('importarOsz: fondo, video e importadaEn (T-049)', () => {
+  it('guarda fondo, video, offset e importadaEn', async () => {
+    const antes = Date.now();
+    await importarOsz(oszCompleto());
+    const despues = Date.now();
+
+    const [c] = await listarCanciones();
+    expect(await bytesDeBlob(c!.background!)).toEqual(Array.from(FONDO_BYTES));
+    expect(c!.background!.type).toBe('image/jpeg');
+    expect(await bytesDeBlob(c!.video!)).toEqual(Array.from(VIDEO_BYTES));
+    expect(c!.video!.type).toBe('video/mp4');
+    expect(c!.videoOffset).toBe(-120);
+    expect(c!.importadaEn).toBeGreaterThanOrEqual(antes);
+    expect(c!.importadaEn).toBeLessThanOrEqual(despues);
+  });
+
+  it('un .osz con video .avi importa sin video y sin error', async () => {
+    const osz = armarOsz({
+      'Normal.osu': osuConEventos('Normal', ['Video,0,"vid.avi"'], ['64,192,0,1,0,0:0:0:0:']),
+      'audio.wav': AUDIO_BYTES,
+      'vid.avi': VIDEO_BYTES,
+    });
+    await importarOsz(osz);
+    const [c] = await listarCanciones();
+    expect(c!.video).toBeUndefined();
+    expect('video' in c!).toBe(false);
+    expect('videoOffset' in c!).toBe(false);
+    expect(c!.dificultades).toHaveLength(1);
+  });
+
+  it('un .osz sin fondo ni video no guarda esos campos', async () => {
+    const osz = armarOsz({
+      'mapa.osu': new TextEncoder().encode(OSU_DE_PRUEBA),
+      'audio.wav': AUDIO_BYTES,
+    });
+    await importarOsz(osz);
+    const [c] = await listarCanciones();
+    expect('background' in c!).toBe(false);
+    expect('video' in c!).toBe(false);
+  });
+
+  it('pide almacenamiento persistente despues de guardar, sin esperarlo', async () => {
+    // Una promesa que nunca se resuelve: si importarOsz la esperara, el test no terminaria.
+    const persist = vi.fn(() => new Promise<boolean>(() => {}));
+    vi.stubGlobal('navigator', { storage: { persist } });
+    try {
+      await importarOsz(oszCompleto());
+      expect(persist).toHaveBeenCalledTimes(1);
+      expect(await listarCanciones()).toHaveLength(1);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('si persist() falla, la importacion igual termina bien', async () => {
+    vi.stubGlobal('navigator', {
+      storage: { persist: () => Promise.reject(new Error('no')) },
+    });
+    try {
+      await expect(importarOsz(oszCompleto())).resolves.toEqual(expect.any(String));
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+});
+
+describe('borrarCancion', () => {
+  it('la saca de listarCanciones y deja las demas', async () => {
+    const id1 = await importarOsz(oszCompleto());
+    const id2 = await importarOsz(oszCompleto());
+    await borrarCancion(id1);
+    const ids = (await listarCanciones()).map((c) => c.id);
+    expect(ids).toEqual([id2]);
+  });
+
+  it('borrar un id que no existe no lanza', async () => {
+    await expect(borrarCancion('no-existe')).resolves.toBeUndefined();
+  });
+});
+
+describe('exportarCancion', () => {
+  it('exportar y reimportar da la misma cancion', async () => {
+    const id = await importarOsz(oszCompleto());
+    const original = (await listarCanciones())[0]!;
+
+    const exportado = await exportarCancion(id);
+    expect(exportado.type).toBe('application/zip');
+    const id2 = await importarOsz(exportado);
+    expect(id2).not.toBe(id);
+
+    const reimportada = (await listarCanciones()).find((c) => c.id === id2)!;
+    expect(reimportada.titulo).toBe(original.titulo);
+    expect(reimportada.artista).toBe(original.artista);
+    expect(reimportada.dificultades.map((d) => d.metadata.difficultyName).sort()).toEqual([
+      'Easy',
+      'Hard',
+    ]);
+    for (const d of original.dificultades) {
+      const igual = reimportada.dificultades.find(
+        (r) => r.metadata.difficultyName === d.metadata.difficultyName,
+      )!;
+      expect(igual.notes).toEqual(d.notes);
+      expect(igual.overallDifficulty).toBe(d.overallDifficulty);
+      expect(igual.metadata.creator).toBe(d.metadata.creator);
+    }
+    expect(await bytesDeBlob(reimportada.audio)).toEqual(Array.from(AUDIO_BYTES));
+    expect(await bytesDeBlob(reimportada.background!)).toEqual(Array.from(FONDO_BYTES));
+    expect(await bytesDeBlob(reimportada.video!)).toEqual(Array.from(VIDEO_BYTES));
+    expect(reimportada.videoOffset).toBe(-120);
+  });
+
+  it('el .osz exportado trae audio, fondo, video y un .osu por dificultad', async () => {
+    const id = await importarOsz(oszCompleto());
+    const zip = unzipSync(new Uint8Array(await (await exportarCancion(id)).arrayBuffer()));
+    const nombres = Object.keys(zip).sort();
+    expect(nombres.filter((n) => n.endsWith('.osu'))).toHaveLength(2);
+    expect(nombres).toContain('audio.wav');
+    // El nombre es el que declara el .osu ("bg.jpg"), no el que tenia en el zip original.
+    expect(nombres).toContain('bg.jpg');
+    expect(nombres).toContain('vid.mp4');
+    expect(nombres).toHaveLength(5);
+  });
+
+  it('sin fondo ni video exporta solo audio y .osu', async () => {
+    const id = await importarOsz(
+      armarOsz({
+        'mapa.osu': new TextEncoder().encode(OSU_DE_PRUEBA),
+        'audio.wav': AUDIO_BYTES,
+      }),
+    );
+    const zip = unzipSync(new Uint8Array(await (await exportarCancion(id)).arrayBuffer()));
+    expect(Object.keys(zip).sort()).toEqual([
+      'Artista de prueba - Cancion de prueba (Arnold) [Normal].osu',
+      'audio.wav',
+    ]);
+  });
+
+  it('un video no reproducible (que no se guardo) no aparece en el .osz exportado', async () => {
+    const id = await importarOsz(
+      armarOsz({
+        'Normal.osu': osuConEventos('Normal', ['Video,0,"vid.avi"'], ['64,192,0,1,0,0:0:0:0:']),
+        'audio.wav': AUDIO_BYTES,
+        'vid.avi': VIDEO_BYTES,
+      }),
+    );
+    const zip = unzipSync(new Uint8Array(await (await exportarCancion(id)).arrayBuffer()));
+    expect(Object.keys(zip).some((n) => n.endsWith('.avi'))).toBe(false);
+  });
+
+  it('si dos dificultades declaran fondos distintos, todas apuntan al que viaja en el zip', async () => {
+    const id = await importarOsz(
+      armarOsz({
+        'A.osu': osuConEventos('A', ['0,0,"uno.jpg",0,0'], ['64,192,0,1,0,0:0:0:0:']),
+        'B.osu': osuConEventos('B', ['0,0,"dos.jpg",0,0'], ['64,192,0,1,0,0:0:0:0:']),
+        'audio.wav': AUDIO_BYTES,
+        'uno.jpg': FONDO_BYTES,
+        'dos.jpg': new Uint8Array([0]),
+      }),
+    );
+    const zip = unzipSync(new Uint8Array(await (await exportarCancion(id)).arrayBuffer()));
+    const textos = Object.entries(zip)
+      .filter(([n]) => n.endsWith('.osu'))
+      .map(([, bytes]) => new TextDecoder().decode(bytes));
+    expect(textos).toHaveLength(2);
+    for (const t of textos) expect(t).toContain('0,0,"uno.jpg",0,0');
+    expect(Object.keys(zip)).toContain('uno.jpg');
+    expect(Object.keys(zip)).not.toContain('dos.jpg');
+  });
+
+  it('rechaza con un mensaje claro si la cancion no existe', async () => {
+    await expect(exportarCancion('no-existe')).rejects.toThrow(/no esta en la biblioteca/);
+  });
+});
+
+describe('almacenamiento persistente y cuota', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('pedirAlmacenamientoPersistente devuelve lo que responde persist()', async () => {
+    vi.stubGlobal('navigator', { storage: { persist: () => Promise.resolve(true) } });
+    expect(await pedirAlmacenamientoPersistente()).toBe(true);
+    vi.stubGlobal('navigator', { storage: { persist: () => Promise.resolve(false) } });
+    expect(await pedirAlmacenamientoPersistente()).toBe(false);
+  });
+
+  it('devuelve false (y no lanza) si la API no existe', async () => {
+    vi.stubGlobal('navigator', {});
+    expect(await pedirAlmacenamientoPersistente()).toBe(false);
+    vi.stubGlobal('navigator', undefined);
+    expect(await pedirAlmacenamientoPersistente()).toBe(false);
+  });
+
+  it('devuelve false (y no lanza) si persist() lanza o rechaza', async () => {
+    vi.stubGlobal('navigator', {
+      storage: {
+        persist: () => {
+          throw new Error('sincrono');
+        },
+      },
+    });
+    expect(await pedirAlmacenamientoPersistente()).toBe(false);
+    vi.stubGlobal('navigator', { storage: { persist: () => Promise.reject(new Error('async')) } });
+    expect(await pedirAlmacenamientoPersistente()).toBe(false);
+  });
+
+  it('estimarAlmacenamiento traduce usage y quota a usado y cuota', async () => {
+    vi.stubGlobal('navigator', {
+      storage: { estimate: () => Promise.resolve({ usage: 1500, quota: 1_000_000 }) },
+    });
+    expect(await estimarAlmacenamiento()).toEqual({ usado: 1500, cuota: 1_000_000 });
+  });
+
+  it('estimarAlmacenamiento devuelve undefined si no hay API, faltan datos o falla', async () => {
+    vi.stubGlobal('navigator', {});
+    expect(await estimarAlmacenamiento()).toBeUndefined();
+    vi.stubGlobal('navigator', { storage: { estimate: () => Promise.resolve({ usage: 5 }) } });
+    expect(await estimarAlmacenamiento()).toBeUndefined();
+    vi.stubGlobal('navigator', { storage: { estimate: () => Promise.reject(new Error('x')) } });
+    expect(await estimarAlmacenamiento()).toBeUndefined();
   });
 });

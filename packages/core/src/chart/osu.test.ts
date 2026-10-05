@@ -122,6 +122,9 @@ describe('parseOsu', () => {
         difficultyName: 'Normal',
         audioFile: 'audio.mp3',
         previewTime: 5000,
+        // T-049: OSU_BASICO trae `0,0,"fondo.jpg",0,0` en [Events], que
+        // ahora se lee (antes el parser lo ignoraba y este campo no existia).
+        backgroundFile: 'fondo.jpg',
       });
     });
 

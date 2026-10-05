@@ -83,6 +83,13 @@ export interface ChartMetadata {
   /** Desde donde arranca el preview en el song select. */
   previewTime: Ms;
   backgroundFile?: string;
+  /** Video de fondo declarado en [Events] (ruta dentro del .osz, con '/'). */
+  videoFile?: string;
+  /** Desfase del video respecto del audio, en ms (campo 2 de la linea de video). */
+  videoOffset?: Ms;
+  /** [Metadata] Source y Tags, tal cual (recortados). Ausentes si vienen vacios. */
+  source?: string;
+  tags?: string;
 }
 
 export interface Chart {

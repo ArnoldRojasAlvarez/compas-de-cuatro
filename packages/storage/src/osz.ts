@@ -16,11 +16,51 @@
 // dependencias propias. Ver tambien el ticket, seccion "La capa de
 // navegador va aparte".
 
-import { unzipSync } from 'fflate';
-import type { Chart } from '@tetra/core';
+import { unzipSync, type Unzipped } from 'fflate';
+import type { Chart, Ms } from '@tetra/core';
 import { parseOsu } from '@tetra/core';
 
 const decodificadorUtf8 = new TextDecoder('utf-8');
+
+/** Extensiones de video que el navegador reproduce en un <video>. Las demas (avi, flv, mpg, wmv) se ignoran. */
+const EXTENSIONES_DE_VIDEO_REPRODUCIBLES: ReadonlySet<string> = new Set(['mp4', 'm4v', 'webm']);
+
+function extensionDe(nombre: string): string {
+  const punto = nombre.lastIndexOf('.');
+  return punto === -1 ? '' : nombre.slice(punto + 1).toLowerCase();
+}
+
+/** `true` si el navegador puede reproducir un video con ese nombre (por la extension). */
+export function esVideoReproducible(nombre: string): boolean {
+  return EXTENSIONES_DE_VIDEO_REPRODUCIBLES.has(extensionDe(nombre));
+}
+
+/**
+ * Normaliza un nombre de archivo para compararlo: `\` pasa a `/`, se quita
+ * el `./` inicial (las veces que haga falta) y se pasa a minusculas.
+ */
+function normalizarNombreDeZip(nombre: string): string {
+  return nombre.replace(/\\/g, '/').replace(/^(\.\/)+/, '').toLowerCase();
+}
+
+/**
+ * Busca un archivo en el zip por el nombre que declara el .osu. Primero
+ * exacto; si no esta, compara normalizando (ver `normalizarNombreDeZip`),
+ * porque un .osz real muchas veces trae `BG.JPG` y el .osu declara `bg.jpg`,
+ * o declara la ruta con `\`. Devuelve `undefined` si no hay coincidencia.
+ */
+export function buscarEnZip(
+  zip: Unzipped,
+  nombre: string,
+): Uint8Array<ArrayBuffer> | undefined {
+  const exacto = zip[nombre];
+  if (exacto !== undefined) return exacto;
+  const buscado = normalizarNombreDeZip(nombre);
+  for (const [clave, bytes] of Object.entries(zip)) {
+    if (normalizarNombreDeZip(clave) === buscado) return bytes;
+  }
+  return undefined;
+}
 
 /**
  * Todos los nombres de archivo `.osu` de un `.osz`, en orden alfabetico
@@ -63,6 +103,15 @@ export function mimeDesdeNombre(nombre: string): string {
       return 'image/jpeg';
     case 'png':
       return 'image/png';
+    case 'webp':
+      return 'image/webp';
+    case 'gif':
+      return 'image/gif';
+    case 'mp4':
+    case 'm4v':
+      return 'video/mp4';
+    case 'webm':
+      return 'video/webm';
     default:
       return 'application/octet-stream';
   }
@@ -101,7 +150,7 @@ export async function extraerMapaDeOsz(archivo: Blob): Promise<MapaImportado> {
   }
   const chart = resultado.chart;
 
-  const bytesAudio = zip[chart.metadata.audioFile];
+  const bytesAudio = buscarEnZip(zip, chart.metadata.audioFile);
   if (bytesAudio === undefined) {
     throw new Error(
       `El .osz no trae el archivo de audio declarado en el .osu ` +
@@ -110,13 +159,12 @@ export async function extraerMapaDeOsz(archivo: Blob): Promise<MapaImportado> {
   }
   const audio = new Blob([bytesAudio], { type: mimeDesdeNombre(chart.metadata.audioFile) });
 
-  // El parser de T-005 no lee [Events] (fuera de alcance del ticket: ver
-  // "Fuera de alcance"), asi que chart.metadata.backgroundFile nunca viene
-  // seteado hoy. Se deja preparado para cuando un ticket futuro agregue esa
-  // lectura: en ese momento esta funcion ya sabe buscar la portada en el
-  // zip sin cambios en su firma.
+  // Desde T-049 parseOsu lee [Events], asi que backgroundFile viene seteado
+  // cuando el .osu declara fondo. El video no se maneja aca: esta funcion
+  // quedo para una sola dificultad y su firma no cambia (ver
+  // extraerCancionDeOsz, que si lo extrae).
   const nombreFondo = chart.metadata.backgroundFile;
-  const bytesFondo = nombreFondo === undefined ? undefined : zip[nombreFondo];
+  const bytesFondo = nombreFondo === undefined ? undefined : buscarEnZip(zip, nombreFondo);
   if (bytesFondo === undefined) {
     return { chart, audio };
   }
@@ -130,6 +178,10 @@ export interface CancionImportada {
   artista: string;
   audio: Blob;
   background?: Blob;
+  /** Solo si el .osz trae un video reproducible (mp4, m4v, webm) que alguna dificultad declara. */
+  video?: Blob;
+  /** ms; `videoOffset` de la dificultad que declaro el video (0 si no lo traia). */
+  videoOffset?: Ms;
   /** Una entrada por cada .osu que parseo como mania 4K valido. Nunca vacio: ver el @throws de abajo. */
   dificultades: Chart[];
 }
@@ -144,13 +196,18 @@ export interface CancionImportada {
  * (mismo criterio que `extraerMapaDeOsz`: un .osz sin ninguna dificultad
  * jugable no es un .osz valido para este juego).
  *
- * El audio y la portada se toman del `.osu` que ordena primero en
- * `elegirArchivosOsu`: en un set real las distintas dificultades de una
- * misma cancion comparten el mismo `AudioFilename` (y la misma portada), asi
- * que alcanza con resolverlo una vez en vez de por dificultad. Lo mismo para
- * el titulo y el artista, que se muestran a nivel cancion en el song select
- * (cada dificultad conserva igual su propio `chart.metadata`, incluido su
- * `difficultyName`).
+ * El audio se toma del `.osu` que ordena primero en `elegirArchivosOsu`: en
+ * un set real las distintas dificultades de una misma cancion comparten el
+ * mismo `AudioFilename`, asi que alcanza con resolverlo una vez en vez de
+ * por dificultad. Lo mismo para el titulo y el artista, que se muestran a
+ * nivel cancion en el song select (cada dificultad conserva igual su propio
+ * `chart.metadata`, incluido su `difficultyName`).
+ *
+ * T-049: el fondo y el video salen de la primera dificultad (en ese mismo
+ * orden) que declare uno que exista en el zip. Un video con extension que el
+ * navegador no reproduce (avi, flv, mpg, wmv) se ignora en silencio: la
+ * cancion se importa igual, sin video. Todas las busquedas en el zip son
+ * tolerantes a mayusculas, `\` y `./` (ver `buscarEnZip`).
  *
  * @throws {Error} si el zip no trae ningun .osu, si ninguno de los que trae
  * parsea como mania 4K, o si falta el archivo de audio que declara el .osu
@@ -185,7 +242,7 @@ export async function extraerCancionDeOsz(archivo: Blob): Promise<CancionImporta
   }
 
   const primera = dificultades[0]!;
-  const bytesAudio = zip[primera.metadata.audioFile];
+  const bytesAudio = buscarEnZip(zip, primera.metadata.audioFile);
   if (bytesAudio === undefined) {
     throw new Error(
       `El .osz no trae el archivo de audio declarado en el .osu ` +
@@ -194,17 +251,31 @@ export async function extraerCancionDeOsz(archivo: Blob): Promise<CancionImporta
   }
   const audio = new Blob([bytesAudio], { type: mimeDesdeNombre(primera.metadata.audioFile) });
 
-  const nombreFondo = primera.metadata.backgroundFile;
-  const bytesFondo = nombreFondo === undefined ? undefined : zip[nombreFondo];
-  const base: CancionImportada = {
+  const resultado: CancionImportada = {
     titulo: primera.metadata.title,
     artista: primera.metadata.artist,
     audio,
     dificultades,
   };
-  if (bytesFondo === undefined) {
-    return base;
+
+  for (const chart of dificultades) {
+    const nombreFondo = chart.metadata.backgroundFile;
+    if (nombreFondo === undefined) continue;
+    const bytesFondo = buscarEnZip(zip, nombreFondo);
+    if (bytesFondo === undefined) continue;
+    resultado.background = new Blob([bytesFondo], { type: mimeDesdeNombre(nombreFondo) });
+    break;
   }
-  const background = new Blob([bytesFondo], { type: mimeDesdeNombre(nombreFondo!) });
-  return { ...base, background };
+
+  for (const chart of dificultades) {
+    const nombreVideo = chart.metadata.videoFile;
+    if (nombreVideo === undefined || !esVideoReproducible(nombreVideo)) continue;
+    const bytesVideo = buscarEnZip(zip, nombreVideo);
+    if (bytesVideo === undefined) continue;
+    resultado.video = new Blob([bytesVideo], { type: mimeDesdeNombre(nombreVideo) });
+    resultado.videoOffset = chart.metadata.videoOffset ?? 0;
+    break;
+  }
+
+  return resultado;
 }

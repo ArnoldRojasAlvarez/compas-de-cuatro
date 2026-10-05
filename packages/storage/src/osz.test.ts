@@ -9,6 +9,7 @@
 import { describe, expect, it } from 'vitest';
 import { zipSync } from 'fflate';
 import {
+  buscarEnZip,
   elegirArchivoOsu,
   elegirArchivosOsu,
   extraerCancionDeOsz,
@@ -232,5 +233,169 @@ describe('extraerCancionDeOsz', () => {
       // sin 'audio.wav'
     });
     await expect(extraerCancionDeOsz(osz)).rejects.toThrow(/audio\.wav/);
+  });
+});
+
+// T-049: fondo, video y busqueda tolerante en el zip.
+describe('mimeDesdeNombre (T-049)', () => {
+  it.each([
+    ['clip.mp4', 'video/mp4'],
+    ['clip.m4v', 'video/mp4'],
+    ['clip.webm', 'video/webm'],
+    ['fondo.webp', 'image/webp'],
+    ['anim.gif', 'image/gif'],
+    ['FONDO.JPEG', 'image/jpeg'],
+    ['clip.avi', 'application/octet-stream'],
+  ])('%s -> %s', (nombre, esperado) => {
+    expect(mimeDesdeNombre(nombre)).toBe(esperado);
+  });
+});
+
+describe('buscarEnZip', () => {
+  const a = new Uint8Array([1]);
+  const b = new Uint8Array([2]);
+
+  it('prefiere la coincidencia exacta', () => {
+    expect(buscarEnZip({ 'bg.jpg': a, 'BG.JPG': b }, 'BG.JPG')).toBe(b);
+  });
+
+  it('encuentra BG.JPG cuando se pide bg.jpg', () => {
+    expect(buscarEnZip({ 'BG.JPG': a }, 'bg.jpg')).toBe(a);
+  });
+
+  it('trata \\ como / y ignora el ./ inicial', () => {
+    expect(buscarEnZip({ 'img/fondo.png': a }, 'img\\fondo.png')).toBe(a);
+    expect(buscarEnZip({ './img/fondo.png': a }, 'img/fondo.png')).toBe(a);
+    expect(buscarEnZip({ 'img/fondo.png': a }, './img/Fondo.PNG')).toBe(a);
+  });
+
+  it('devuelve undefined si no hay nada parecido', () => {
+    expect(buscarEnZip({ 'otro.jpg': a }, 'bg.jpg')).toBeUndefined();
+  });
+
+  it('no confunde dos rutas distintas que solo comparten el nombre final', () => {
+    expect(buscarEnZip({ 'a/bg.jpg': a }, 'b/bg.jpg')).toBeUndefined();
+  });
+});
+
+describe('extraerCancionDeOsz: fondo y video (T-049)', () => {
+  function osu(version: string, eventos: string[]): Uint8Array {
+    const texto = OSU_DE_PRUEBA.replace('Version:Normal', `Version:${version}`).replace(
+      '[TimingPoints]',
+      `[Events]\n${eventos.join('\n')}\n\n[TimingPoints]`,
+    );
+    return new TextEncoder().encode(texto);
+  }
+
+  it('un bg.JPG en el zip y "bg.jpg" en el .osu importa con fondo', async () => {
+    const osz = armarOsz({
+      'mapa.osu': osu('Normal', ['0,0,"bg.jpg",0,0']),
+      'audio.wav': new Uint8Array([1]),
+      'bg.JPG': new Uint8Array([7, 7, 7, 7]),
+    });
+    const r = await extraerCancionDeOsz(osz);
+    expect(r.background).toBeDefined();
+    expect(r.background!.size).toBe(4);
+    expect(r.background!.type).toBe('image/jpeg');
+  });
+
+  it('el audio tambien se encuentra con otra capitalizacion', async () => {
+    const osz = armarOsz({
+      'mapa.osu': osu('Normal', []),
+      'AUDIO.WAV': new Uint8Array([1, 2]),
+    });
+    const r = await extraerCancionDeOsz(osz);
+    expect(r.audio.size).toBe(2);
+  });
+
+  it('el fondo se toma de la segunda dificultad si la primera no declara uno', async () => {
+    // Orden alfabetico: A.osu (sin fondo) antes que B.osu (con fondo).
+    const osz = armarOsz({
+      'A.osu': osu('A', []),
+      'B.osu': osu('B', ['0,0,"b.png",0,0']),
+      'audio.wav': new Uint8Array([1]),
+      'b.png': new Uint8Array([5, 5, 5]),
+    });
+    const r = await extraerCancionDeOsz(osz);
+    expect(r.background!.size).toBe(3);
+    expect(r.background!.type).toBe('image/png');
+  });
+
+  it('si la primera declara un fondo que no esta en el zip, usa el de la siguiente', async () => {
+    const osz = armarOsz({
+      'A.osu': osu('A', ['0,0,"falta.jpg",0,0']),
+      'B.osu': osu('B', ['0,0,"b.png",0,0']),
+      'audio.wav': new Uint8Array([1]),
+      'b.png': new Uint8Array([5, 5, 5]),
+    });
+    const r = await extraerCancionDeOsz(osz);
+    expect(r.background!.size).toBe(3);
+  });
+
+  it('sin fondo declarado no hay background ni video', async () => {
+    const osz = armarOsz({ 'mapa.osu': osu('Normal', []), 'audio.wav': new Uint8Array([1]) });
+    const r = await extraerCancionDeOsz(osz);
+    expect(r.background).toBeUndefined();
+    expect(r.video).toBeUndefined();
+    expect(r.videoOffset).toBeUndefined();
+  });
+
+  it('importa un video mp4 con su offset', async () => {
+    const osz = armarOsz({
+      'mapa.osu': osu('Normal', ['Video,-120,"vid.mp4"']),
+      'audio.wav': new Uint8Array([1]),
+      'vid.mp4': new Uint8Array([4, 4, 4, 4, 4]),
+    });
+    const r = await extraerCancionDeOsz(osz);
+    expect(r.video!.size).toBe(5);
+    expect(r.video!.type).toBe('video/mp4');
+    expect(r.videoOffset).toBe(-120);
+  });
+
+  it('un video .avi se ignora en silencio: la cancion importa sin video', async () => {
+    const osz = armarOsz({
+      'mapa.osu': osu('Normal', ['Video,0,"vid.avi"', '0,0,"bg.jpg",0,0']),
+      'audio.wav': new Uint8Array([1]),
+      'vid.avi': new Uint8Array([4, 4]),
+      'bg.jpg': new Uint8Array([9]),
+    });
+    const r = await extraerCancionDeOsz(osz);
+    expect(r.video).toBeUndefined();
+    expect(r.videoOffset).toBeUndefined();
+    expect(r.background).toBeDefined();
+    expect(r.dificultades).toHaveLength(1);
+  });
+
+  it.each(['avi', 'flv', 'mpg', 'wmv'])(
+    'la extension .%s no se considera reproducible',
+    async (ext) => {
+      const osz = armarOsz({
+        'mapa.osu': osu('Normal', [`Video,0,"vid.${ext}"`]),
+        'audio.wav': new Uint8Array([1]),
+        [`vid.${ext}`]: new Uint8Array([4]),
+      });
+      expect((await extraerCancionDeOsz(osz)).video).toBeUndefined();
+    },
+  );
+
+  it('si la primera dificultad declara un .avi y la segunda un .webm, usa el .webm con su offset', async () => {
+    const osz = armarOsz({
+      'A.osu': osu('A', ['Video,10,"vid.avi"']),
+      'B.osu': osu('B', ['Video,300,"vid.webm"']),
+      'audio.wav': new Uint8Array([1]),
+      'vid.avi': new Uint8Array([1]),
+      'vid.webm': new Uint8Array([2, 2]),
+    });
+    const r = await extraerCancionDeOsz(osz);
+    expect(r.video!.type).toBe('video/webm');
+    expect(r.videoOffset).toBe(300);
+  });
+
+  it('un video declarado que no esta en el zip no hace fallar la importacion', async () => {
+    const osz = armarOsz({
+      'mapa.osu': osu('Normal', ['Video,0,"falta.mp4"']),
+      'audio.wav': new Uint8Array([1]),
+    });
+    expect((await extraerCancionDeOsz(osz)).video).toBeUndefined();
   });
 });

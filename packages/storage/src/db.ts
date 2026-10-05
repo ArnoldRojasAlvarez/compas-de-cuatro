@@ -5,7 +5,7 @@
 // usuario real va a tener en desarrollo (T-011, "Rendimiento": no hace
 // falta virtualizar para esa escala).
 
-import type { Chart, DifficultyResult } from '@tetra/core';
+import type { Chart, DifficultyResult, Ms } from '@tetra/core';
 import type { ImagenesDeSkin } from './osk.js';
 
 const NOMBRE_BASE = 'tetra-mapas';
@@ -47,6 +47,11 @@ export type SongId = string;
  * que parseo como mania 4K valido (ver osz.ts, `extraerCancionDeOsz`).
  * Nunca vacio: si ningun `.osu` parsea, la importacion entera falla antes
  * de llegar a guardarse (ver index.ts, `importarOsz`).
+ *
+ * T-049 agrega `video`, `videoOffset` e `importadaEn`, los tres opcionales:
+ * van en el mismo object store, asi que la version de la base no cambia y
+ * las canciones viejas se siguen leyendo tal cual (sin fondo de video y sin
+ * fecha de importacion).
  */
 export interface CancionGuardada {
   id: SongId;
@@ -54,6 +59,12 @@ export interface CancionGuardada {
   artista: string;
   audio: Blob;
   background?: Blob;
+  /** Solo si el .osz trae un video que el navegador puede reproducir (mp4, m4v, webm). */
+  video?: Blob;
+  /** ms; copia de chart.metadata.videoOffset de la dificultad de la que salio el video. */
+  videoOffset?: Ms;
+  /** Date.now() al importar. Opcional porque las canciones viejas no lo tienen. */
+  importadaEn?: number;
   dificultades: Chart[];
 }
 
