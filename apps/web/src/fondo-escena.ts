@@ -16,6 +16,12 @@ export interface OpcionesFondo {
   desenfoque?: number;
   /** 0 a 1: cuanto se oscurece la imagen. Default 0.6. */
   oscuridad?: number;
+  /**
+   * T-054: 0 a 1, cuanto se oscurece ademas el CENTRO (una vineta inversa: el
+   * centro mas oscuro, los bordes con mas imagen). Es para el menu, donde el
+   * logo y los botones tienen que leerse sobre una portada clara. Default 0.
+   */
+  centro?: number;
 }
 
 export interface FondoEscena {
@@ -27,17 +33,21 @@ export interface FondoEscena {
 
 const DESENFOQUE_POR_DEFECTO = 0;
 const OSCURIDAD_POR_DEFECTO = 0.6;
+const CENTRO_POR_DEFECTO = 0;
 
-/** Recorta la oscuridad a 0..1 y el desenfoque a >= 0; un valor no numerico vuelve al default. */
+/** Recorta la oscuridad y el centro a 0..1 y el desenfoque a >= 0; un valor no numerico vuelve al default. */
 export function normalizarOpcionesFondo(opciones: OpcionesFondo | undefined): {
   desenfoque: number;
   oscuridad: number;
+  centro: number;
 } {
   const d = opciones?.desenfoque;
   const o = opciones?.oscuridad;
+  const c = opciones?.centro;
   return {
     desenfoque: d !== undefined && Number.isFinite(d) ? Math.max(0, d) : DESENFOQUE_POR_DEFECTO,
     oscuridad: o !== undefined && Number.isFinite(o) ? Math.min(1, Math.max(0, o)) : OSCURIDAD_POR_DEFECTO,
+    centro: c !== undefined && Number.isFinite(c) ? Math.min(1, Math.max(0, c)) : CENTRO_POR_DEFECTO,
   };
 }
 
@@ -70,6 +80,12 @@ function crearFondoEscena(): FondoEscena {
   const velo = document.createElement('div');
   velo.className = 'tetra-fondo-velo';
   contenedor.appendChild(velo);
+  // T-054: oscurece solo el centro. Una capa aparte (no un cambio de gradiente
+  // del velo) para que pasar del menu al song select funda su opacidad en vez
+  // de saltar.
+  const centro = document.createElement('div');
+  centro.className = 'tetra-fondo-centro';
+  contenedor.appendChild(centro);
   document.body.prepend(contenedor);
 
   /** Indice de la capa que se ve ahora, o -1 si no hay imagen. */
@@ -105,11 +121,12 @@ function crearFondoEscena(): FondoEscena {
   }
 
   function aplicarOpciones(opciones: OpcionesFondo | undefined): void {
-    const { desenfoque, oscuridad } = normalizarOpcionesFondo(opciones);
+    const { desenfoque, oscuridad, centro: oscuridadDelCentro } = normalizarOpcionesFondo(opciones);
     // El desenfoque se aplica a las dos capas (la que sale tambien) y la
-    // oscuridad al velo; las dos transicionan por CSS.
+    // oscuridad al velo; todo transiciona por CSS.
     for (const capa of capas) capa.el.style.filter = desenfoque > 0 ? `blur(${desenfoque}px)` : '';
     velo.style.opacity = String(oscuridad);
+    centro.style.opacity = String(oscuridadDelCentro);
   }
 
   function mostrarCapa(indice: number, url: string): void {

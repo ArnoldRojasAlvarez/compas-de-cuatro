@@ -196,10 +196,9 @@ export interface CancionImportada {
  * (mismo criterio que `extraerMapaDeOsz`: un .osz sin ninguna dificultad
  * jugable no es un .osz valido para este juego).
  *
- * El audio se toma del `.osu` que ordena primero en `elegirArchivosOsu`: en
- * un set real las distintas dificultades de una misma cancion comparten el
- * mismo `AudioFilename`, asi que alcanza con resolverlo una vez en vez de
- * por dificultad. Lo mismo para el titulo y el artista, que se muestran a
+ * El audio se resuelve una sola vez por cancion (en un set real las
+ * dificultades comparten el mismo `AudioFilename`): se prueba el de cada
+ * dificultad en orden y se queda el primero que exista en el zip (T-054). Lo mismo para el titulo y el artista, que se muestran a
  * nivel cancion en el song select (cada dificultad conserva igual su propio
  * `chart.metadata`, incluido su `difficultyName`).
  *
@@ -210,8 +209,8 @@ export interface CancionImportada {
  * tolerantes a mayusculas, `\` y `./` (ver `buscarEnZip`).
  *
  * @throws {Error} si el zip no trae ningun .osu, si ninguno de los que trae
- * parsea como mania 4K, o si falta el archivo de audio que declara el .osu
- * elegido para el audio de la cancion.
+ * parsea como mania 4K, o si NINGUNA dificultad tiene su archivo de audio en
+ * el zip (el mensaje nombra el de la primera).
  */
 export async function extraerCancionDeOsz(archivo: Blob): Promise<CancionImportada> {
   const bytes = new Uint8Array(await archivo.arrayBuffer());
@@ -241,15 +240,23 @@ export async function extraerCancionDeOsz(archivo: Blob): Promise<CancionImporta
     throw new Error('El .osz no contiene ninguna dificultad de mania 4K valida.');
   }
 
+  // T-054: el audio es el de la primera dificultad (en orden) cuyo
+  // `AudioFilename` exista en el zip. Hay sets reales donde la primera declara
+  // un archivo que no vino y las demas si lo traen: no tiene que fallar por eso.
   const primera = dificultades[0]!;
-  const bytesAudio = buscarEnZip(zip, primera.metadata.audioFile);
-  if (bytesAudio === undefined) {
+  let audio: Blob | undefined;
+  for (const chart of dificultades) {
+    const bytesAudio = buscarEnZip(zip, chart.metadata.audioFile);
+    if (bytesAudio === undefined) continue;
+    audio = new Blob([bytesAudio], { type: mimeDesdeNombre(chart.metadata.audioFile) });
+    break;
+  }
+  if (audio === undefined) {
     throw new Error(
       `El .osz no trae el archivo de audio declarado en el .osu ` +
         `(AudioFilename:${primera.metadata.audioFile}).`,
     );
   }
-  const audio = new Blob([bytesAudio], { type: mimeDesdeNombre(primera.metadata.audioFile) });
 
   const resultado: CancionImportada = {
     titulo: primera.metadata.title,

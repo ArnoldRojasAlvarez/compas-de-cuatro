@@ -47,13 +47,19 @@
 /* Mismo lenguaje de microinteracciones que el resto de la app (transiciones
    y :active salen de style.css): el boton secundario del menu insinua el
    acento en el borde al pasar el mouse, sin rellenarse, para que "Jugar"
-   siga siendo lo unico que brilla. */
+   siga siendo lo unico que brilla.
+
+   T-054: sobre una portada clara o cargada los secundarios casi no se leian.
+   Llevan la superficie al 85 % con un desenfoque del fondo y borde de linea. */
 #app .tetra-menu-boton:not(.tetra-boton-primario) {
-  background: color-mix(in srgb, var(--superficie) 70%, transparent);
+  background: color-mix(in srgb, var(--superficie) 85%, transparent);
+  border-color: var(--linea);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
 }
 
 #app .tetra-menu-boton:not(.tetra-boton-primario):hover:not(:disabled) {
-  background: color-mix(in srgb, var(--superficie-2) 80%, transparent);
+  background: color-mix(in srgb, var(--superficie-2) 90%, transparent);
   border-color: color-mix(in srgb, var(--acento) 45%, var(--linea));
 }
 
@@ -67,10 +73,18 @@
   max-width: calc(100vw - 2 * var(--espacio-5));
 }
 
+/* La fila lleva su propio fondo translucido: la linea tiene que leerse sobre
+   cualquier portada (T-054). */
 .tetra-menu-sonando-fila {
   display: flex;
   align-items: center;
   gap: var(--espacio-1);
+  padding: var(--espacio-1) var(--espacio-3) var(--espacio-1) var(--espacio-1);
+  background: color-mix(in srgb, var(--superficie) 85%, transparent);
+  border: 1px solid var(--linea);
+  border-radius: var(--radio-control);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
   opacity: 0;
   pointer-events: none;
   transition: opacity 400ms var(--curva-salida);
@@ -90,6 +104,13 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  transition: opacity 400ms var(--curva-salida);
+}
+
+/* T-054: la cancion ya esta elegida pero todavia se decodifica: el titulo va
+   atenuado hasta que arranca. */
+.tetra-menu-sonando-cargando .tetra-menu-sonando-texto {
+  opacity: 0.5;
 }
 
 /* Con ventanas bajas el menu se compacta para mantener el "sin scroll". */

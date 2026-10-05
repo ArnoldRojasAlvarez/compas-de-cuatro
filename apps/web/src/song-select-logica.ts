@@ -128,6 +128,60 @@ export function calcularInfoDeDificultad(chart: Chart): InfoDeDificultad {
   };
 }
 
+/**
+ * Notas por segundo entre la primera y la ultima nota (el final de la ultima
+ * si es hold). A diferencia de `densidadNotasPorSegundo`, no cuenta la
+ * introduccion ni el silencio final: es lo que de verdad se toca. Con menos
+ * de dos notas, o con todas en el mismo instante, da 0.
+ */
+function densidadEntreNotas(chart: Chart): number {
+  if (chart.notes.length < 2) return 0;
+  let primera = Number.POSITIVE_INFINITY;
+  let ultima = Number.NEGATIVE_INFINITY;
+  for (const nota of chart.notes) {
+    if (nota.time < primera) primera = nota.time;
+    const fin = isHold(nota) ? nota.endTime : nota.time;
+    if (fin > ultima) ultima = fin;
+  }
+  const segundos = (ultima - primera) / 1000;
+  return segundos > 0 ? chart.notes.length / segundos : 0;
+}
+
+/**
+ * T-054: las dificultades de una cancion de la mas facil a la mas dificil,
+ * con un criterio inmediato y estable (no espera al worker de estrellas):
+ * densidad de notas entre la primera y la ultima, desempate por cantidad de
+ * notas y despues por nombre. Devuelve una copia; no muta la lista de entrada.
+ * Los empates totales conservan el orden original (el sort es estable).
+ */
+export function ordenarDificultades(charts: readonly Chart[]): Chart[] {
+  return charts
+    .map((chart) => ({ chart, densidad: densidadEntreNotas(chart) }))
+    .sort((a, b) => {
+      if (a.densidad !== b.densidad) return a.densidad - b.densidad;
+      if (a.chart.notes.length !== b.chart.notes.length) {
+        return a.chart.notes.length - b.chart.notes.length;
+      }
+      return a.chart.metadata.difficultyName.localeCompare(b.chart.metadata.difficultyName, 'es', {
+        sensitivity: 'base',
+      });
+    })
+    .map(({ chart }) => chart);
+}
+
+/** T-054: el mensaje corto de una importacion fallida ("No se pudo importar mapa.osz"); el detalle tecnico va aparte, en el `title`. */
+export function textoDeImportacionFallida(nombreArchivo: string): string {
+  const nombre = nombreArchivo.trim();
+  return nombre === '' ? 'No se pudo importar' : `No se pudo importar ${nombre}`;
+}
+
+/** La misma cancion con sus dificultades ya ordenadas (ver `ordenarDificultades`). Los Chart son los mismos objetos: solo cambia el orden. */
+export function conDificultadesOrdenadas<T extends { dificultades: readonly Chart[] }>(
+  cancion: T,
+): T {
+  return { ...cancion, dificultades: ordenarDificultades(cancion.dificultades) };
+}
+
 // ---------------------------------------------------------------------------
 // Lista de canciones: buscar, ordenar, aleatorio
 // ---------------------------------------------------------------------------

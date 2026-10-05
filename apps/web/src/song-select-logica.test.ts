@@ -9,6 +9,7 @@ import type { CancionGuardada } from '@tetra/storage';
 import {
   bpmPrincipal,
   calcularInfoDeDificultad,
+  conDificultadesOrdenadas,
   contarNotasLargas,
   densidadNotasPorSegundo,
   duracionMs,
@@ -19,6 +20,8 @@ import {
   formatearDuracion,
   nivelDeEstrellas,
   ordenarCanciones,
+  ordenarDificultades,
+  textoDeImportacionFallida,
   type NivelEstrellas,
   type ObtenerEstrellas,
 } from './song-select-logica.js';
@@ -470,5 +473,149 @@ describe('elegirIndiceAleatorio', () => {
   it('aleatorio() = 1 exacto (limite superior) no se va de rango', () => {
     expect(elegirIndiceAleatorio(5, null, () => 1)).toBe(4);
     expect(elegirIndiceAleatorio(5, 2, () => 1)).toBe(4);
+  });
+});
+
+// T-054: orden de las dificultades de mas facil a mas dificil.
+describe('ordenarDificultades', () => {
+  type Columna = 0 | 1 | 2 | 3;
+
+  /** `cantidad` taps repartidos entre `desdeMs` y `hastaMs`, de la dificultad `nombre`. */
+  function dificultad(nombre: string, cantidad: number, desdeMs: number, hastaMs: number): Chart {
+    const notes: Chart['notes'] = [];
+    for (let i = 0; i < cantidad; i++) {
+      const tiempo = cantidad === 1 ? desdeMs : desdeMs + ((hastaMs - desdeMs) * i) / (cantidad - 1);
+      notes.push({ kind: 'tap', time: tiempo, column: (i % 4) as Columna });
+    }
+    return chart({ metadata: { ...chart().metadata, difficultyName: nombre }, notes });
+  }
+
+  const nombres = (charts: readonly Chart[]): string[] => charts.map((c) => c.metadata.difficultyName);
+
+  it('ordena de menor a mayor densidad, no por nombre ni por el orden del zip', () => {
+    // Orden alfabetico del zip: another, drago's insane, hard, intermediate, sky blue.
+    const zip = [
+      dificultad('another', 400, 0, 100_000), // 4/s
+      dificultad("drago's insane", 800, 0, 100_000), // 8/s
+      dificultad('hard', 300, 0, 100_000), // 3/s
+      dificultad('intermediate', 200, 0, 100_000), // 2/s
+      dificultad('sky blue', 100, 0, 100_000), // 1/s
+    ];
+    // Dejar el orden de entrada (o un sort por nombre) daria another primero.
+    expect(nombres(ordenarDificultades(zip))).toEqual([
+      'sky blue',
+      'intermediate',
+      'hard',
+      'another',
+      "drago's insane",
+    ]);
+  });
+
+  it('la densidad se mide entre la primera y la ultima nota, no desde el tiempo 0', () => {
+    // A: 100 notas en 10 s (10/s) tras 50 s de intro. B: 200 notas en 40 s (5/s) desde 0.
+    // Medida desde 0, A daria 100/60 (1.7/s) y quedaria antes que B.
+    const a = dificultad('A', 100, 50_000, 60_000);
+    const b = dificultad('B', 200, 0, 40_000);
+    expect(nombres(ordenarDificultades([a, b]))).toEqual(['B', 'A']);
+  });
+
+  it('una hold cuenta hasta su endTime al medir el tramo', () => {
+    // Dos notas cada una; la que termina en un hold largo tiene el tramo mas largo, luego menos densidad.
+    const corta = chart({
+      metadata: { ...chart().metadata, difficultyName: 'aCorta' },
+      notes: [
+        { kind: 'tap', time: 0, column: 0 },
+        { kind: 'tap', time: 10_000, column: 1 },
+      ],
+    });
+    const conHold = chart({
+      metadata: { ...chart().metadata, difficultyName: 'zHold' },
+      notes: [
+        { kind: 'tap', time: 0, column: 0 },
+        { kind: 'hold', time: 10_000, endTime: 20_000, column: 1 },
+      ],
+    });
+    // Midiendo solo el time de la ultima nota quedarian empatadas y 'zHold' saldria despues de 'aCorta' por nombre.
+    expect(nombres(ordenarDificultades([corta, conHold]))).toEqual(['zHold', 'aCorta']);
+  });
+
+  it('con la misma densidad desempata por cantidad de notas', () => {
+    const chica = dificultad('zeta', 50, 0, 10_000); // 5/s
+    const grande = dificultad('alfa', 100, 0, 20_000); // 5/s
+    // Por nombre saldria alfa primero; por cantidad de notas, zeta.
+    expect(nombres(ordenarDificultades([grande, chica]))).toEqual(['zeta', 'alfa']);
+  });
+
+  it('con densidad y cantidad iguales desempata por nombre', () => {
+    const b = dificultad('B', 10, 0, 5_000);
+    const a = dificultad('a', 10, 0, 5_000);
+    const c = dificultad('C', 10, 0, 5_000);
+    expect(nombres(ordenarDificultades([c, b, a]))).toEqual(['a', 'B', 'C']);
+  });
+
+  it('es estable: dos dificultades identicas conservan su orden de entrada', () => {
+    const uno = dificultad('Igual', 10, 0, 5_000);
+    const dos = dificultad('Igual', 10, 0, 5_000);
+    const resultado = ordenarDificultades([uno, dos]);
+    expect(resultado[0]).toBe(uno);
+    expect(resultado[1]).toBe(dos);
+  });
+
+  it('un mapa sin notas o con una sola nota (densidad 0) va primero y no rompe', () => {
+    const vacia = chart({ metadata: { ...chart().metadata, difficultyName: 'vacia' }, notes: [] });
+    const una = dificultad('una', 1, 1000, 1000);
+    const normal = dificultad('normal', 20, 0, 10_000);
+    expect(nombres(ordenarDificultades([normal, una, vacia]))).toEqual(['vacia', 'una', 'normal']);
+  });
+
+  it('no muta la lista de entrada y devuelve los mismos objetos Chart', () => {
+    const dificil = dificultad('dificil', 100, 0, 10_000);
+    const facil = dificultad('facil', 10, 0, 10_000);
+    const entrada = [dificil, facil];
+    const salida = ordenarDificultades(entrada);
+    expect(entrada[0]).toBe(dificil);
+    expect(salida).not.toBe(entrada);
+    expect(salida[0]).toBe(facil);
+  });
+
+  it('lista vacia da lista vacia', () => {
+    expect(ordenarDificultades([])).toEqual([]);
+  });
+});
+
+describe('conDificultadesOrdenadas', () => {
+  it('ordena las dificultades de la cancion y conserva el resto de sus campos', () => {
+    const facil = chart({
+      metadata: { ...chart().metadata, difficultyName: 'facil' },
+      notes: [
+        { kind: 'tap', time: 0, column: 0 },
+        { kind: 'tap', time: 10_000, column: 1 },
+      ],
+    });
+    const dificil = chart({
+      metadata: { ...chart().metadata, difficultyName: 'dificil' },
+      notes: Array.from({ length: 50 }, (_, i) => ({
+        kind: 'tap' as const,
+        time: i * 200,
+        column: (i % 4) as 0 | 1 | 2 | 3,
+      })),
+    });
+    const cancion = { id: 'x', titulo: 'T', dificultades: [dificil, facil] };
+    const ordenada = conDificultadesOrdenadas(cancion);
+    expect(ordenada.id).toBe('x');
+    expect(ordenada.titulo).toBe('T');
+    expect(ordenada.dificultades[0]).toBe(facil);
+    // La original no se toca.
+    expect(cancion.dificultades[0]).toBe(dificil);
+  });
+});
+
+describe('textoDeImportacionFallida', () => {
+  it('nombra el archivo que no se pudo importar', () => {
+    expect(textoDeImportacionFallida('mapa.osz')).toBe('No se pudo importar mapa.osz');
+  });
+
+  it('sin nombre de archivo no deja un espacio colgando', () => {
+    expect(textoDeImportacionFallida('  ')).toBe('No se pudo importar');
   });
 });

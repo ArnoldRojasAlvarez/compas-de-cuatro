@@ -15,12 +15,21 @@ import {
   elegirSiguienteId,
   inicioDePreviewSegundos,
 } from './musica-menu-logica.js';
+import { conDificultadesOrdenadas } from './song-select-logica.js';
 import { gananciaDeVolumen, leerVolumen } from './volumen.js';
 
 export interface MusicaMenu {
   readonly analizador: AnalyserNode | null;
   /** Cancion sonando (o null con el click track). */
   readonly actual: CancionGuardada | null;
+  /**
+   * T-054: la cancion ya elegida, aunque todavia se este decodificando y no
+   * suene (decodificar una cancion entera tarda). Con `cargando` en true el
+   * menu ya puede mostrar su fondo y su titulo, atenuado. Null con el click track.
+   */
+  readonly eligida: CancionGuardada | null;
+  /** true entre que se elige una cancion y que arranca (o falla su decodificacion). */
+  readonly cargando: boolean;
   siguiente(): Promise<void>;
   alternarPausa(): void;
   readonly pausada: boolean;
@@ -66,6 +75,8 @@ export function crearMusicaMenu(): MusicaMenu {
   }
 
   let actual: CancionGuardada | null = null;
+  let eligida: CancionGuardada | null = null;
+  let cargando = false;
   let pausada = false;
   let detenido = false;
   /** Cada pedido de reproduccion toma un numero: uno viejo que termina de decodificar tarde se descarta. */
@@ -81,7 +92,8 @@ export function crearMusicaMenu(): MusicaMenu {
   async function canciones(): Promise<CancionGuardada[]> {
     if (cancionesEnCache === null) {
       try {
-        cancionesEnCache = await listarCanciones();
+        // T-054: las dificultades de mas facil a mas dificil; el previewTime sale de la primera.
+        cancionesEnCache = (await listarCanciones()).map(conDificultadesOrdenadas);
       } catch {
         return [];
       }
@@ -149,6 +161,8 @@ export function crearMusicaMenu(): MusicaMenu {
         if (!detenido && miToken === token) void avanzar(Math.random);
       });
       actual = cancion;
+      eligida = cancion;
+      cargando = false;
       avisar();
       return true;
     } catch {
@@ -172,10 +186,17 @@ export function crearMusicaMenu(): MusicaMenu {
       );
       const cancion = id === null ? undefined : lista.find((c) => c.id === id);
       if (cancion === undefined) break;
+      // Elegida: el menu ya muestra su fondo y su titulo (atenuado) mientras
+      // se decodifica, que en una maquina lenta tarda segundos.
+      eligida = cancion;
+      cargando = true;
+      avisar();
       if (await tocarCancion(cancion, miToken)) return;
       excluida = cancion.id; // no decodifico: se prueba con otra
     }
     if (detenido || miToken !== token) return;
+    eligida = null;
+    cargando = false;
     await tocarClickTrack(miToken);
   }
 
@@ -206,6 +227,12 @@ export function crearMusicaMenu(): MusicaMenu {
     },
     get actual() {
       return actual;
+    },
+    get eligida() {
+      return eligida;
+    },
+    get cargando() {
+      return cargando;
     },
     get pausada() {
       return pausada;

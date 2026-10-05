@@ -14,7 +14,8 @@ export type NombreIcono =
   | 'editar'
   | 'exportar'
   | 'borrar'
-  | 'confirmar';
+  | 'confirmar'
+  | 'cerrar';
 
 interface DefinicionIcono {
   /** Trazos (path d). */
@@ -53,6 +54,7 @@ const ICONOS: Record<NombreIcono, DefinicionIcono> = {
     trazos: ['M5 7h14', 'M10 7V4.5h4V7', 'M7 7l1 13h8l1-13', 'M10.5 11v5.5', 'M13.5 11v5.5'],
   },
   confirmar: { trazos: ['M5 12.5l4.5 4.5L19 7.5'] },
+  cerrar: { trazos: ['M6 6l12 12', 'M18 6L6 18'] },
 }
 
 const NS = 'http://www.w3.org/2000/svg';

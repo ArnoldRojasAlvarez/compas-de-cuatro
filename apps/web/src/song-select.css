@@ -42,7 +42,24 @@
   font-size: var(--tipo-xs);
   letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: var(--tinta-3);
+  color: var(--tinta-2);
+  /* T-054: sobre una portada clara tiene que seguir leyendose. */
+  text-shadow: 0 1px 8px color-mix(in srgb, var(--fondo) 85%, transparent);
+}
+
+/* T-054: los botones-icono son fantasma por defecto (style.css) y sobre una
+   portada clara se perdian. En el song select llevan la superficie translucida
+   con desenfoque, como el resto de los controles. Va antes de las reglas de
+   borrar/reproductor de abajo, que lo pisan a igual especificidad. */
+#app .tetra-song-select .tetra-boton-icono {
+  background: color-mix(in srgb, var(--superficie) 85%, transparent);
+  border-color: var(--linea);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+}
+
+#app .tetra-song-select .tetra-boton-icono:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--superficie-2) 90%, transparent);
 }
 
 .tetra-song-select-cuerpo {
@@ -129,19 +146,21 @@
   gap: var(--espacio-2);
   font-size: var(--tipo-sm);
   padding: var(--espacio-1) var(--espacio-3);
-  background: color-mix(in srgb, var(--fondo) 60%, transparent);
+  background: color-mix(in srgb, var(--superficie) 85%, transparent);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
   border: 1px solid var(--linea);
   color: var(--tinta-2);
 }
 
 #app .tetra-dificultad-item:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--superficie-2) 80%, transparent);
+  background: color-mix(in srgb, var(--superficie-2) 90%, transparent);
   color: var(--tinta);
 }
 
 #app .tetra-dificultad-item-enfocada,
 #app .tetra-dificultad-item-enfocada:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--acento) 12%, var(--fondo));
+  background: color-mix(in srgb, var(--acento) 14%, var(--superficie));
   border-color: var(--acento);
   color: var(--tinta);
 }
@@ -162,7 +181,27 @@
   display: flex;
   align-items: center;
   gap: var(--espacio-2);
+  /* T-054: la barra fina se perdia sobre una portada clara: va en una
+     pastilla translucida. */
+  padding: 0 var(--espacio-3) 0 0;
+  background: color-mix(in srgb, var(--superficie) 85%, transparent);
+  border: 1px solid var(--linea);
+  border-radius: var(--radio-control);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
   transition: opacity 0.2s ease;
+}
+
+/* El boton de pausa ya esta dentro de la pastilla: sin caja propia. */
+#app .tetra-song-select .tetra-ss-reproductor .tetra-boton-icono {
+  background: transparent;
+  border-color: transparent;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+#app .tetra-song-select .tetra-ss-reproductor .tetra-boton-icono:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--superficie-2) 90%, transparent);
 }
 
 .tetra-ss-reproductor-inactivo {
@@ -230,7 +269,7 @@
 #app .tetra-boton-icono.tetra-ss-borrar-confirmando:hover:not(:disabled) {
   color: var(--j-miss);
   border-color: var(--j-miss);
-  background: color-mix(in srgb, var(--j-miss) 12%, transparent);
+  background: color-mix(in srgb, var(--j-miss) 18%, var(--superficie));
 }
 
 /* ---------------------------------------------------------------------- */
@@ -251,6 +290,13 @@
   display: flex;
   flex-direction: column;
   gap: 2px;
+  /* T-054: las barras finas del perfil se perdian sobre una portada clara. */
+  padding: var(--espacio-2) var(--espacio-3);
+  background: color-mix(in srgb, var(--superficie) 85%, transparent);
+  border: 1px solid var(--linea);
+  border-radius: var(--radio-control);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
 }
 
 .tetra-perfil-fila {
@@ -331,7 +377,9 @@
 .tetra-song-select-buscar {
   flex: 1;
   min-width: 0;
-  background: color-mix(in srgb, var(--superficie) 75%, transparent);
+  background: color-mix(in srgb, var(--superficie) 85%, transparent);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
 }
 
 /* Orden y filtro de estrellas: cerrados por defecto. */
@@ -510,21 +558,49 @@
   font-size: var(--tipo-xs);
   background: transparent;
   border-color: transparent;
-  color: var(--tinta-3);
+  color: var(--tinta-2);
+  text-shadow: 0 1px 8px color-mix(in srgb, var(--fondo) 85%, transparent);
 }
 
 #app .tetra-song-select-click-track:hover:not(:disabled) {
   color: var(--tinta);
 }
 
+/* Mensaje de error: una linea corta con el boton de cerrar (T-054). Oculto
+   con `hidden` mientras no hay nada que decir. */
 .tetra-song-select-error {
-  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--espacio-2);
+  min-width: 0;
+  padding: 0 0 0 var(--espacio-3);
+  background: color-mix(in srgb, var(--superficie) 85%, transparent);
+  border: 1px solid color-mix(in srgb, var(--j-miss) 55%, var(--linea));
+  border-radius: var(--radio-control);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
   color: var(--j-miss);
   font-size: var(--tipo-sm);
 }
 
-.tetra-song-select-error:empty {
+.tetra-song-select-error[hidden] {
   display: none;
+}
+
+/* El boton de cerrar ya esta dentro de la caja del error: sin caja propia. */
+#app .tetra-song-select .tetra-song-select-error-cerrar {
+  background: transparent;
+  border-color: transparent;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+.tetra-song-select-error-texto {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* ---------------------------------------------------------------------- */

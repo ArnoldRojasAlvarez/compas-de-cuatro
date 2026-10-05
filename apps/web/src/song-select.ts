@@ -35,6 +35,7 @@ import { EVENTO_BIBLIOTECA_CAMBIO } from './musica-menu-logica.js';
 import { crearReproductorDePreview } from './preview.js';
 import {
   calcularInfoDeDificultad,
+  conDificultadesOrdenadas,
   elegirIndiceAleatorio,
   estrellasDeCancion,
   filtrarCanciones,
@@ -45,6 +46,7 @@ import {
   moverIndice,
   nivelDeEstrellas,
   ordenarCanciones,
+  textoDeImportacionFallida,
   type CriterioDeOrden,
 } from './song-select-logica.js';
 import { crearClienteDificultad } from './dificultad-worker-cliente.js';
@@ -362,10 +364,18 @@ export function mostrarSongSelect(contenedor: HTMLElement, opciones: OpcionesSon
   botonClickTrack.textContent = 'Jugar click track';
   pie.appendChild(botonClickTrack);
 
-  const mensajeError = document.createElement('p');
-  mensajeError.className = 'tetra-song-select-error';
-  mensajeError.setAttribute('role', 'alert');
-  pie.appendChild(mensajeError);
+  // Mensaje de error: una linea corta, el detalle tecnico en `title`, y un
+  // boton para cerrarlo. Oculto mientras no hay nada que decir.
+  const errorEl = document.createElement('div');
+  errorEl.className = 'tetra-song-select-error';
+  errorEl.setAttribute('role', 'alert');
+  errorEl.hidden = true;
+  const mensajeError = document.createElement('span');
+  mensajeError.className = 'tetra-song-select-error-texto';
+  const botonCerrarError = crearBotonIcono('cerrar', 'Cerrar el mensaje', 'tetra-song-select-error-cerrar');
+  botonCerrarError.addEventListener('click', () => ocultarError());
+  errorEl.append(mensajeError, botonCerrarError);
+  pie.appendChild(errorEl);
   columnaLista.appendChild(pie);
 
   cuerpo.appendChild(columnaLista);
@@ -467,11 +477,16 @@ export function mostrarSongSelect(contenedor: HTMLElement, opciones: OpcionesSon
   contenedor.appendChild(panel);
   contenedor.appendChild(velo);
 
-  function mostrarErrorImportacion(mensaje: string): void {
+  /** Muestra un error hasta que se cierre, se importe algo con exito o se cambie de pantalla (T-054). `detalle` (el texto tecnico, por defecto el mismo mensaje) va en el tooltip. */
+  function mostrarError(mensaje: string, detalle?: string): void {
     mensajeError.textContent = mensaje;
+    errorEl.title = detalle ?? mensaje;
+    errorEl.hidden = false;
   }
-  function limpiarErrorImportacion(): void {
+  function ocultarError(): void {
     mensajeError.textContent = '';
+    errorEl.title = '';
+    errorEl.hidden = true;
   }
 
   // -- Salida: todo lo que esta pantalla deja corriendo se apaga aca. --
@@ -580,7 +595,8 @@ export function mostrarSongSelect(contenedor: HTMLElement, opciones: OpcionesSon
   async function cargarCanciones(idAEnfocar?: SongId): Promise<void> {
     const leidas = await listarCanciones();
     if (desmontado) return;
-    estado.todas = leidas;
+    // T-054: de la mas facil a la mas dificil; el indice de la dificultad enfocada se refiere a esta lista.
+    estado.todas = leidas.map(conDificultadesOrdenadas);
     // Los Blob de portada de la lectura anterior ya no se usan (esta lectura
     // trae objetos nuevos): se revocan sus URLs antes del proximo render,
     // que crea las nuevas bajo demanda.
@@ -704,7 +720,6 @@ export function mostrarSongSelect(contenedor: HTMLElement, opciones: OpcionesSon
   async function exportarEnfocada(boton: HTMLButtonElement): Promise<void> {
     const cancion = cancionEnfocada();
     if (!cancion) return;
-    limpiarErrorImportacion();
     boton.disabled = true;
     try {
       const blob = await exportarCancion(cancion.id);
@@ -718,7 +733,7 @@ export function mostrarSongSelect(contenedor: HTMLElement, opciones: OpcionesSon
       // eslint-disable-next-line no-restricted-globals -- limpieza de un object URL de descarga, no mide tiempo de juego.
       setTimeout(() => URL.revokeObjectURL(url), 10_000);
     } catch (error) {
-      mostrarErrorImportacion(mensajeDeErrorDeCarga(error));
+      mostrarError(mensajeDeErrorDeCarga(error));
     } finally {
       boton.disabled = false;
     }
@@ -726,7 +741,6 @@ export function mostrarSongSelect(contenedor: HTMLElement, opciones: OpcionesSon
 
   /** Borra la cancion y mueve el foco a la siguiente de la lista (o a la anterior si era la ultima). */
   async function borrarEnfocada(id: SongId): Promise<void> {
-    limpiarErrorImportacion();
     const siguiente = idTrasBorrar(
       listaVisible().map((c) => c.id),
       id,
@@ -734,7 +748,7 @@ export function mostrarSongSelect(contenedor: HTMLElement, opciones: OpcionesSon
     try {
       await borrarCancion(id);
     } catch (error) {
-      mostrarErrorImportacion(mensajeDeErrorDeCarga(error));
+      mostrarError(mensajeDeErrorDeCarga(error));
       return;
     }
     if (desmontado) return;
@@ -1022,7 +1036,6 @@ export function mostrarSongSelect(contenedor: HTMLElement, opciones: OpcionesSon
     const chart = cancion?.dificultades[estado.dificultadEnfocadaIndice];
     if (!cancion || !chart || iniciandoPartida) return;
 
-    limpiarErrorImportacion();
     iniciandoPartida = true;
     try {
       const ctxDeDecodificacion = new AudioContext();
@@ -1034,7 +1047,7 @@ export function mostrarSongSelect(contenedor: HTMLElement, opciones: OpcionesSon
       }
       await jugar(chart, audioBuffer, escenaDeCancion(cancion, chart));
     } catch (error) {
-      mostrarErrorImportacion(mensajeDeErrorDeCarga(error));
+      mostrarError(mensajeDeErrorDeCarga(error));
     } finally {
       iniciandoPartida = false;
     }
@@ -1043,12 +1056,13 @@ export function mostrarSongSelect(contenedor: HTMLElement, opciones: OpcionesSon
   // -- Importar .osz: boton "+" o soltar en cualquier parte de la ventana --
 
   async function manejarOsz(archivo: File): Promise<void> {
-    limpiarErrorImportacion();
     try {
       const id = await importarOsz(archivo);
+      // Un error de una importacion anterior ya no tiene sentido (T-054).
+      ocultarError();
       await cargarCanciones(id);
     } catch (error) {
-      mostrarErrorImportacion(mensajeDeErrorDeCarga(error));
+      mostrarError(textoDeImportacionFallida(archivo.name), mensajeDeErrorDeCarga(error));
     }
   }
 
@@ -1110,7 +1124,6 @@ export function mostrarSongSelect(contenedor: HTMLElement, opciones: OpcionesSon
 
   botonClickTrack.addEventListener('click', () => {
     if (iniciandoPartida) return;
-    limpiarErrorImportacion();
     iniciandoPartida = true;
     void (async () => {
       try {
@@ -1120,7 +1133,7 @@ export function mostrarSongSelect(contenedor: HTMLElement, opciones: OpcionesSon
         ]);
         await jugar(chart, audio);
       } catch (error) {
-        mostrarErrorImportacion(mensajeDeErrorDeCarga(error));
+        mostrarError(mensajeDeErrorDeCarga(error));
       } finally {
         iniciandoPartida = false;
       }

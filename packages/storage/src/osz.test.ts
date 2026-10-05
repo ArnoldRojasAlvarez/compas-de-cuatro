@@ -236,6 +236,50 @@ describe('extraerCancionDeOsz', () => {
   });
 });
 
+// T-054: el audio es el de la primera dificultad cuyo archivo exista.
+describe('extraerCancionDeOsz: audio ausente en la primera dificultad (T-054)', () => {
+  function osuConAudio(version: string, audio: string): Uint8Array {
+    const texto = OSU_DE_PRUEBA.replace('Version:Normal', `Version:${version}`).replace(
+      'AudioFilename: audio.wav',
+      `AudioFilename: ${audio}`,
+    );
+    return new TextEncoder().encode(texto);
+  }
+
+  it('si la primera declara un audio que no esta, usa el de la siguiente que si lo tiene', async () => {
+    const osz = armarOsz({
+      'A.osu': osuConAudio('A', 'falta.mp3'),
+      'B.osu': osuConAudio('B', 'real.ogg'),
+      'real.ogg': new Uint8Array([9, 9, 9]),
+    });
+    const r = await extraerCancionDeOsz(osz);
+    expect(r.audio.size).toBe(3);
+    expect(r.audio.type).toBe('audio/ogg');
+    // Las dos dificultades se importan igual.
+    expect(r.dificultades.map((d) => d.metadata.difficultyName)).toEqual(['A', 'B']);
+  });
+
+  it('si la primera si tiene su audio, se queda con ese aunque otra declare otro', async () => {
+    const osz = armarOsz({
+      'A.osu': osuConAudio('A', 'uno.mp3'),
+      'B.osu': osuConAudio('B', 'dos.ogg'),
+      'uno.mp3': new Uint8Array([1]),
+      'dos.ogg': new Uint8Array([2, 2]),
+    });
+    const r = await extraerCancionDeOsz(osz);
+    expect(r.audio.size).toBe(1);
+    expect(r.audio.type).toBe('audio/mpeg');
+  });
+
+  it('si ninguna dificultad tiene su audio, falla nombrando el de la primera', async () => {
+    const osz = armarOsz({
+      'A.osu': osuConAudio('A', 'falta1.mp3'),
+      'B.osu': osuConAudio('B', 'falta2.mp3'),
+    });
+    await expect(extraerCancionDeOsz(osz)).rejects.toThrow(/falta1\.mp3/);
+  });
+});
+
 // T-049: fondo, video y busqueda tolerante en el zip.
 describe('mimeDesdeNombre (T-049)', () => {
   it.each([

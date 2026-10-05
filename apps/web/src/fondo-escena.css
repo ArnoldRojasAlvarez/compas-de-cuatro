@@ -47,3 +47,19 @@
   opacity: 0.6;
   transition: opacity 400ms var(--curva-salida);
 }
+
+/* T-054: vineta inversa para el menu. Oscurece el centro, donde estan el logo y
+   los botones, y deja los bordes con mas imagen. Su opacidad la fija
+   fondo-escena.ts (opcion `centro`); sin esa opcion queda en 0 y no se nota. */
+.tetra-fondo-centro {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(
+    ellipse 55% 60% at 50% 48%,
+    color-mix(in srgb, var(--fondo) 75%, transparent) 0%,
+    color-mix(in srgb, var(--fondo) 45%, transparent) 55%,
+    transparent 100%
+  );
+  opacity: 0;
+  transition: opacity 400ms var(--curva-salida);
+}

@@ -64,7 +64,9 @@
   font-weight: 500;
   line-height: 1;
   color: var(--acento);
-  text-shadow: 0 0 var(--espacio-5) color-mix(in srgb, var(--acento) 45%, transparent);
+  text-shadow:
+    0 1px 3px rgb(0 0 0 / 0.5),
+    0 0 var(--espacio-5) color-mix(in srgb, var(--acento) 45%, transparent);
   transform-origin: center;
   will-change: transform;
 }
@@ -101,7 +103,11 @@
   align-items: flex-end;
   gap: var(--espacio-1);
   white-space: nowrap;
-  text-shadow: 0 1px 10px rgb(0 0 0 / 0.6);
+  /* T-054: un contorno apretado mas el halo, para que la precision se lea
+     sobre un fondo claro sin dibujar una caja. */
+  text-shadow:
+    0 1px 2px rgb(0 0 0 / 0.55),
+    0 0 12px rgb(0 0 0 / 0.5);
 }
 
 .tetra-dato-valor {
@@ -180,6 +186,7 @@
   font-size: var(--tipo-xs);
   color: var(--tinta-3);
   white-space: nowrap;
+  text-shadow: 0 1px 2px rgb(0 0 0 / 0.55);
 }
 
 /* Sin movimiento: el numero del combo cambia sin pulso (el !important gana al

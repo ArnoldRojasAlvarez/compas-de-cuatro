@@ -24,8 +24,8 @@ export interface OpcionesMenu {
   aMapeador: () => void;
 }
 
-/** Fondo del menu: la imagen se ve, pero el logo y los botones mandan. */
-const FONDO_DEL_MENU = { oscuridad: 0.7, desenfoque: 2 };
+/** Fondo del menu: los bordes dejan ver la imagen y el centro (logo y botones) va mas oscuro, para que se lea sobre una portada clara o muy cargada (T-054). */
+const FONDO_DEL_MENU = { oscuridad: 0.5, desenfoque: 2, centro: 1 };
 
 /**
  * Muestra el menu principal dentro de `contenedor`, reemplazando lo que
@@ -80,7 +80,8 @@ export function mostrarMenu(contenedor: HTMLElement, opciones: OpcionesMenu): vo
   // solo comodidad para el mouse, y un segundo "Jugar" duplicaria el nombre.
   zonaLogo.classList.add('tetra-menu-logo-clicable');
   function jugar(): void {
-    const inicial = musica?.actual?.id;
+    // La elegida, aunque todavia se este decodificando: es la que el jugador ve.
+    const inicial = musica?.eligida?.id;
     apagar();
     // El song select pone su propio fondo: no se limpia aca para no parpadear.
     opciones.aJugar(inicial);
@@ -148,7 +149,10 @@ export function mostrarMenu(contenedor: HTMLElement, opciones: OpcionesMenu): vo
       // Hasta que suena algo (la biblioteca se lee y la cancion se decodifica)
       // no se muestra nada: evita un "Click track" fugaz antes del titulo real.
       fila.classList.add('tetra-menu-sonando-visible');
-      const cancion = m.actual;
+      // T-054: la elegida, no la que suena. Apenas se elige se ve su fondo y
+      // su titulo, atenuado hasta que la decodificacion termina y arranca.
+      const cancion = m.eligida;
+      fila.classList.toggle('tetra-menu-sonando-cargando', m.cargando);
       // Sin cancion de la biblioteca suena el click track: se nombra tal cual.
       const t = cancion ? textoDeLoQueSuena(cancion.titulo, cancion.artista) : 'Click track';
       if (texto.textContent !== t) texto.textContent = t;
