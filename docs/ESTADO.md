@@ -8,7 +8,7 @@ Estado corto y siempre al dia. **Si sos una sesion NUEVA, empeza por
 
 ## Donde esta todo
 
-- `main`: limpio, verde, 951 tests + 9 e2e (sincronia, pausa x2, mapeador, partida x5).
+- `main`: limpio, verde, 998 tests + 9 e2e (sincronia, pausa x2, mapeador, partida x5).
 - Estado demo: menu con musica de la biblioteca, song select sobre la escena, partida con fondo y video, cuatro skins propias, cancion demo sembrada.
 - En curso: nada.
 
@@ -52,12 +52,22 @@ Estado corto y siempre al dia. **Si sos una sesion NUEVA, empeza por
 | T-051 | Cancion demo "Primer Compas" compuesta por codigo y sintetizada en el navegador (82 s, 128 BPM), Facil 1.1, Normal 2.3, Dificil 3.9 estrellas, fondo generativo; se siembra sola una vez |
 | T-052 | Escena: fondo de la cancion a pantalla completa; menu con musica de la biblioteca (pausa, siguiente); song select minimalista con preview visible, exportar y borrar, importar soltando en cualquier parte |
 | T-053 | Partida a pantalla completa con fondo atenuado y video sincronizado al reloj, intro, HUD limpio, volumen; resultados con fondo; ajustes con poco texto, skins en miniatura, atenuacion y video |
+| T-055 | Records por dificultad: mejor y ultima partida, intentos, conteos de cada juicio, rango SS; se ven en el song select (detalle, chips y lista) y con aviso de nuevo record en resultados |
 | T-054 | Pulido: legibilidad sobre portadas, dificultades de facil a dificil, audio de cualquier dificultad, errores cerrables, fondo del menu inmediato |
 
 La prueba de feel de Arnold ya se hizo: en una cancion real sus golpes salieron
 centrados en cero. El motor esta bien sincronizado.
 
 ## En curso
+
+- **T-056 (contadores en partida, teclas y atajos):** detenido a pedido de
+  Arnold el 5 de octubre, sin revisar ni fusionar. Esta en la rama
+  `feat/contadores` (worktree `.claude/worktrees/agent-a6234eb5a5e3771dc`, cinco
+  commits). Al retomarlo: correr los cuatro checks y el e2e en esa rama,
+  revisarla, fusionar, y despues conectar: (1) `results.ts` pasa los conteos a
+  `rangoDePrecision` y `resultados.css` gana la clase del rango SS; (2)
+  `partidaDesdeScore` de `records-logica.ts` recibe `pulsaciones` y la
+  desviacion media del resultado de la partida.
 
 | Ticket | Que es | Estado |
 |---|---|---|
