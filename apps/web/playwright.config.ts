@@ -18,9 +18,11 @@ export default defineConfig({
     // usuario para arrancar un AudioContext en el Chromium que usa
     // Playwright si se lanza con esta flag: si no, start() quedaria
     // 'suspended' y ctx.currentTime no avanzaria, y la prueba de deriva no
-    // mediria nada real.
+    // mediria nada real. `--mute-audio` corta solo la salida a los parlantes:
+    // el grafo de audio y su reloj siguen corriendo igual, y correr el e2e no
+    // hace sonar nada en la maquina.
     launchOptions: {
-      args: ['--autoplay-policy=no-user-gesture-required'],
+      args: ['--autoplay-policy=no-user-gesture-required', '--mute-audio'],
     },
   },
   webServer: {
