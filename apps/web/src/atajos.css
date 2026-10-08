@@ -63,7 +63,8 @@
 
 /* -- Aviso de velocidad (T-057): arriba al centro de la pantalla, mono, se desvanece solo -- */
 
-.tetra-velocidad-aviso {
+.tetra-velocidad-aviso,
+.tetra-offset-aviso {
   position: absolute;
   top: var(--espacio-4);
   left: 50%;
@@ -78,6 +79,12 @@
   text-shadow: 0 1px 2px rgb(0 0 0 / 0.55);
 }
 
-.tetra-velocidad-aviso[hidden] {
+.tetra-velocidad-aviso[hidden],
+.tetra-offset-aviso[hidden] {
   display: none;
+}
+
+/* T-060: el aviso de offset va justo debajo del de velocidad, para que los dos puedan verse a la vez. */
+.tetra-offset-aviso {
+  top: calc(var(--espacio-4) + 2.25rem);
 }

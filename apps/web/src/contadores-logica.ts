@@ -6,6 +6,7 @@
 // performance.now() ni de timers (CLAUDE.md, "El reloj es el audio").
 
 import type { HitWindows, Ms } from '@tetra/core';
+import { formatearOffset } from './ajustes-barras-logica.js';
 import { desviacionEstandar } from './estadisticas.js';
 
 // ---------------------------------------------------------------------------
@@ -21,8 +22,24 @@ export const MARCAS_EN_BARRA = 40;
 /** Pasos de la opacidad de una marca: no se reescribe el estilo si no cambia el paso. */
 export const PASOS_DE_ALPHA = 16;
 
-/** Cuantos golpes entran en la media movil (la flechita de la barra). */
-export const GOLPES_EN_MEDIA_MOVIL = 20;
+/**
+ * Cuantos golpes entran en la media movil: la flechita de la barra y el numero
+ * junto a ella (T-060: eran 20 para la flecha; ahora los dos usan los mismos 30).
+ */
+export const GOLPES_EN_MEDIA_MOVIL = 30;
+
+/** T-060: golpes juzgados que hacen falta para mostrar el numero de la media en vivo. */
+export const GOLPES_MINIMOS_MEDIA_VIVA = 10;
+
+/**
+ * T-060: la media en vivo que se muestra junto a la barra, `+61 ms`, o `null`
+ * si todavia no hay `GOLPES_MINIMOS_MEDIA_VIVA` golpes (no se dibuja nada).
+ * Positivo es tarde: subir el offset acerca la media a 0.
+ */
+export function textoDeMediaViva(media: Ms, golpes: number): string | null {
+  if (golpes < GOLPES_MINIMOS_MEDIA_VIVA || !Number.isFinite(media)) return null;
+  return formatearOffset(media);
+}
 
 /**
  * Posicion de una marca en la barra, de -1 (borde izquierdo, temprano) a 1

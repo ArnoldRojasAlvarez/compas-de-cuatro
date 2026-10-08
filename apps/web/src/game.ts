@@ -26,7 +26,13 @@ import {
 } from '@tetra/engine';
 import { mostrarResultados, type CorreccionDeOffset, type Desviacion } from './results.js';
 import { guardarOffset, leerOffset } from './offset.js';
-import { guardarOffsetLocal } from './offset-local.js';
+import { clampOffsetLocal, guardarOffsetLocal } from './offset-local.js';
+import { deltaDeOffset } from './ajustes-barras-logica.js';
+import {
+  crearSesgoAcumulado,
+  sentidoDeTeclaDeOffset,
+  textoDeAvisoDeOffset,
+} from './offset-vivo-logica.js';
 import {
   VELOCIDAD_MIN,
   guardarVelocidad,
@@ -566,19 +572,21 @@ export function runGame(
       userOffset: offsetGlobal + (offsetLocal ?? 0),
       destino: volumen,
     });
-    // Que corrige "Corregir offset" de los resultados: el local de la cancion
-    // si la partida trajo uno (aunque sea 0), si no el global.
-    const correccionDeOffset: CorreccionDeOffset =
-      offsetLocal !== undefined && idCancion !== undefined
-        ? { actual: offsetLocal, guardar: (ms) => guardarOffsetLocal(idCancion, ms), local: true }
-        : {
-            actual: offsetGlobal,
-            guardar: (ms) => {
-              guardarOffset(ms);
-              return ms;
-            },
-            local: false,
-          };
+    // Que offset se ajusta (con las teclas - y = de la partida, con el boton de
+    // la pausa y con "Corregir offset" de los resultados): el local de la
+    // cancion si la partida trajo uno (aunque sea 0), si no el global. T-060: es
+    // mutable porque se puede mover en vivo; `baseDelReloj` es la otra parte
+    // del `userOffset` del reloj, la que no se toca.
+    const idDelOffsetLocal = offsetLocal !== undefined ? idCancion : undefined;
+    const editaLocal = idDelOffsetLocal !== undefined;
+    let offsetEditable: Ms = editaLocal ? (offsetLocal ?? 0) : offsetGlobal;
+    const baseDelReloj: Ms = editaLocal ? offsetGlobal : (offsetLocal ?? 0);
+    /** Guarda el offset editable donde corresponde y devuelve el valor que quedo (el local se recorta a +-300). */
+    const persistirOffsetEditable = (ms: Ms): Ms => {
+      if (idDelOffsetLocal !== undefined) return guardarOffsetLocal(idDelOffsetLocal, ms);
+      guardarOffset(ms);
+      return ms;
+    };
     const engine = createJudgeEngine(chart);
     window.__tetraDebug = { clock, ctx, volumen, efectos };
 
@@ -608,8 +616,13 @@ export function runGame(
     let reintentoDesde: Ms | null = null;
     // T-057: instante de juego (clock.now()) del ultimo cambio de velocidad, o null sin aviso a la vista.
     let avisoVelocidadDesde: Ms | null = null;
+    // T-060: lo mismo para el aviso del offset (teclas - y =).
+    let avisoOffsetDesde: Ms | null = null;
 
     const desviaciones: Desviacion[] = [];
+    // T-060: error y offset en vigor de cada golpe juzgado (sin miss), para
+    // "Corregir offset" de los resultados.
+    const sesgoTotal = crearSesgoAcumulado();
     function registrar(resultado: HitResult | null, t: Ms): void {
       if (resultado === null) return;
       desviaciones.push({
@@ -618,7 +631,10 @@ export function runGame(
         judgement: resultado.judgement,
         column: resultado.note.column,
       });
-      contadores.golpe(resultado.error, resultado.judgement, t);
+      if (resultado.judgement !== 'miss') {
+        sesgoTotal.agregar(resultado.error, offsetEditable);
+      }
+      contadores.golpe(resultado.error, resultado.judgement, t, offsetEditable);
     }
 
     // T-004, "El punto critico: el tiempo de la pulsacion":
@@ -696,6 +712,7 @@ export function runGame(
       window.removeEventListener('keydown', manejarAtajoAbajo);
       window.removeEventListener('keyup', manejarAtajoArriba);
       window.removeEventListener('keydown', manejarVelocidad);
+      window.removeEventListener('keydown', manejarOffsetEnVivo);
       window.removeEventListener('blur', cancelarReintento);
       window.removeEventListener('resize', ajustarAlVentana);
       volumen.disconnect();
@@ -715,6 +732,14 @@ export function runGame(
       liberarSkinPropia();
       app.destroy(true, { children: true });
       contenedor.innerHTML = '';
+      // Que corrige "Corregir offset": `actual` es el offset que regia en promedio
+      // durante los golpes (el de siempre si no se toco en la partida), asi la
+      // cuenta de calcularOffsetCorregido sigue valiendo si se movio en vivo.
+      const correccionDeOffset: CorreccionDeOffset = {
+        actual: sesgoTotal.offsetPromedio(offsetEditable),
+        guardar: persistirOffsetEditable,
+        local: editaLocal,
+      };
       mostrarResultados(
         contenedor,
         estadoFinal,
@@ -733,7 +758,7 @@ export function runGame(
         desviaciones,
         replay:
           reproducir?.replay ??
-          grabador!.replay(hashDeReplay(chart), offsetGlobal + (offsetLocal ?? 0)),
+          grabador!.replay(hashDeReplay(chart), clock.userOffset),
       });
     }
 
@@ -953,8 +978,45 @@ export function runGame(
       avisos.mostrarVelocidad(textoDeAvisoDeVelocidad(nueva), pasoDeAlphaDeAvisoDeVelocidad(0));
     }
 
+    /**
+     * T-060: pone el offset editable en `nuevo` (recortado y guardado), lo aplica al
+     * reloj ya mismo y avisa a la media en vivo. `userOffset` es mutable a
+     * proposito (HANDOFF, leccion 2): se escribe el, nunca `offset`.
+     */
+    function fijarOffsetEditable(nuevo: Ms): Ms {
+      let valor = editaLocal ? clampOffsetLocal(nuevo) : Math.round(nuevo);
+      try {
+        valor = persistirOffsetEditable(valor);
+      } catch {
+        // Sin almacenamiento el offset vale solo para esta partida.
+      }
+      offsetEditable = valor;
+      clock.userOffset = baseDelReloj + valor;
+      contadores.cambiarOffset(valor);
+      return valor;
+    }
+
+    // T-060: - y = (tambien + y las del teclado numerico) bajan y suben el offset
+    // de la cancion de a 1 ms (Shift, 5 ms) con efecto inmediato. Subir el
+    // offset acerca a 0 una media tarde. El aviso se mide con clock.now(). Una
+    // tecla asignada a una columna manda sobre el atajo, y en replay/auto no aplica.
+    function manejarOffsetEnVivo(evento: KeyboardEvent): void {
+      if (detenido || reproducir !== undefined || !appInicializada || fase !== 'jugando') return;
+      if (evento.ctrlKey || evento.metaKey || evento.altKey || keyMap.includes(evento.code)) return;
+      const sentido = sentidoDeTeclaDeOffset(evento.code, evento.key);
+      if (sentido === 0) return;
+      evento.preventDefault();
+      const valor = fijarOffsetEditable(offsetEditable + deltaDeOffset(sentido, evento.shiftKey));
+      avisoOffsetDesde = clock.now();
+      avisos.mostrarOffset(
+        textoDeAvisoDeOffset(valor, editaLocal),
+        pasoDeAlphaDeAvisoDeVelocidad(0),
+      );
+    }
+
     window.addEventListener('keydown', manejarAtajoAbajo);
     window.addEventListener('keydown', manejarVelocidad);
+    window.addEventListener('keydown', manejarOffsetEnVivo);
     window.addEventListener('keyup', manejarAtajoArriba);
     // Perder el foco con la tecla apretada: el keyup no llega, el aro no debe quedar colgado.
     window.addEventListener('blur', cancelarReintento);
@@ -1100,6 +1162,13 @@ export function runGame(
             const paso = pasoDeAlphaDeAvisoDeVelocidad(t - avisoVelocidadDesde);
             avisos.mostrarVelocidad(textoDeAvisoDeVelocidad(velocidadActual), paso);
             if (paso === 0) avisoVelocidadDesde = null;
+          }
+
+          // El aviso del offset, igual.
+          if (avisoOffsetDesde !== null) {
+            const paso = pasoDeAlphaDeAvisoDeVelocidad(t - avisoOffsetDesde);
+            avisos.mostrarOffset(textoDeAvisoDeOffset(offsetEditable, editaLocal), paso);
+            if (paso === 0) avisoOffsetDesde = null;
           }
 
           // 2. La entrada (o el replay), despachada con el tiempo de cada evento

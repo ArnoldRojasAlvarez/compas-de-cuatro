@@ -184,6 +184,22 @@
   border-bottom: 5px solid var(--tinta);
 }
 
+/* T-060: la media de los ultimos golpes como numero, a la derecha de la barra (mono, chico). */
+.tetra-error-media-texto {
+  position: absolute;
+  left: calc(100% + var(--espacio-3));
+  top: 0;
+  font-size: var(--tipo-xs);
+  line-height: 16px;
+  color: var(--tinta-2);
+  white-space: nowrap;
+  text-shadow: 0 1px 2px rgb(0 0 0 / 0.55);
+}
+
+.tetra-error-media-texto[hidden] {
+  display: none;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .tetra-tecla,
   .tetra-error-media {
