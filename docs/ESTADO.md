@@ -77,6 +77,10 @@ centrados en cero. El motor esta bien sincronizado.
 
 ## Lo que sigue despues
 
+- **Primero, T-059 rendimiento de la partida** (pedido de Arnold el 7 de
+  octubre): caidas abruptas de fps (vio 54) y contador ilegible. Medir antes de
+  arreglar; incluye T-039. Ver `docs/tickets/T-059-rendimiento-de-la-partida.md`.
+
 - **Pendiente chico de T-048:** el titulo de la demo sigue "Primer Compas" (es un
   dato guardado y la clave para no duplicarla). Para "Primer Compás" en
   instalaciones nuevas: cambiar `TITULO_DEMO`, sumar el titulo viejo al chequeo
