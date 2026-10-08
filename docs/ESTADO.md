@@ -1,6 +1,6 @@
 # Estado del proyecto
 
-Ultima actualizacion: 7 de octubre de 2026 (cierre del dia).
+Ultima actualizacion: 8 de octubre de 2026.
 
 Estado corto y siempre al dia. **Si sos una sesion NUEVA, empeza por
 `docs/HANDOFF.md`** (metodo de trabajo, reglas, lecciones), despues
@@ -8,7 +8,7 @@ Estado corto y siempre al dia. **Si sos una sesion NUEVA, empeza por
 
 ## Donde esta todo
 
-- `main`: limpio, verde, 1386 tests + 49 e2e.
+- `main`: limpio, verde, 1414 tests + 51 e2e.
 - Estado demo: menu con musica de la biblioteca, song select sobre la escena, partida con fondo y video, cuatro skins propias, cancion demo sembrada.
 - En curso: nada.
 
@@ -53,6 +53,7 @@ Estado corto y siempre al dia. **Si sos una sesion NUEVA, empeza por
 | T-052 | Escena: fondo de la cancion a pantalla completa; menu con musica de la biblioteca (pausa, siguiente); song select minimalista con preview visible, exportar y borrar, importar soltando en cualquier parte |
 | T-053 | Partida a pantalla completa con fondo atenuado y video sincronizado al reloj, intro, HUD limpio, volumen; resultados con fondo; ajustes con poco texto, skins en miniatura, atenuacion y video |
 | T-055 | Records por dificultad: mejor y ultima partida, intentos, conteos de cada juicio, rango SS; se ven en el song select (detalle, chips y lista) y con aviso de nuevo record en resultados |
+| T-059 | Rendimiento: el "54 fps" era el contador (1000/dt con el reloj de audio, que avanza por bloques); el juego va a 16,7 ms con p99 16,8 en GPU real. Contador nuevo `60 fps · 17 ms max` (promedio de 500 ms y peor frame), layouts de 60/s a 8/s, flecha de la barra de error con transform, T-039 (pista sin objetos por frame), arnes `tools/medir-rendimiento.mjs`. Pendiente: un tiron aislado del driver de GPU, opcion experimental de baja latencia |
 | T-048 | Tildes y enie en todo texto visible (UI y mensajes de error de los paquetes); "Fácil"/"Difícil" se muestran con tilde sin cambiar el `difficultyName` guardado; `tildes.test.ts` vigila palabras comunes sin tilde y rayas |
 | T-034 | Mapeador: Mayus+arrastrar elige (rectangulo alineado a la grilla), Ctrl+A/C/X/V, Supr, Alt+flechas mueve (slot o columna), Q cuantiza; cada operacion es un paso de deshacer; el portapapeles sobrevive entre dificultades |
 | T-046 | Minimapa del mapeador: onda, densidad de notas, huecos de mas de 8 compases en ambar, marcas cada 8 compases, cabezal y zona visible; clic o arrastre salta |
@@ -77,9 +78,11 @@ centrados en cero. El motor esta bien sincronizado.
 
 ## Lo que sigue despues
 
-- **Primero, T-059 rendimiento de la partida** (pedido de Arnold el 7 de
-  octubre): caidas abruptas de fps (vio 54) y contador ilegible. Medir antes de
-  arreglar; incluye T-039. Ver `docs/tickets/T-059-rendimiento-de-la-partida.md`.
+- **T-059, prueba de Arnold:** jugar el Difícil de la demo unos 40 s en su
+  Chrome con el contador nuevo y mirar el "ms max". El arnes solo corre headless
+  (sin vsync real ni contencion con otros programas). Si aparece el tiron de
+  ~38 s, probar `localStorage.setItem('tetra:dibujo-baja-latencia','true')` y
+  decidir si va como casilla en ajustes (ver docs/rendimiento/T-059-medicion.md).
 
 - **Pendiente chico de T-048:** el titulo de la demo sigue "Primer Compas" (es un
   dato guardado y la clave para no duplicarla). Para "Primer Compás" en
