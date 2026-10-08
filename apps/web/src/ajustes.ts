@@ -18,6 +18,11 @@
 //
 // T-042 suma la quinta, "Biblioteca": exportar e importar la copia de
 // seguridad (dos botones y una linea de estado).
+//
+// T-058: offset, velocidad, volumen, efectos y atenuacion son barras del mismo
+// componente (`crearBarra`): mismo riel, valor en la misma columna. La logica
+// pura (formatos, recorte del offset, paso de los botones) vive en
+// ajustes-barras-logica.ts.
 
 import {
   ErrorDeRespaldo,
@@ -50,14 +55,17 @@ import { guardarOffset, leerOffset } from './offset.js';
 import { guardarMostrarFps, leerMostrarFps } from './graficos.js';
 import { intentarAsignarCodigo, leerKeyMap, guardarKeyMap, type KeyMap } from './keymap.js';
 import { nombreLegibleDeCodigo } from './teclas.js';
+import { VELOCIDAD_MAX, VELOCIDAD_MIN, guardarVelocidad, leerVelocidad } from './velocidad.js';
 import {
-  VELOCIDAD_MAX,
-  VELOCIDAD_MIN,
-  clampVelocidad,
-  guardarVelocidad,
-  leerVelocidad,
-  velocidadAScrollDuration,
-} from './velocidad.js';
+  OFFSET_BARRA_MAX,
+  OFFSET_BARRA_MIN,
+  deltaDeOffset,
+  formatearOffset,
+  formatearVelocidad,
+  offsetABarra,
+  pasoDeOffset,
+} from './ajustes-barras-logica.js';
+import { crearBotonIcono } from './iconos.js';
 import {
   gananciaDeVolumen,
   guardarVolumen,
@@ -190,15 +198,6 @@ function agruparEnFila(...filas: HTMLElement[]): HTMLElement {
   return grupo;
 }
 
-/** Dos filas de ajuste en una sola linea de la tarjeta (en angosto la segunda baja). */
-function agruparEnPar(a: HTMLElement, b: HTMLElement): HTMLElement {
-  const par = document.createElement('div');
-  par.className = 'tetra-ajustes-par';
-  par.appendChild(a);
-  par.appendChild(b);
-  return par;
-}
-
 /** Dato vivo en mono, junto a un control ("1200 ms", "80%"). */
 function crearDatoVivo(texto: string): HTMLElement {
   const dato = document.createElement('span');
@@ -207,50 +206,98 @@ function crearDatoVivo(texto: string): HTMLElement {
   return dato;
 }
 
-/** Botones de mas y menos pegados al input numerico: un solo control segmentado. */
-function crearSegmentado(
-  botonMenos: HTMLElement,
-  entrada: HTMLElement,
-  botonMas: HTMLElement,
-): HTMLElement {
-  const grupo = document.createElement('div');
-  grupo.className = 'tetra-ajustes-segmentado';
-  grupo.appendChild(botonMenos);
-  grupo.appendChild(entrada);
-  grupo.appendChild(botonMas);
-  return grupo;
+interface OpcionesBarra {
+  id: string;
+  min: number;
+  max: number;
+  paso: number;
+  /** Posicion inicial de la barra. */
+  valor: number;
+  /** Texto inicial del valor, a la derecha de la barra. */
+  texto: string;
+  /** Una rayita en el centro del riel (el cero del offset). */
+  marcaCentro?: boolean;
+  /** Botones a los costados de la barra (el offset). Sin ellos, el hueco queda vacio. */
+  menos?: HTMLElement;
+  mas?: HTMLElement;
 }
 
-/** Deslizador 0 a 100 (en pasos de 1) con su valor en vivo; `alCambiar` recibe la fraccion 0 a 1. */
+/**
+ * Barra de ajuste (T-058): el mismo componente para offset, velocidad,
+ * volumen, efectos y atenuacion. Cuatro columnas fijas (hueco del `-`, riel,
+ * hueco del `+`, valor), asi que todas las barras tienen el mismo largo de riel
+ * y el valor cae en la misma columna, lleven botones o no.
+ */
+function crearBarra(opciones: OpcionesBarra): {
+  entrada: HTMLInputElement;
+  dato: HTMLElement;
+  control: HTMLElement;
+} {
+  const entrada = document.createElement('input');
+  entrada.type = 'range';
+  entrada.id = opciones.id;
+  entrada.className = 'tetra-ajustes-rango';
+  entrada.min = String(opciones.min);
+  entrada.max = String(opciones.max);
+  entrada.step = String(opciones.paso);
+  entrada.value = String(opciones.valor);
+
+  const riel = document.createElement('div');
+  riel.className = opciones.marcaCentro
+    ? 'tetra-ajustes-riel tetra-ajustes-riel-centro'
+    : 'tetra-ajustes-riel';
+  riel.appendChild(entrada);
+
+  const dato = crearDatoVivo(opciones.texto);
+
+  const control = document.createElement('div');
+  control.className = 'tetra-ajustes-barra';
+  if (opciones.menos) {
+    opciones.menos.classList.add('tetra-ajustes-barra-menos');
+    control.appendChild(opciones.menos);
+  }
+  control.appendChild(riel);
+  if (opciones.mas) {
+    opciones.mas.classList.add('tetra-ajustes-barra-mas');
+    control.appendChild(opciones.mas);
+  }
+  control.appendChild(dato);
+  return { entrada, dato, control };
+}
+
+/** Barra 0 a 100 (en pasos de 1) con su valor en vivo; `alCambiar` recibe la fraccion 0 a 1. */
 function crearDeslizador(
   id: string,
   inicial: number,
   alCambiar: (fraccion: number) => void,
-): { entrada: HTMLInputElement; dato: HTMLElement } {
-  const entrada = document.createElement('input');
-  entrada.type = 'range';
-  entrada.id = id;
-  entrada.className = 'tetra-ajustes-rango';
-  entrada.min = '0';
-  entrada.max = '100';
-  entrada.step = '1';
-  entrada.value = String(Math.round(inicial * 100));
-  const dato = crearDatoVivo(formatearPorcentaje(inicial));
+): { entrada: HTMLInputElement; control: HTMLElement } {
+  const { entrada, dato, control } = crearBarra({
+    id,
+    min: 0,
+    max: 100,
+    paso: 1,
+    valor: Math.round(inicial * 100),
+    texto: formatearPorcentaje(inicial),
+  });
   entrada.addEventListener('input', () => {
     const fraccion = Number(entrada.value) / 100;
     dato.textContent = formatearPorcentaje(fraccion);
     alCambiar(fraccion);
   });
-  return { entrada, dato };
+  return { entrada, control };
 }
 
-const PASO_OFFSET_MS = 1;
-
 /**
- * Control de calibracion de offset (T-007, "Parte B"): numero editable en
- * ms mas botones de +-1ms. Se lee de localStorage al armar el control y se
- * guarda ahi mismo en cada cambio; game.ts lo vuelve a leer al arrancar la
- * proxima partida y se lo pasa al reloj como `ClockOptions.userOffset`.
+ * Control de calibracion de offset (T-007; T-058 lo pasa a barra): de
+ * -150 a +150 ms con el cero marcado en el centro, y dos botones de a 1 ms
+ * (Shift: 5) porque arrastrar no alcanza para afinar. Doble clic sobre la barra
+ * vuelve a 0. Se lee de localStorage al armar el control y se guarda ahi mismo
+ * en cada cambio; game.ts lo vuelve a leer al arrancar la proxima partida y se
+ * lo pasa al reloj como `ClockOptions.userOffset`.
+ *
+ * El offset guardado puede pasar de la barra (el de calibracion admite mas):
+ * entonces la barra queda en el tope y el numero muestra el valor real, que
+ * solo se reemplaza al mover la barra o apretar un boton.
  *
  * El signo lo define el reloj (packages/audio/src/clock.ts) y el motor de
  * juicio: subir el offset mueve los golpes hacia temprano (puntos mas abajo
@@ -259,130 +306,118 @@ const PASO_OFFSET_MS = 1;
  * partir de la media medida.
  */
 function crearControlDeOffset(): HTMLElement {
-  const botonMenos = document.createElement('button');
-  botonMenos.type = 'button';
-  botonMenos.textContent = `-${PASO_OFFSET_MS} ms`;
+  let real = leerOffset();
 
-  const entrada = document.createElement('input');
-  entrada.type = 'number';
-  entrada.id = 'tetra-offset-valor';
-  entrada.className = 'tetra-ajustes-numero';
-  entrada.step = String(PASO_OFFSET_MS);
-  entrada.value = String(leerOffset());
+  const botonMenos = crearBotonIcono('menos', 'Bajar el offset 1 ms');
+  botonMenos.title = 'Bajar 1 ms (con Shift, 5 ms)';
+  const botonMas = crearBotonIcono('mas', 'Subir el offset 1 ms');
+  botonMas.title = 'Subir 1 ms (con Shift, 5 ms)';
 
-  const botonMas = document.createElement('button');
-  botonMas.type = 'button';
-  botonMas.textContent = `+${PASO_OFFSET_MS} ms`;
+  const { entrada, dato, control } = crearBarra({
+    id: 'tetra-offset-valor',
+    min: OFFSET_BARRA_MIN,
+    max: OFFSET_BARRA_MAX,
+    paso: 1,
+    valor: offsetABarra(real),
+    texto: formatearOffset(real),
+    marcaCentro: true,
+    menos: botonMenos,
+    mas: botonMas,
+  });
 
   function fijarOffset(valor: number): void {
-    entrada.value = String(valor);
+    real = valor;
+    entrada.value = String(offsetABarra(valor));
+    dato.textContent = formatearOffset(valor);
     guardarOffset(valor);
   }
 
-  botonMenos.addEventListener('click', () => {
-    fijarOffset((Number(entrada.value) || 0) - PASO_OFFSET_MS);
+  entrada.addEventListener('input', () => fijarOffset(Number(entrada.value)));
+  entrada.addEventListener('dblclick', () => fijarOffset(0));
+  // Shift+flecha mueve 5 ms; sin Shift el input nativo ya mueve un paso (1 ms).
+  entrada.addEventListener('keydown', (e) => {
+    if (!e.shiftKey) return;
+    const sentido =
+      e.key === 'ArrowRight' || e.key === 'ArrowUp'
+        ? 1
+        : e.key === 'ArrowLeft' || e.key === 'ArrowDown'
+          ? -1
+          : null;
+    if (sentido === null) return;
+    e.preventDefault();
+    fijarOffset(pasoDeOffset(real, deltaDeOffset(sentido, true)));
   });
-  botonMas.addEventListener('click', () => {
-    fijarOffset((Number(entrada.value) || 0) + PASO_OFFSET_MS);
+  botonMenos.addEventListener('click', (e) => {
+    fijarOffset(pasoDeOffset(real, deltaDeOffset(-1, e.shiftKey)));
   });
-  entrada.addEventListener('change', () => {
-    const valor = Number(entrada.value);
-    fijarOffset(Number.isFinite(valor) ? valor : 0);
+  botonMas.addEventListener('click', (e) => {
+    fijarOffset(pasoDeOffset(real, deltaDeOffset(1, e.shiftKey)));
   });
 
   return crearFila({
     nombre: 'Offset',
-    idControl: 'tetra-offset-valor',
+    idControl: entrada.id,
     ayuda:
-      'Offset en ms. Si en los resultados pegas temprano (puntos abajo), bajalo; si pegas tarde (arriba), subilo.',
-    controles: [crearSegmentado(botonMenos, entrada, botonMas)],
+      'Offset en ms. Si en los resultados pegas temprano (puntos abajo), bajalo; si pegas tarde (arriba), subilo. Doble clic en la barra lo vuelve a 0.',
+    controles: [control],
   });
 }
 
-const PASO_VELOCIDAD = 1;
-
 /**
- * Control de velocidad de caida (T-008, "Parte A"): numero entero con
- * botones de mas y menos, igual de forma que el control de offset de
- * arriba. Muestra el concepto natural del jugador (mas numero = mas rapido
- * = menos notas en pantalla a la vez), no los ms de `scrollDuration`: ese
- * numero se guarda tal cual en localStorage y game.ts lo convierte a ms
- * recien al arrancar la partida, con `velocidadAScrollDuration`. Junto al
- * control queda, en vivo, lo que dura una nota en cruzar la pista.
+ * Control de velocidad de caida (T-008; T-058 lo pasa a barra): de 1 a 12,
+ * guarda al mover. Muestra el concepto natural del jugador (mas numero = mas
+ * rapido = menos notas en pantalla a la vez), no los ms de `scrollDuration`:
+ * ese numero se guarda tal cual en localStorage y game.ts lo convierte a ms
+ * recien al arrancar la partida, con `velocidadAScrollDuration`. Junto a la
+ * barra queda, en vivo, el nivel y lo que dura una nota en cruzar la pista.
  */
 function crearControlDeVelocidad(): HTMLElement {
-  const botonMenos = document.createElement('button');
-  botonMenos.type = 'button';
-  botonMenos.textContent = `-${PASO_VELOCIDAD}`;
-
-  const entrada = document.createElement('input');
-  entrada.type = 'number';
-  entrada.id = 'tetra-velocidad-valor';
-  entrada.className = 'tetra-ajustes-numero';
-  entrada.step = String(PASO_VELOCIDAD);
-  entrada.min = String(VELOCIDAD_MIN);
-  entrada.max = String(VELOCIDAD_MAX);
-  entrada.value = String(leerVelocidad());
-
-  const botonMas = document.createElement('button');
-  botonMas.type = 'button';
-  botonMas.textContent = `+${PASO_VELOCIDAD}`;
-
-  const dato = crearDatoVivo('');
-  function actualizarDato(velocidad: number): void {
-    dato.textContent = `${velocidadAScrollDuration(velocidad)} ms`;
-  }
-  actualizarDato(leerVelocidad());
-
-  function fijarVelocidad(valor: number): void {
-    const recortado = clampVelocidad(valor);
-    entrada.value = String(recortado);
-    guardarVelocidad(recortado);
-    actualizarDato(recortado);
-  }
-
-  botonMenos.addEventListener('click', () => {
-    fijarVelocidad((Number(entrada.value) || VELOCIDAD_MIN) - PASO_VELOCIDAD);
+  const inicial = leerVelocidad();
+  const { entrada, dato, control } = crearBarra({
+    id: 'tetra-velocidad-valor',
+    min: VELOCIDAD_MIN,
+    max: VELOCIDAD_MAX,
+    paso: 1,
+    valor: inicial,
+    texto: formatearVelocidad(inicial),
   });
-  botonMas.addEventListener('click', () => {
-    fijarVelocidad((Number(entrada.value) || VELOCIDAD_MIN) + PASO_VELOCIDAD);
-  });
-  entrada.addEventListener('change', () => {
-    const valor = Number(entrada.value);
-    fijarVelocidad(Number.isFinite(valor) ? valor : VELOCIDAD_MIN);
+  entrada.addEventListener('input', () => {
+    const velocidad = Number(entrada.value);
+    guardarVelocidad(velocidad);
+    dato.textContent = formatearVelocidad(velocidad);
   });
 
   return crearFila({
     nombre: 'Velocidad',
-    idControl: 'tetra-velocidad-valor',
+    idControl: entrada.id,
     ayuda: `Mas alto, las notas caen mas rapido y hay menos en pantalla a la vez (de ${VELOCIDAD_MIN} a ${VELOCIDAD_MAX}). El dato es lo que tarda una nota en cruzar la pista.`,
-    controles: [dato, crearSegmentado(botonMenos, entrada, botonMas)],
+    controles: [control],
   });
 }
 
 /** Volumen de la musica (T-053): deslizador 0 a 100 %, compartido con el menu y el preview. */
 function crearControlDeVolumen(): HTMLElement {
-  const { entrada, dato } = crearDeslizador('tetra-volumen-valor', leerVolumen(), (fraccion) => {
+  const { entrada, control } = crearDeslizador('tetra-volumen-valor', leerVolumen(), (fraccion) => {
     guardarVolumen(fraccion);
   });
   return crearFila({
     nombre: 'Volumen',
     idControl: entrada.id,
     ayuda: 'Volumen de la musica en la partida, el menu y la previa de las canciones.',
-    controles: [entrada, dato],
+    controles: [control],
   });
 }
 
 /** Volumen de los efectos (T-027): el mismo deslizador que el de la musica, con su clave propia. */
 function crearControlDeEfectos(): HTMLElement {
-  const { entrada, dato } = crearDeslizador('tetra-efectos-valor', leerVolumenEfectos(), (fraccion) => {
+  const { entrada, control } = crearDeslizador('tetra-efectos-valor', leerVolumenEfectos(), (fraccion) => {
     guardarVolumenEfectos(fraccion);
   });
   return crearFila({
     nombre: 'Efectos',
     idControl: entrada.id,
     ayuda: 'Volumen del sonido de cada golpe en la partida.',
-    controles: [entrada, dato],
+    controles: [control],
   });
 }
 
@@ -805,7 +840,7 @@ function crearControlDeSkin(onError: (mensaje: string) => void): HTMLElement {
 
 /** Atenuacion del fondo de la cancion detras de la pista (0 a 100 %, 80 % por defecto). */
 function crearControlDeAtenuacion(): HTMLElement {
-  const { entrada, dato } = crearDeslizador('tetra-atenuacion-valor', leerAtenuacion(), (fraccion) => {
+  const { entrada, control } = crearDeslizador('tetra-atenuacion-valor', leerAtenuacion(), (fraccion) => {
     guardarAtenuacion(fraccion);
   });
   return crearFila({
@@ -813,7 +848,7 @@ function crearControlDeAtenuacion(): HTMLElement {
     idControl: entrada.id,
     ayuda:
       'Cuanto se oscurece la imagen o el video de fondo de la cancion detras de la pista. Mas atenuacion, la pista se lee mejor.',
-    controles: [entrada, dato],
+    controles: [control],
   });
 }
 
@@ -1066,11 +1101,13 @@ export function mostrarAjustes(
       1,
       'Juego',
       'juego',
-      // T-027: tres filas como antes; los controles nuevos comparten fila para que
-      // la pantalla siga entrando en 1280x800 sin scroll.
-      agruparEnPar(crearControlDeOffset(), crearControlDeSonidoDeGolpe()),
+      // T-058: las cuatro barras (mismo riel y misma columna de valor) y el
+      // selector del golpe, una fila cada uno.
+      crearControlDeOffset(),
       crearControlDeVelocidad(),
-      agruparEnPar(crearControlDeVolumen(), crearControlDeEfectos()),
+      crearControlDeVolumen(),
+      crearControlDeEfectos(),
+      crearControlDeSonidoDeGolpe(),
     ),
   );
   rejilla.appendChild(crearSeccion(2, 'Teclas', 'teclas', crearControlDeTeclas(mostrarError)));

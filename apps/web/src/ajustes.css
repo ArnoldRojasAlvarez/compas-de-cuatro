@@ -163,22 +163,113 @@
   color: var(--tinta);
 }
 
-/* Dato vivo junto a un control ("1200 ms", "80%"): mono, tenue, ancho fijo para que no baile. */
-.tetra-ajustes-dato {
-  min-width: 5ch;
-  font-size: var(--tipo-sm);
+/* Barra de ajuste (T-058): offset, velocidad, volumen, efectos y atenuacion
+   comparten la misma cuadricula de cuatro columnas fijas (hueco del `-`, riel,
+   hueco del `+`, valor), asi el riel mide lo mismo y el valor cae en la misma
+   columna en todas, lleven botones o no. */
+.tetra-ajustes {
+  --ancho-riel: 140px;
+  --ancho-paso: 28px;
+  --ancho-valor: 5.5rem;
+  --alto-barra: 28px;
+  --ancho-barra: calc(
+    var(--ancho-paso) * 2 + var(--ancho-riel) + var(--ancho-valor) + var(--espacio-1) * 3
+  );
+}
+
+.tetra-ajustes-barra {
+  display: grid;
+  grid-template-columns: var(--ancho-paso) var(--ancho-riel) var(--ancho-paso) var(--ancho-valor);
+  align-items: center;
+  column-gap: var(--espacio-1);
+}
+
+.tetra-ajustes-barra > * {
+  grid-row: 1;
+}
+
+.tetra-ajustes-barra-menos {
+  grid-column: 1;
+}
+
+.tetra-ajustes-riel {
+  position: relative;
+  grid-column: 2;
+  min-width: 0;
+}
+
+.tetra-ajustes-barra-mas {
+  grid-column: 3;
+}
+
+/* Dato vivo junto a la barra ("7 · 514 ms", "80%"): mono tabular, tenue, en la columna del valor. */
+.tetra-ajustes-barra .tetra-ajustes-dato {
+  grid-column: 4;
+  padding-left: var(--espacio-2);
+  font-size: var(--tipo-xs);
   font-variant-numeric: tabular-nums;
-  text-align: right;
+  white-space: nowrap;
   color: var(--tinta-2);
 }
 
-/* Deslizador (volumen, atenuacion): el acento del navegador en teal, ancho fijo. */
+/* El acento del navegador en teal; el riel ocupa toda su columna. */
 .tetra-ajustes-rango {
-  width: 140px;
-  height: var(--alto-control);
+  display: block;
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  height: var(--alto-barra);
   margin: 0;
   accent-color: var(--acento);
   cursor: pointer;
+}
+
+/* El foco de style.css pinta un fondo opaco: aca taparia la marca del cero. */
+#app .tetra-ajustes .tetra-ajustes-rango:focus-visible {
+  background: transparent;
+}
+
+/* El cero del offset: una rayita en el centro del riel, detras de la perilla. */
+.tetra-ajustes-riel-centro::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  z-index: 0;
+  width: 2px;
+  height: 20px;
+  background: var(--tinta-3);
+  border-radius: 1px;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+
+/* Botones - y + del offset: cuadrados chicos, mismo gris fantasma que los botones-icono. */
+#app .tetra-ajustes .tetra-ajustes-fila .tetra-ajustes-barra .tetra-boton-icono {
+  width: var(--ancho-paso);
+  height: var(--ancho-paso);
+}
+
+#app .tetra-ajustes .tetra-ajustes-barra .tetra-icono {
+  width: 16px;
+  height: 16px;
+}
+
+/* Tarjeta Juego (T-058): cinco filas seguidas, sin lineas entre ellas, para que
+   la pantalla siga entrando en 1280x800. El selector del golpe tiene el mismo
+   ancho que las barras, asi los controles de la derecha quedan alineados. */
+.tetra-ajustes-seccion-juego {
+  gap: 10px;
+}
+
+.tetra-ajustes-seccion-juego .tetra-ajustes-fila + .tetra-ajustes-fila {
+  padding-top: 0;
+  border-top: 0;
+}
+
+#app .tetra-ajustes .tetra-ajustes-seccion-juego .tetra-ajustes-fila select {
+  width: var(--ancho-barra);
+  height: 32px;
 }
 
 /* ---------------------------------------------------------------------- */
@@ -195,46 +286,6 @@
 #app .tetra-ajustes .tetra-ajustes-fila select {
   min-width: 0;
   padding: 0 var(--espacio-3);
-}
-
-/* Control segmentado: [ - ][ valor ][ + ] pegados, un solo control. */
-.tetra-ajustes-segmentado {
-  display: inline-flex;
-  align-items: stretch;
-}
-
-#app .tetra-ajustes .tetra-ajustes-segmentado button,
-#app .tetra-ajustes .tetra-ajustes-segmentado input {
-  position: relative;
-  min-width: 40px;
-  margin: 0;
-  padding: 0 var(--espacio-3);
-  font-family: var(--fuente-datos);
-  font-size: var(--tipo-sm);
-  font-variant-numeric: tabular-nums;
-  border-radius: 0;
-}
-
-#app .tetra-ajustes .tetra-ajustes-segmentado input {
-  width: 72px;
-  margin-inline: -1px;
-  padding: 0 var(--espacio-2);
-  text-align: center;
-  background: var(--superficie);
-}
-
-#app .tetra-ajustes .tetra-ajustes-segmentado button:first-child {
-  border-radius: var(--radio-control) 0 0 var(--radio-control);
-}
-
-#app .tetra-ajustes .tetra-ajustes-segmentado button:last-child {
-  border-radius: 0 var(--radio-control) var(--radio-control) 0;
-}
-
-/* El anillo de foco tiene que quedar por encima de los vecinos pegados. */
-#app .tetra-ajustes .tetra-ajustes-segmentado button:focus-visible,
-#app .tetra-ajustes .tetra-ajustes-segmentado input:focus-visible {
-  z-index: 1;
 }
 
 /* ---------------------------------------------------------------------- */
@@ -436,43 +487,6 @@
   gap: var(--espacio-3);
 }
 
-/* Dos ajustes en una linea (T-027): Offset con Golpe, Volumen con Efectos. Cada
-   uno conserva su etiqueta y su control; en angosto el segundo baja. */
-.tetra-ajustes-par {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--espacio-3) var(--espacio-4);
-}
-
-.tetra-ajustes-par > .tetra-ajustes-fila {
-  flex: 0 0 auto;
-  flex-wrap: nowrap;
-  gap: var(--espacio-3);
-}
-
-.tetra-ajustes-par > .tetra-ajustes-fila + .tetra-ajustes-fila {
-  padding-top: 0;
-  border-top: 0;
-}
-
-.tetra-ajustes-par .tetra-ajustes-rango {
-  width: 80px;
-}
-
-.tetra-ajustes-par .tetra-ajustes-dato {
-  min-width: 4ch;
-}
-
-/* La linea de arriba separa los pares de las filas sueltas, igual que entre filas. */
-.tetra-ajustes-par + .tetra-ajustes-fila,
-.tetra-ajustes-fila + .tetra-ajustes-par,
-.tetra-ajustes-par + .tetra-ajustes-par {
-  padding-top: var(--espacio-4);
-  border-top: 1px solid var(--linea);
-}
-
 /* Los controles de debajo de las skins, en una rejilla de tres columnas
    (T-056: dos filas, con los interruptores de los contadores en la segunda). */
 .tetra-ajustes-controles-fila {
@@ -490,11 +504,8 @@
 
 @media (min-width: 900px) {
   .tetra-ajustes-controles-fila {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-
-  .tetra-ajustes-controles-fila .tetra-ajustes-rango {
-    width: 110px;
+    /* La primera columna es mas ancha: ahi va la barra de atenuacion (nombre mas barra completa). */
+    grid-template-columns: minmax(0, 1.9fr) repeat(2, minmax(0, 1fr));
   }
 
   .tetra-ajustes-seccion-presentacion .tetra-ajustes-grupo {
