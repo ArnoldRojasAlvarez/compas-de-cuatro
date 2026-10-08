@@ -71,6 +71,9 @@ centrados en cero. El motor esta bien sincronizado.
 
 ## En curso
 
+- **T-060 (LN y offset en vivo) y T-061 (diagnostico de tirones):** despachados el 8 de octubre.
+- **T-062 (modo practica):** escrito, se despacha cuando entren T-060 y T-061 (mismo bucle de juego).
+
 
 
 | Ticket | Que es | Estado |
