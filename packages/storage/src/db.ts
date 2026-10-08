@@ -5,16 +5,28 @@
 // usuario real va a tener en desarrollo (T-011, "Rendimiento": no hace
 // falta virtualizar para esa escala).
 
-import { combinarRecord, hashMapa, leerReplay, serializarReplay } from '@tetra/core';
+import {
+  TOPE_HISTORIAL,
+  combinarRecord,
+  hashMapa,
+  leerReplay,
+  serializarReplay,
+} from '@tetra/core';
 import type {
   Chart,
   DifficultyResult,
   Ms,
   PartidaJugada,
   RecordDeMapa,
+  RegistroPartida,
   Replay,
 } from '@tetra/core';
-import { normalizarRecord, normalizarReplayGuardado } from './records-validacion.js';
+import {
+  claveDeRegistroPartida,
+  normalizarRecord,
+  normalizarRegistroPartida,
+  normalizarReplayGuardado,
+} from './records-validacion.js';
 import type { ReplayGuardado } from './records-validacion.js';
 import type { ImagenesDeSkin } from './osk.js';
 
@@ -51,13 +63,23 @@ const NOMBRE_BASE = 'tetra-mapas';
 // T-044 agrega 'replays' (el replay de la mejor partida de cada mapa, ver
 // ReplayGuardado): version 6, mismo guard con `contains`. Quien viene de 1 a 5
 // conserva todo y solo gana la tienda nueva. Misma clave que 'records'.
-const VERSION_BASE = 6;
+//
+// T-045 agrega 'historial' (un registro resumido por partida completada, ver
+// RegistroPartida en @tetra/core): version 7, mismo guard con `contains`. Quien
+// viene de 1 a 6 conserva todo y solo gana la tienda nueva. A diferencia de
+// 'records' y 'replays', NO se indexa por mapa ni se borra con la cancion: el
+// historial es del jugador (cuanto toco, como evoluciona su timing), no de la
+// cancion, y borrar un mapa de la biblioteca no borra lo que el jugador jugo.
+// Claves fuera de linea (`fecha|hash`, ver claveDeRegistroPartida): el orden de
+// las claves es el cronologico y reimportar un respaldo no duplica nada.
+const VERSION_BASE = 7;
 const NOMBRE_TIENDA_MAPAS_LEGADO = 'mapas';
 const NOMBRE_TIENDA_SKINS = 'skins';
 const NOMBRE_TIENDA_CANCIONES = 'canciones';
 const NOMBRE_TIENDA_DIFICULTADES = 'dificultades';
 const NOMBRE_TIENDA_RECORDS = 'records';
 const NOMBRE_TIENDA_REPLAYS = 'replays';
+const NOMBRE_TIENDA_HISTORIAL = 'historial';
 
 export type SongId = string;
 
@@ -136,6 +158,9 @@ function abrirBaseDeDatos(): Promise<IDBDatabase> {
       }
       if (!db.objectStoreNames.contains(NOMBRE_TIENDA_REPLAYS)) {
         db.createObjectStore(NOMBRE_TIENDA_REPLAYS, { keyPath: 'hash' });
+      }
+      if (!db.objectStoreNames.contains(NOMBRE_TIENDA_HISTORIAL)) {
+        db.createObjectStore(NOMBRE_TIENDA_HISTORIAL);
       }
     };
 
@@ -514,6 +539,78 @@ export async function listarReplaysDeLaBase(): Promise<ReplayGuardado[]> {
   }
 }
 
+/**
+ * Deja el historial en `tope` registros como maximo borrando los mas viejos
+ * (las claves empiezan por la fecha, asi que las primeras son las mas
+ * antiguas). Se pide dentro de la transaccion que acaba de escribir, despues
+ * de sus escrituras: IndexedDB las ejecuta en orden, asi que el conteo ya las
+ * incluye.
+ */
+function recortarHistorial(tienda: IDBObjectStore, tope: number): void {
+  const conteo = tienda.count();
+  conteo.onsuccess = () => {
+    let exceso = conteo.result - tope;
+    if (exceso <= 0) return;
+    const recorrido = tienda.openCursor();
+    recorrido.onsuccess = () => {
+      const cursor = recorrido.result;
+      if (cursor === null || exceso <= 0) return;
+      cursor.delete();
+      exceso -= 1;
+      cursor.continue();
+    };
+  };
+}
+
+/**
+ * Guarda el resumen de una partida completada (T-045). Si el historial pasa de
+ * `tope` (por defecto `TOPE_HISTORIAL`, 2000), sale el mas viejo, en la misma
+ * transaccion: nunca crece sin tope. Un registro con la misma fecha y mapa se
+ * reemplaza (no se duplica).
+ */
+export async function guardarRegistroEnLaBase(
+  registro: RegistroPartida,
+  tope: number = TOPE_HISTORIAL,
+): Promise<void> {
+  const db = await abrirBaseDeDatos();
+  try {
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction(NOMBRE_TIENDA_HISTORIAL, 'readwrite');
+      const tienda = tx.objectStore(NOMBRE_TIENDA_HISTORIAL);
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error ?? new Error('No se pudo guardar el historial.'));
+      tx.onabort = () => reject(tx.error ?? new Error('Se aborto el guardado del historial.'));
+      tienda.put(registro, claveDeRegistroPartida(registro));
+      recortarHistorial(tienda, tope);
+    });
+  } finally {
+    db.close();
+  }
+}
+
+/** Todo el historial bien formado, del mas viejo al mas nuevo. Los registros corruptos se ignoran; nunca lanza por el contenido. */
+export async function listarHistorialDeLaBase(): Promise<RegistroPartida[]> {
+  const db = await abrirBaseDeDatos();
+  try {
+    return await new Promise<RegistroPartida[]>((resolve, reject) => {
+      const tx = db.transaction(NOMBRE_TIENDA_HISTORIAL, 'readonly');
+      const peticion = tx.objectStore(NOMBRE_TIENDA_HISTORIAL).getAll();
+      peticion.onsuccess = () => {
+        const registros: RegistroPartida[] = [];
+        for (const crudo of peticion.result as unknown[]) {
+          const registro = normalizarRegistroPartida(crudo);
+          if (registro !== undefined) registros.push(registro);
+        }
+        resolve(registros);
+      };
+      peticion.onerror = () =>
+        reject(peticion.error ?? new Error('No se pudo leer el historial.'));
+    });
+  } finally {
+    db.close();
+  }
+}
+
 /** Lo que se escribio (y lo que ya estaba) al restaurar un respaldo en la base. */
 export interface ResultadoEscrituraRespaldo {
   cancionesNuevas: number;
@@ -524,11 +621,13 @@ export interface ResultadoEscrituraRespaldo {
   recordsActualizados: number;
   /** T-044: replays que se escribieron (nuevos o en lugar de uno que ya no era de la mejor partida). */
   replaysNuevos: number;
+  /** T-045: partidas del historial que no estaban (las que ya estaban, por fecha y mapa, no se tocan). */
+  historialNuevo: number;
 }
 
 /**
  * Escribe un respaldo en la base (T-042), todo en UNA transaccion sobre las
- * cuatro tiendas (canciones, skins, records y replays): si algo falla a medias (cuota llena, por ejemplo) se aborta y
+ * cinco tiendas (canciones, skins, records, replays e historial): si algo falla a medias (cuota llena, por ejemplo) se aborta y
  * no queda nada escrito. Nunca pisa: una cancion o skin cuyo id ya existe se
  * deja como esta y se cuenta como existente. Los records se mezclan con
  * `mezclar(previo, entrante)`; si devuelve `undefined` no hay nada que
@@ -541,6 +640,7 @@ export async function restaurarEnLaBase(
     skins: SkinGuardada[];
     records: RecordDeMapa[];
     replays?: ReplayGuardado[];
+    historial?: RegistroPartida[];
   },
   mezclar: (previo: RecordDeMapa | undefined, entrante: RecordDeMapa) => RecordDeMapa | undefined,
 ): Promise<ResultadoEscrituraRespaldo> {
@@ -552,6 +652,7 @@ export async function restaurarEnLaBase(
     recordsNuevos: 0,
     recordsActualizados: 0,
     replaysNuevos: 0,
+    historialNuevo: 0,
   };
   const db = await abrirBaseDeDatos();
   try {
@@ -562,6 +663,7 @@ export async function restaurarEnLaBase(
           NOMBRE_TIENDA_SKINS,
           NOMBRE_TIENDA_RECORDS,
           NOMBRE_TIENDA_REPLAYS,
+          NOMBRE_TIENDA_HISTORIAL,
         ],
         'readwrite',
       );
@@ -649,6 +751,33 @@ export async function restaurarEnLaBase(
               replays.delete(entrante.hash);
             }
           };
+        };
+      }
+
+      // T-045: el historial se une por clave (fecha y mapa): una partida que ya
+      // estaba no se duplica ni se cuenta, asi importar dos veces el mismo
+      // respaldo no cambia nada. Si la union pasa del tope, se queda con las
+      // mas nuevas (las claves ordenan por fecha): las que sobran no entran.
+      const historial = tx.objectStore(NOMBRE_TIENDA_HISTORIAL);
+      const historialEntrante = new Map<string, RegistroPartida>();
+      for (const registro of contenido.historial ?? []) {
+        const clave = claveDeRegistroPartida(registro);
+        if (!historialEntrante.has(clave)) historialEntrante.set(clave, registro);
+      }
+      if (historialEntrante.size > 0) {
+        const lecturaClaves = historial.getAllKeys();
+        lecturaClaves.onsuccess = () => {
+          const existentes = new Set(lecturaClaves.result.map(String));
+          const todas = [...new Set([...existentes, ...historialEntrante.keys()])].sort();
+          const sobrantes = new Set(todas.slice(0, Math.max(0, todas.length - TOPE_HISTORIAL)));
+          for (const clave of sobrantes) {
+            if (existentes.has(clave)) historial.delete(clave);
+          }
+          for (const [clave, registro] of historialEntrante) {
+            if (existentes.has(clave) || sobrantes.has(clave)) continue;
+            historial.put(registro, clave);
+            resultado.historialNuevo += 1;
+          }
         };
       }
     });

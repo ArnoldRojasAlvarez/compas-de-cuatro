@@ -20,6 +20,17 @@ export { hashMapa } from './difficulty/hash.js';
 export type { AjusteLogLog } from './estadistica/index.js';
 export { rangos, spearman, ajustarLeyDePotencia } from './estadistica/index.js';
 
+// T-045: historial de partidas (agregaciones puras).
+export type { RegistroPartida, ResumenHistorial } from './estadistica/historial.js';
+export {
+  TOPE_HISTORIAL,
+  diaUtc,
+  filtrarPorVentana,
+  golpesJuzgados,
+  resumirHistorial,
+  serieDiaria,
+} from './estadistica/historial.js';
+
 export { escribirOsu } from './chart/osu-escritor.js';
 
 export type { Onset, AnalisisOnsets, OpcionesOnsets } from './mapeador/onsets.js';

@@ -20,6 +20,7 @@ import { MODELO_CALIBRADO, SKILLSETS, replayPerfecto } from '@tetra/core';
 import {
   borrarCancion,
   exportarCancion,
+  guardarEnHistorial,
   guardarPartida,
   hashesConReplay,
   importarOsz,
@@ -31,6 +32,7 @@ import {
   type SongId,
 } from '@tetra/storage';
 import { runGame, type EscenaPartida, type OpcionesPartida } from './game.js';
+import { registroDePartida, type GolpeConColumna } from './historial-logica.js';
 import {
   MENSAJE_MAPA_SIN_NOTAS,
   MENSAJE_REPLAY_ILEGIBLE,
@@ -1250,6 +1252,24 @@ export function mostrarSongSelect(contenedor: HTMLElement, opciones: OpcionesSon
     }
   }
 
+  /**
+   * T-045: guarda el resumen de la partida en el historial (las estadisticas
+   * globales). Misma regla que el record: solo partidas completadas de la
+   * biblioteca, nunca auto ni replay (quien llama ya filtro). Un fallo no
+   * estorba: el jugador ve igual sus resultados.
+   */
+  async function registrarEnHistorial(
+    chart: Chart,
+    score: ScoreState,
+    golpes: readonly GolpeConColumna[],
+  ): Promise<void> {
+    try {
+      await guardarEnHistorial(registroDePartida(chart, score, golpes, new Date().toISOString()));
+    } catch {
+      // Sin historial esta vez: la partida ya termino y sus resultados estan en pantalla.
+    }
+  }
+
   /** Id que estaba enfocado al empezar a jugar: al volver, el song select reabre en esa cancion. */
   let idAlJugar: SongId | null = null;
 
@@ -1301,6 +1321,7 @@ export function mostrarSongSelect(contenedor: HTMLElement, opciones: OpcionesSon
           { pulsaciones: resultado.pulsaciones, desviaciones: resultado.desviaciones },
           resultado.replay,
         );
+        await registrarEnHistorial(chart, resultado.score, resultado.desviaciones);
       }
       mostrarBotonVolverDesdeResultados();
     } else {

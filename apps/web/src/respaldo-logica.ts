@@ -41,7 +41,7 @@ function plural(n: number, singular: string, pluralTexto: string): string {
 /**
  * El resumen de una restauracion en una sola linea, corta para que entre en la
  * tarjeta sin saltar: canciones nuevas, las que ya estaban y, si hay, skins,
- * records, replays y ajustes restaurados.
+ * records, replays, partidas del historial y ajustes restaurados.
  */
 export function lineaDeRestauracion(r: ResumenRestauracion): string {
   const partes = [plural(r.cancionesNuevas, 'cancion nueva', 'canciones nuevas')];
@@ -52,6 +52,7 @@ export function lineaDeRestauracion(r: ResumenRestauracion): string {
   const records = r.recordsNuevos + r.recordsActualizados;
   if (records > 0) partes.push(plural(records, 'record', 'records'));
   if (r.replaysNuevos > 0) partes.push(plural(r.replaysNuevos, 'replay', 'replays'));
+  if (r.historialNuevo > 0) partes.push(plural(r.historialNuevo, 'partida', 'partidas'));
   if (r.ajustesRestaurados > 0) partes.push('ajustes');
   return partes.join(', ');
 }

@@ -4,7 +4,7 @@
 // corrupto se ignora al leer: el song select sigue andando sin el.
 
 import { JUDGEMENTS, leerReplay } from '@tetra/core';
-import type { Judgement, PartidaJugada, RecordDeMapa, Rango } from '@tetra/core';
+import type { Judgement, PartidaJugada, RecordDeMapa, Rango, RegistroPartida } from '@tetra/core';
 
 const RANGOS_VALIDOS: readonly string[] = ['SS', 'S', 'A', 'B', 'C', 'D'];
 
@@ -93,4 +93,48 @@ export function normalizarReplayGuardado(valor: unknown): ReplayGuardado | undef
   const replay = leerReplay(texto);
   if (replay === null || replay.hashMapa !== hash) return undefined;
   return { hash, texto, fecha };
+}
+
+/**
+ * T-045: un registro del historial bien formado, o `undefined`. Lo que sale de
+ * IndexedDB o de un respaldo no es de fiar: se exige cada campo (un registro
+ * a medias descuadraria los promedios) y se descarta el que no sirve. Nunca
+ * lanza. Los campos de mas se ignoran.
+ */
+export function normalizarRegistroPartida(valor: unknown): RegistroPartida | undefined {
+  if (!esObjeto(valor)) return undefined;
+  const { hash, fecha, score, accuracy, notas, desviacionMedia, desviacionTipica } = valor;
+  const { tempranas, tardias, fallosPorColumna, duracionJugadaMs } = valor;
+  if (typeof hash !== 'string' || hash === '') return undefined;
+  if (typeof fecha !== 'string' || !Number.isFinite(Date.parse(fecha))) return undefined;
+  if (!esNumeroFinito(score) || !esNumeroFinito(accuracy)) return undefined;
+  if (!esNumeroFinito(desviacionMedia)) return undefined;
+  for (const n of [notas, desviacionTipica, tempranas, tardias, duracionJugadaMs]) {
+    if (!esNumeroFinito(n) || n < 0) return undefined;
+  }
+  if (
+    !Array.isArray(fallosPorColumna) ||
+    fallosPorColumna.length !== 4 ||
+    !fallosPorColumna.every((f) => esNumeroFinito(f) && f >= 0)
+  ) {
+    return undefined;
+  }
+  return {
+    hash,
+    fecha,
+    score,
+    accuracy,
+    notas: notas as number,
+    desviacionMedia,
+    desviacionTipica: desviacionTipica as number,
+    tempranas: tempranas as number,
+    tardias: tardias as number,
+    fallosPorColumna: [...fallosPorColumna] as [number, number, number, number],
+    duracionJugadaMs: duracionJugadaMs as number,
+  };
+}
+
+/** La clave de un registro en la tienda 'historial': la fecha primero, asi el orden de las claves es el cronologico. Dos respaldos del mismo registro caen en la misma clave. */
+export function claveDeRegistroPartida(registro: RegistroPartida): string {
+  return `${registro.fecha}|${registro.hash}`;
 }

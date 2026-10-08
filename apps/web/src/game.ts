@@ -588,6 +588,7 @@ export function runGame(
         time: resultado.note.time,
         error: resultado.error,
         judgement: resultado.judgement,
+        column: resultado.note.column,
       });
       contadores.golpe(resultado.error, resultado.judgement, t);
     }

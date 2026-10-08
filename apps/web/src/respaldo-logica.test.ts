@@ -17,6 +17,7 @@ const RESUMEN_VACIO = {
   recordsNuevos: 0,
   recordsActualizados: 0,
   replaysNuevos: 0,
+  historialNuevo: 0,
   ajustesRestaurados: 0,
 };
 
@@ -69,6 +70,15 @@ describe('lineaDeRestauracion', () => {
     expect(
       lineaDeRestauracion({ ...RESUMEN_VACIO, recordsNuevos: 2, replaysNuevos: 2, ajustesRestaurados: 1 }),
     ).toBe('0 canciones nuevas, 2 records, 2 replays, ajustes');
+  });
+
+  it('T-045: cuenta las partidas del historial restauradas, despues de los replays', () => {
+    expect(lineaDeRestauracion({ ...RESUMEN_VACIO, historialNuevo: 1 })).toBe(
+      '0 canciones nuevas, 1 partida',
+    );
+    expect(
+      lineaDeRestauracion({ ...RESUMEN_VACIO, replaysNuevos: 2, historialNuevo: 40, ajustesRestaurados: 1 }),
+    ).toBe('0 canciones nuevas, 2 replays, 40 partidas, ajustes');
   });
 
   it('cuando no entra nada nuevo lo dice con ceros y muestra lo que ya estaba', () => {

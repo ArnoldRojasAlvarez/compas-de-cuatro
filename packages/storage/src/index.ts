@@ -19,6 +19,7 @@ import {
   type DifficultyResult,
   type PartidaJugada,
   type RecordDeMapa,
+  type RegistroPartida,
   type Replay,
 } from '@tetra/core';
 import { ponerDificultad, quitarDificultad } from './dificultades.js';
@@ -35,6 +36,8 @@ import {
   guardarDificultadCacheada,
   leerDificultadCacheada,
   guardarPartidaEnLaBase,
+  guardarRegistroEnLaBase,
+  listarHistorialDeLaBase,
   leerRecordsDeLaBase,
   leerReplayDeLaBase,
   listarHashesConReplayDeLaBase,
@@ -227,6 +230,20 @@ export function leerReplayGuardado(
 /** T-044: los hashes de los mapas con replay guardado (solo claves, no lee los replays). */
 export function hashesConReplay(): Promise<Set<string>> {
   return listarHashesConReplayDeLaBase();
+}
+
+/**
+ * T-045: guarda el resumen de una partida completada en el historial. Con mas
+ * de 2000 sale la mas vieja (el historial no crece sin tope). No depende de la
+ * cancion: borrarla de la biblioteca no toca el historial.
+ */
+export function guardarEnHistorial(registro: RegistroPartida): Promise<void> {
+  return guardarRegistroEnLaBase(registro);
+}
+
+/** T-045: todo el historial, de la partida mas vieja a la mas nueva. Un registro corrupto se ignora; nunca lanza por el contenido. */
+export function leerHistorial(): Promise<RegistroPartida[]> {
+  return listarHistorialDeLaBase();
 }
 
 /** Records de varios mapas de una vez, por hash. Un registro corrupto no aparece; nunca lanza por su contenido. */

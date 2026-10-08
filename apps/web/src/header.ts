@@ -17,6 +17,27 @@ export const CLASE_EN_JUEGO = 'tetra-en-juego';
 export const EVENTO_TIEMPO_JUGADO = 'tetra:tiempo-jugado';
 
 /**
+ * T-045: evento que el header dispara sobre `window` al hacer clic en el bloque
+ * "Jugado". El router lo atiende y lleva a las estadisticas globales.
+ */
+export const EVENTO_ABRIR_ESTADISTICAS = 'tetra:abrir-estadisticas';
+
+/** El boton "Jugado" y si hoy se puede usar (lo decide el router segun la pantalla, ver permitirAbrirEstadisticas). */
+let botonJugado: HTMLButtonElement | null = null;
+let aperturaPermitida = false;
+
+/**
+ * T-045: habilita o deshabilita el bloque "Jugado" del header como acceso a las
+ * estadisticas. Solo se puede desde pantallas que se cierran sin dejar nada
+ * vivo detras (menu, ajustes): el song select tiene audio y un worker, y el
+ * mapeador trabajo sin guardar. El router lo llama en cada cambio de pantalla.
+ */
+export function permitirAbrirEstadisticas(permitido: boolean): void {
+  aperturaPermitida = permitido;
+  if (botonJugado !== null) botonJugado.disabled = !permitido;
+}
+
+/**
  * Monta el header al principio de <body>. Se llama una sola vez al arrancar
  * (main.ts). La hora se refresca con rAF, que aca solo dibuja: no es tiempo
  * de juego y el header esta oculto cuando hay partida. Un temporizador
@@ -38,8 +59,16 @@ export function montarHeader(): void {
   marcaTexto.textContent = 'Tetra';
   marca.append(barras, marcaTexto);
 
-  const jugado = document.createElement('span');
-  jugado.className = 'tetra-header-dato';
+  // T-045: el bloque es un boton que lleva a las estadisticas globales.
+  const jugado = document.createElement('button');
+  jugado.type = 'button';
+  jugado.className = 'tetra-header-dato tetra-header-boton';
+  jugado.title = 'Ver estadisticas';
+  jugado.disabled = !aperturaPermitida;
+  jugado.addEventListener('click', () => {
+    window.dispatchEvent(new CustomEvent(EVENTO_ABRIR_ESTADISTICAS));
+  });
+  botonJugado = jugado;
   const jugadoEtiqueta = document.createElement('span');
   jugadoEtiqueta.className = 'tetra-header-etiqueta';
   jugadoEtiqueta.textContent = 'Jugado';

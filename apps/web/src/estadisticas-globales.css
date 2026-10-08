@@ -1,0 +1,265 @@
+/* Estadisticas globales (estadisticas-globales.ts). T-045: minimalista sobre
+   la escena (fondo por defecto). Cuatro numeros grandes en mono, dos graficos
+   de linea, barras de fallos por columna y una barra partida temprano/tarde.
+   Sin parrafos. Una sola cosa brilla: la linea de la desviacion.
+
+   Nota de especificidad: style.css restila TODO <button> con `#app button`
+   (especificidad de id), asi que lo que aca pisa a un boton va con el
+   prefijo `#app`. */
+
+.tetra-estg {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espacio-5);
+  width: min(94vw, 1120px);
+  box-sizing: border-box;
+  /* La barra queda arriba aunque no haya datos: el estado vacio se centra en el resto. */
+  min-height: calc(100vh - var(--alto-header) - 32px);
+  padding: var(--espacio-3) 0;
+}
+
+/* ---------------------------------------------------------------------- */
+/* Barra superior: volver, titulo chico (el h1 accesible) y el filtro      */
+/* ---------------------------------------------------------------------- */
+
+.tetra-estg-barra {
+  display: flex;
+  align-items: center;
+  gap: var(--espacio-2);
+}
+
+.tetra-estg-titulo {
+  margin: 0;
+  font-family: var(--fuente-display);
+  font-weight: 500;
+  font-size: var(--tipo-xs);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--tinta-2);
+}
+
+/* Segmentado chico a la derecha: tres opciones, una sola activa. */
+.tetra-estg-periodos {
+  display: inline-flex;
+  margin-left: auto;
+  padding: 2px;
+  gap: 2px;
+  background: color-mix(in srgb, var(--superficie) 85%, transparent);
+  border: 1px solid var(--linea);
+  border-radius: var(--radio-control);
+}
+
+#app .tetra-estg-periodo {
+  padding: var(--espacio-1) var(--espacio-3);
+  font-family: var(--fuente-datos);
+  font-size: var(--tipo-xs);
+  white-space: nowrap;
+  color: var(--tinta-3);
+  background: transparent;
+  border-color: transparent;
+}
+
+#app .tetra-estg-periodo:hover:not(:disabled) {
+  background: var(--superficie-2);
+  color: var(--tinta);
+}
+
+#app .tetra-estg-periodo[aria-pressed='true'] {
+  background: var(--superficie-2);
+  border-color: var(--linea);
+  color: var(--tinta);
+}
+
+/* Sin partidas guardadas no hay nada que filtrar. */
+.tetra-estg-sin-datos .tetra-estg-periodos {
+  display: none;
+}
+
+/* ---------------------------------------------------------------------- */
+/* Cuerpo                                                                   */
+/* ---------------------------------------------------------------------- */
+
+.tetra-estg-cuerpo {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: var(--espacio-5);
+}
+
+/* Los cuatro numeros: sin caja, alineados a la izquierda, en mono. */
+.tetra-estg-cifras {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--espacio-5);
+}
+
+.tetra-estg-cifra {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espacio-1);
+  min-width: 0;
+}
+
+.tetra-estg-cifra-etiqueta {
+  font-size: var(--tipo-xs);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--tinta-3);
+}
+
+.tetra-estg-cifra-valor {
+  font-family: var(--fuente-datos);
+  font-variant-numeric: tabular-nums;
+  font-size: clamp(1.5rem, 3vw, 2.25rem);
+  line-height: 1.1;
+  color: var(--tinta);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tetra-estg-graficos,
+.tetra-estg-fila-final {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--espacio-4);
+}
+
+.tetra-estg-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espacio-2);
+  min-width: 0;
+  padding: var(--espacio-3) var(--espacio-4);
+  background: color-mix(in srgb, var(--superficie) 85%, transparent);
+  border: 1px solid var(--linea);
+  border-radius: var(--radio-panel);
+}
+
+.tetra-estg-etiqueta {
+  margin: 0;
+  font-family: var(--fuente-cuerpo);
+  font-weight: 500;
+  font-size: var(--tipo-xs);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--tinta-3);
+}
+
+/* El alto lo fija la hoja de estilos; el ancho del bitmap se toma de clientWidth. */
+.tetra-estg-canvas {
+  display: block;
+  width: 100%;
+  height: 172px;
+}
+
+.tetra-estg-fila-final .tetra-estg-canvas {
+  height: 148px;
+}
+
+/* ---------------------------------------------------------------------- */
+/* Barra partida temprano / tarde                                           */
+/* ---------------------------------------------------------------------- */
+
+.tetra-estg-panel-partida {
+  justify-content: center;
+  gap: var(--espacio-4);
+}
+
+.tetra-estg-partida {
+  display: flex;
+  gap: 2px;
+  height: 14px;
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.tetra-estg-partida-temprano,
+.tetra-estg-partida-tarde {
+  flex-basis: 0;
+  min-width: 2px;
+}
+
+.tetra-estg-partida-temprano {
+  background: var(--j-100);
+}
+
+.tetra-estg-partida-tarde {
+  background: var(--acento-2);
+}
+
+.tetra-estg-partida-vacia {
+  background: var(--linea);
+}
+
+.tetra-estg-partida-pie {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--espacio-4);
+}
+
+.tetra-estg-partida-lado {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-left: var(--espacio-2);
+  border-left: 3px solid var(--linea);
+}
+
+.tetra-estg-lado-temprano {
+  border-left-color: var(--j-100);
+}
+
+.tetra-estg-lado-tarde {
+  border-left-color: var(--acento-2);
+}
+
+.tetra-estg-partida-nombre {
+  font-size: var(--tipo-xs);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--tinta-3);
+}
+
+.tetra-estg-partida-valor {
+  font-family: var(--fuente-datos);
+  font-variant-numeric: tabular-nums;
+  font-size: var(--tipo-xl);
+  line-height: 1.1;
+  color: var(--tinta);
+}
+
+/* ---------------------------------------------------------------------- */
+/* Estado vacio: el mismo lenguaje que el song select sin canciones         */
+/* ---------------------------------------------------------------------- */
+
+.tetra-estg-vacio {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--espacio-3);
+  /* El resto de la pantalla, centrado: el bloque queda a la altura del ojo. */
+  margin: auto 0;
+  padding: var(--espacio-8) 0;
+}
+
+#app .tetra-estg-jugar {
+  padding: var(--espacio-2) var(--espacio-5);
+  font-size: var(--tipo-base);
+}
+
+/* ---------------------------------------------------------------------- */
+/* Angosto                                                                  */
+/* ---------------------------------------------------------------------- */
+
+@media (max-width: 760px) {
+  .tetra-estg-cifras {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--espacio-4);
+  }
+
+  .tetra-estg-graficos,
+  .tetra-estg-fila-final {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

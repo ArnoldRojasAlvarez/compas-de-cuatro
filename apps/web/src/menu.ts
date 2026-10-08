@@ -1,6 +1,6 @@
 // T-010: menu principal. Primera pantalla con identidad visual propia (ver
 // docs/DISENO.md): el logo que respira (logo.ts) y los accesos a Jugar,
-// Mapeador y Ajustes.
+// Mapeador, Estadisticas (T-045) y Ajustes: cuatro botones, el numero de la casa.
 //
 // T-052 lo deja minimo: sin titulo ni lema (el logo ya dice TETRA), el logo
 // mas grande (un clic en el es Jugar), y abajo a la izquierda, discreto, lo
@@ -20,6 +20,8 @@ export interface OpcionesMenu {
   aJugar: (cancionInicial?: SongId) => void;
   /** Ir a ajustes. */
   aAjustes: () => void;
+  /** T-045: ir a las estadisticas globales. */
+  aEstadisticas: () => void;
   /** Ir al mapeador (editor de mapas, manual y automatico). */
   aMapeador: () => void;
 }
@@ -30,8 +32,12 @@ const FONDO_DEL_MENU = { oscuridad: 0.5, desenfoque: 2, centro: 1 };
 /**
  * Muestra el menu principal dentro de `contenedor`, reemplazando lo que
  * hubiera. Es el nuevo punto de entrada de la app (ver router.ts).
+ *
+ * Devuelve la funcion que apaga lo que corre detras del menu (el logo y la
+ * musica): el router la llama si algo ajeno al menu lo cierra (el bloque
+ * "Jugado" del header lleva a las estadisticas desde cualquier lado).
  */
-export function mostrarMenu(contenedor: HTMLElement, opciones: OpcionesMenu): void {
+export function mostrarMenu(contenedor: HTMLElement, opciones: OpcionesMenu): () => void {
   contenedor.innerHTML = '';
 
   const menu = document.createElement('div');
@@ -110,6 +116,19 @@ export function mostrarMenu(contenedor: HTMLElement, opciones: OpcionesMenu): vo
   });
   accesos.appendChild(botonMapeador);
 
+  // T-045: entre Mapeador y Ajustes. Las estadisticas pintan su propio fondo
+  // (el de siempre, sin portada), asi que se limpia el de la cancion que sonaba.
+  const botonEstadisticas = document.createElement('button');
+  botonEstadisticas.type = 'button';
+  botonEstadisticas.className = 'tetra-menu-boton';
+  botonEstadisticas.textContent = 'Estadisticas';
+  botonEstadisticas.addEventListener('click', () => {
+    apagar();
+    fondoEscena().limpiar();
+    opciones.aEstadisticas();
+  });
+  accesos.appendChild(botonEstadisticas);
+
   const botonAjustes = document.createElement('button');
   botonAjustes.type = 'button';
   botonAjustes.className = 'tetra-menu-boton';
@@ -163,4 +182,6 @@ export function mostrarMenu(contenedor: HTMLElement, opciones: OpcionesMenu): vo
     }
     m.alCambiar(pintar);
   }
+
+  return apagar;
 }

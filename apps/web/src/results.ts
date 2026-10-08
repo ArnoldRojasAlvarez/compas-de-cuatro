@@ -6,7 +6,7 @@
 // conteos con barra proporcional y grafico de desviacion con los tokens de
 // docs/DISENO.md. La logica pura vive en resultados-logica.ts.
 
-import type { Judgement, Ms, ScoreState } from '@tetra/core';
+import type { Column, Judgement, Ms, ScoreState } from '@tetra/core';
 import { JUDGEMENTS } from '@tetra/core';
 import {
   calcularOffsetCorregido,
@@ -30,6 +30,8 @@ export interface Desviacion {
   error: Ms;
   /** Juicio de este golpe. Los miss quedan afuera de media/desviacion estandar (T-007). */
   judgement: Judgement;
+  /** T-045: columna de la nota, para contar los fallos por columna del historial. */
+  column: Column;
 }
 
 const NOMBRE_JUICIO: Record<Judgement, string> = {

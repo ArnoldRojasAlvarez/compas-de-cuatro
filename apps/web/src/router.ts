@@ -8,6 +8,12 @@
 //     |
 //     +----> ajustes  ->  menu
 //     +----> mapeador ->  menu | song-select
+//     +----> estadisticas -> menu | song-select
+//
+// T-045: a las estadisticas tambien se llega desde el bloque "Jugado" del
+// header (header.ts), pero solo desde el menu y ajustes: son las pantallas que
+// se cierran sin dejar nada vivo detras (el song select tiene audio y un
+// worker; el mapeador, trabajo sin guardar). Ver `permitirAbrirEstadisticas`.
 //
 // "juego" y "resultados" no son pantallas de este router: song-select.ts
 // arranca el juego llamando a runGame directo (game.ts) y vuelve a
@@ -28,29 +34,65 @@ import { mostrarSongSelect } from './song-select.js';
 import { mostrarAjustes } from './ajustes.js';
 import { mostrarCalibracion } from './calibracion.js';
 import { mostrarMapeador } from './mapeador.js';
+import { mostrarEstadisticasGlobales } from './estadisticas-globales.js';
+import { EVENTO_ABRIR_ESTADISTICAS, permitirAbrirEstadisticas } from './header.js';
 import type { SongId } from '@tetra/storage';
 
 /** Arranca el router sobre `contenedor` (siempre `#app`) y muestra el menu, la pantalla raiz. */
 export function iniciarRouter(contenedor: HTMLElement): void {
+  /** Lo que apaga la pantalla actual si la cierra alguien de afuera (el header). Solo el menu lo necesita. */
+  let apagarPantalla: (() => void) | undefined;
+  /** Si la pantalla actual se puede dejar desde el header. */
+  let estadisticasDesdeElHeader = false;
+
+  /** Anota en que tipo de pantalla se esta: el header habilita o no el acceso a las estadisticas. */
+  function pantalla(opciones: { desdeElHeader: boolean; apagar?: () => void }): void {
+    estadisticasDesdeElHeader = opciones.desdeElHeader;
+    apagarPantalla = opciones.apagar;
+    permitirAbrirEstadisticas(opciones.desdeElHeader);
+  }
+
   function aMenu(): void {
-    mostrarMenu(contenedor, { aJugar: (id) => aSongSelect(id), aAjustes, aMapeador });
+    const apagar = mostrarMenu(contenedor, {
+      aJugar: (id) => aSongSelect(id),
+      aAjustes,
+      aMapeador,
+      aEstadisticas,
+    });
+    pantalla({ desdeElHeader: true, apagar });
   }
   // T-052: desde el menu se llega con la cancion que sonaba ya enfocada.
   function aSongSelect(cancionInicial?: SongId): void {
+    pantalla({ desdeElHeader: false });
     mostrarSongSelect(contenedor, {
       aMenu,
       ...(cancionInicial !== undefined && { cancionInicial }),
       // T-032: editar una dificultad de la biblioteca en el mapeador.
-      aMapeador: (songId, difficultyName) =>
-        mostrarMapeador(contenedor, { aMenu, aSongSelect: () => aSongSelect(), abrir: { songId, difficultyName } }),
+      aMapeador: (songId, difficultyName) => {
+        pantalla({ desdeElHeader: false });
+        mostrarMapeador(contenedor, { aMenu, aSongSelect: () => aSongSelect(), abrir: { songId, difficultyName } });
+      },
     });
   }
   function aAjustes(): void {
+    pantalla({ desdeElHeader: true });
     mostrarAjustes(contenedor, { aMenu });
   }
   function aMapeador(): void {
+    pantalla({ desdeElHeader: false });
     mostrarMapeador(contenedor, { aMenu, aSongSelect: () => aSongSelect() });
   }
+  // T-045: ya estando en las estadisticas el bloque "Jugado" no lleva a ningun lado.
+  function aEstadisticas(): void {
+    pantalla({ desdeElHeader: false });
+    mostrarEstadisticasGlobales(contenedor, { aMenu, aJugar: () => aSongSelect() });
+  }
+
+  window.addEventListener(EVENTO_ABRIR_ESTADISTICAS, () => {
+    if (!estadisticasDesdeElHeader) return;
+    apagarPantalla?.();
+    aEstadisticas();
+  });
 
   // T-015: `#calibracion` es una herramienta de desarrollo, fuera de la
   // navegacion normal (ningun boton lleva ahi). Se entra escribiendo el hash
@@ -72,6 +114,7 @@ export function iniciarRouter(contenedor: HTMLElement): void {
   });
 
   if (enCalibracion) {
+    pantalla({ desdeElHeader: false });
     mostrarCalibracion(contenedor, {
       aMenu: () => {
         window.history.replaceState(

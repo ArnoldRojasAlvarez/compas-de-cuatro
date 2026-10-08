@@ -85,6 +85,34 @@
   gap: var(--espacio-2);
 }
 
+/* T-045: "Jugado" es un boton hacia las estadisticas. El header entero ignora
+   el puntero (no tapa la pantalla de abajo); este bloque lo recupera. Va sin
+   caja: solo el color del numero responde. */
+.tetra-header-boton {
+  padding: 0;
+  font: inherit;
+  line-height: inherit;
+  color: inherit;
+  background: none;
+  border: 0;
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.tetra-header-boton:disabled {
+  cursor: default;
+}
+
+.tetra-header-boton:hover:not(:disabled) .tetra-header-valor {
+  color: var(--acento);
+}
+
+.tetra-header-boton:focus-visible {
+  outline: 2px solid var(--acento);
+  outline-offset: 4px;
+  border-radius: 2px;
+}
+
 .tetra-header-etiqueta {
   letter-spacing: 0.08em;
   text-transform: uppercase;

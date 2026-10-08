@@ -20,9 +20,10 @@
 // ya vienen comprimidos y deflate no les gana nada mas que tiempo.
 
 import { strToU8, unzipSync, zipSync, type Unzipped, type Zippable } from 'fflate';
-import type { Chart, RecordDeMapa } from '@tetra/core';
+import type { Chart, RecordDeMapa, RegistroPartida } from '@tetra/core';
 import {
   listarCancionesDeLaBase,
+  listarHistorialDeLaBase,
   listarRecordsDeLaBase,
   listarReplaysDeLaBase,
   listarSkinsDeLaBase,
@@ -32,6 +33,7 @@ import type { CancionGuardada, SkinGuardada } from './db.js';
 import { CLAVES_IMAGENES_SKIN, type ImagenesDeSkin } from './osk.js';
 import {
   normalizarRecord,
+  normalizarRegistroPartida,
   normalizarReplayGuardado,
   type ReplayGuardado,
 } from './records-validacion.js';
@@ -55,6 +57,8 @@ export interface ContenidoRespaldo {
   records: RecordDeMapa[];
   /** T-044: tienda 'replays' (version 6): el replay de la mejor partida de cada mapa. Ausente en respaldos viejos. */
   replays?: ReplayGuardado[];
+  /** T-045: tienda 'historial' (version 7): un resumen por partida completada. Ausente en respaldos viejos. */
+  historial?: RegistroPartida[];
   /** Claves 'tetra:*' de localStorage. */
   ajustes: Record<string, string>;
 }
@@ -70,6 +74,8 @@ export interface ResumenRestauracion {
   recordsActualizados: number;
   /** T-044: replays que se escribieron. */
   replaysNuevos: number;
+  /** T-045: partidas del historial que no estaban (las repetidas, por fecha y mapa, no cuentan). */
+  historialNuevo: number;
   /** Claves de localStorage escritas (0 si no se pidio sobrescribir). */
   ajustesRestaurados: number;
 }
@@ -118,6 +124,8 @@ interface ManifestRespaldo {
   records: RecordDeMapa[];
   /** T-044: opcional al leer (los respaldos de antes no lo traen). */
   replays?: ReplayGuardado[];
+  /** T-045: opcional al leer, igual que `replays`. */
+  historial?: RegistroPartida[];
   ajustes: Record<string, string>;
 }
 
@@ -189,6 +197,7 @@ export async function exportarRespaldo(c: ContenidoRespaldo): Promise<Blob> {
     skins,
     records: c.records,
     replays: c.replays ?? [],
+    historial: c.historial ?? [],
     ajustes: c.ajustes,
   };
   archivos['manifest.json'] = strToU8(JSON.stringify(manifest, null, 2));
@@ -372,6 +381,15 @@ export async function leerRespaldo(zip: Blob): Promise<ContenidoRespaldo> {
       if (fila !== undefined) replaysValidos.push(fila);
     }
   }
+  // T-045: igual con el historial: una fila que no se lee se descarta.
+  const historialValido: RegistroPartida[] = [];
+  const historialCrudo = manifest['historial'];
+  if (Array.isArray(historialCrudo)) {
+    for (const crudo of historialCrudo as unknown[]) {
+      const registro = normalizarRegistroPartida(crudo);
+      if (registro !== undefined) historialValido.push(registro);
+    }
+  }
   const ajustesValidos: Record<string, string> = {};
   for (const [clave, valor] of Object.entries(ajustes)) {
     if (esAjusteRestaurable(clave, valor)) ajustesValidos[clave] = valor;
@@ -383,6 +401,7 @@ export async function leerRespaldo(zip: Blob): Promise<ContenidoRespaldo> {
     skins: (skins as unknown[]).map((s, i) => leerSkin(archivos, s, i)),
     records: recordsValidos,
     replays: replaysValidos,
+    historial: historialValido,
     ajustes: ajustesValidos,
   };
 }
@@ -474,6 +493,7 @@ export async function reunirContenidoActual(): Promise<ContenidoRespaldo> {
     skins: await listarSkinsDeLaBase(),
     records: await listarRecordsDeLaBase(),
     replays: await listarReplaysDeLaBase(),
+    historial: await listarHistorialDeLaBase(),
     ajustes: leerAjustesLocales(),
   };
 }
