@@ -1,0 +1,100 @@
+/* Calibrar offset (calibrar-offset.ts, T-060): pantalla minima, en mono y sin
+   parrafos. Titulo y volver arriba, una barra de golpes (el centro es "a
+   tiempo", la derecha es tarde), la media en grande y los botones debajo.
+   Solo tokens de tokens.css. */
+
+.tetra-calibrar-offset {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espacio-4);
+  width: min(92vw, 640px);
+  padding: var(--espacio-3) 0;
+}
+
+.tetra-calibrar-offset-encabezado {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--espacio-3);
+}
+
+.tetra-calibrar-offset-encabezado h1 {
+  margin: 0;
+  font-family: var(--fuente-display);
+  font-weight: 600;
+  font-size: var(--tipo-xl);
+}
+
+.tetra-calibrar-offset-ayuda,
+.tetra-calibrar-offset-progreso,
+.tetra-calibrar-offset-detalle {
+  margin: 0;
+  font-family: var(--fuente-datos);
+  font-size: var(--tipo-xs);
+  color: var(--tinta-2);
+}
+
+/* Reservan su alto para que la pantalla no salte al aparecer o borrarse el texto. */
+.tetra-calibrar-offset-progreso,
+.tetra-calibrar-offset-detalle {
+  min-height: 1.4em;
+}
+
+/* La barra de golpes: ancha como el contenedor, con el cero marcado en el centro. */
+.tetra-calibrar-offset-barra {
+  position: relative;
+  height: 32px;
+  background: var(--superficie);
+  border: 1px solid var(--linea);
+  border-radius: var(--radio-control);
+}
+
+.tetra-calibrar-offset-centro {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  margin-left: -1px;
+  background: color-mix(in srgb, var(--tinta) 55%, transparent);
+}
+
+/* Una rayita por golpe; las de entrada (que no cuentan) van tenues. */
+.tetra-calibrar-offset-marca {
+  position: absolute;
+  top: 4px;
+  bottom: 4px;
+  width: 2px;
+  margin-left: -1px;
+  border-radius: 1px;
+  background: var(--acento);
+}
+
+.tetra-calibrar-offset-marca--entrada {
+  background: var(--tinta-3);
+  opacity: 0.6;
+}
+
+.tetra-calibrar-offset-media {
+  font-family: var(--fuente-datos);
+  font-size: 3.5rem;
+  font-weight: 500;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  color: var(--tinta);
+}
+
+/* Oculta pero con su lugar: la pantalla no salta cuando aparece la media. */
+.tetra-calibrar-offset-media[hidden] {
+  display: block;
+  visibility: hidden;
+}
+
+.tetra-calibrar-offset-acciones {
+  display: flex;
+  gap: var(--espacio-3);
+}
+
+.tetra-calibrar-offset-acciones button[hidden] {
+  display: none;
+}

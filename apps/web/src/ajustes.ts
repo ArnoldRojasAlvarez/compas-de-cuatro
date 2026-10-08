@@ -305,7 +305,7 @@ function crearDeslizador(
  * boton "corregir offset" de la pantalla de resultados, que hace justo eso a
  * partir de la media medida.
  */
-function crearControlDeOffset(): HTMLElement {
+function crearControlDeOffset(aCalibrar: () => void): HTMLElement {
   let real = leerOffset();
 
   const botonMenos = crearBotonIcono('menos', 'Bajar el offset 1 ms');
@@ -354,13 +354,23 @@ function crearControlDeOffset(): HTMLElement {
     fijarOffset(pasoDeOffset(real, deltaDeOffset(1, e.shiftKey)));
   });
 
-  return crearFila({
+  const fila = crearFila({
     nombre: 'Offset',
     idControl: entrada.id,
     ayuda:
       'Offset en ms. Si en los resultados pegas temprano (puntos abajo), bajalo; si pegas tarde (arriba), subilo. Doble clic en la barra lo vuelve a 0.',
     controles: [control],
   });
+  // T-060: "Calibrar" mide el offset sin cancion. Va pegado al nombre y no en los
+  // controles, para que las cinco barras sigan midiendo y alineandose igual.
+  const calibrar = document.createElement('button');
+  calibrar.type = 'button';
+  calibrar.className = 'tetra-ajustes-calibrar';
+  calibrar.textContent = 'Calibrar';
+  calibrar.title = 'Mide tu offset con un metrónomo, sin necesitar una canción.';
+  calibrar.addEventListener('click', aCalibrar);
+  fila.querySelector('.tetra-ajustes-fila-nombre')?.after(calibrar);
+  return fila;
 }
 
 /**
@@ -858,7 +868,7 @@ function crearControlDeAtenuacion(): HTMLElement {
  * presentar", que solo recuerda y no bloquea nada. T-053: la lista va
  * plegada para no sumar texto a la pantalla.
  */
-function crearControlDePresentacion(): HTMLElement {
+function crearControlDePresentacion(aCalibrar: () => void): HTMLElement {
   const boton = document.createElement('button');
   boton.type = 'button';
   const pintar = (): void => {
@@ -884,6 +894,15 @@ function crearControlDePresentacion(): HTMLElement {
     });
     etiqueta.append(casilla, document.createTextNode(paso.texto));
     item.appendChild(etiqueta);
+    // T-060: el paso de calibrar el offset lleva a la pantalla que lo hace.
+    if (paso.id === 'offset') {
+      const ir = document.createElement('button');
+      ir.type = 'button';
+      ir.className = 'tetra-ajustes-calibrar';
+      ir.textContent = 'Calibrar';
+      ir.addEventListener('click', aCalibrar);
+      item.appendChild(ir);
+    }
     lista.appendChild(item);
   }
 
@@ -1048,6 +1067,8 @@ function crearControlDeRespaldo(
 export interface OpcionesAjustes {
   /** Volver al menu. Es la unica salida de esta pantalla (ver el ticket, "Cada pantalla tiene como volver"). */
   aMenu: () => void;
+  /** T-060: abrir "Calibrar offset", que mide el offset global sin cancion y vuelve aca. */
+  aCalibrarOffset: () => void;
 }
 
 /**
@@ -1103,7 +1124,7 @@ export function mostrarAjustes(
       'juego',
       // T-058: las cuatro barras (mismo riel y misma columna de valor) y el
       // selector del golpe, una fila cada uno.
-      crearControlDeOffset(),
+      crearControlDeOffset(opciones.aCalibrarOffset),
       crearControlDeVelocidad(),
       crearControlDeVolumen(),
       crearControlDeEfectos(),
@@ -1160,7 +1181,12 @@ export function mostrarAjustes(
     ),
   );
   rejilla.appendChild(
-    crearSeccion(4, 'Presentación', 'presentacion', crearControlDePresentacion()),
+    crearSeccion(
+      4,
+      'Presentación',
+      'presentacion',
+      crearControlDePresentacion(opciones.aCalibrarOffset),
+    ),
   );
   rejilla.appendChild(
     crearSeccion(

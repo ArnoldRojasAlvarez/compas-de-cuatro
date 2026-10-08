@@ -529,6 +529,37 @@
   margin-top: var(--espacio-2);
 }
 
+/* T-060: "Calibrar", un boton chico pegado al nombre del offset (y al paso de la
+   lista de presentar). El nombre deja de estirarse para que quede al lado. */
+.tetra-ajustes-fila-nombre:has(+ .tetra-ajustes-calibrar) {
+  flex: 0 1 auto;
+}
+
+/* La fila del offset no envuelve: la barra se queda a la derecha y el boton cede
+   al lado del nombre (sin esto, un pixel de mas la baja a otra linea). */
+.tetra-ajustes-fila:has(> .tetra-ajustes-calibrar) {
+  flex-wrap: nowrap;
+  gap: var(--espacio-3) var(--espacio-2);
+}
+
+#app .tetra-ajustes .tetra-ajustes-calibrar {
+  margin-right: auto;
+  padding: var(--espacio-1) var(--espacio-2);
+  font-size: var(--tipo-xs);
+  color: var(--tinta-2);
+}
+
+/* En la lista de presentar, el boton va en la misma linea que su paso. */
+.tetra-presentacion-lista li:has(> .tetra-ajustes-calibrar) {
+  display: flex;
+  align-items: center;
+  gap: var(--espacio-2);
+}
+
+#app .tetra-ajustes .tetra-presentacion-lista .tetra-ajustes-calibrar {
+  margin-right: 0;
+}
+
 /* ---------------------------------------------------------------------- */
 /* Mensaje de error                                                        */
 /* ---------------------------------------------------------------------- */
