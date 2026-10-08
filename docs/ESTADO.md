@@ -8,7 +8,7 @@ Estado corto y siempre al dia. **Si sos una sesion NUEVA, empeza por
 
 ## Donde esta todo
 
-- `main`: limpio, verde, 1414 tests + 51 e2e.
+- `main`: limpio, verde, 1447 tests + 53 e2e (ver nota de T-061 abajo).
 - Estado demo: menu con musica de la biblioteca, song select sobre la escena, partida con fondo y video, cuatro skins propias, cancion demo sembrada.
 - En curso: nada.
 
@@ -53,6 +53,7 @@ Estado corto y siempre al dia. **Si sos una sesion NUEVA, empeza por
 | T-052 | Escena: fondo de la cancion a pantalla completa; menu con musica de la biblioteca (pausa, siguiente); song select minimalista con preview visible, exportar y borrar, importar soltando en cualquier parte |
 | T-053 | Partida a pantalla completa con fondo atenuado y video sincronizado al reloj, intro, HUD limpio, volumen; resultados con fondo; ajustes con poco texto, skins en miniatura, atenuacion y video |
 | T-055 | Records por dificultad: mejor y ultima partida, intentos, conteos de cada juicio, rango SS; se ven en el song select (detalle, chips y lista) y con aviso de nuevo record en resultados |
+| T-061 | Diagnostico de tirones con "Mostrar FPS": frames > 30 ms con su momento, densidad y atribucion de long-animation-frame; histograma; linea en resultados y boton "Copiar diagnóstico" (JSON) |
 | T-059 | Rendimiento: el "54 fps" era el contador (1000/dt con el reloj de audio, que avanza por bloques); el juego va a 16,7 ms con p99 16,8 en GPU real. Contador nuevo `60 fps · 17 ms max` (promedio de 500 ms y peor frame), layouts de 60/s a 8/s, flecha de la barra de error con transform, T-039 (pista sin objetos por frame), arnes `tools/medir-rendimiento.mjs`. Pendiente: un tiron aislado del driver de GPU, opcion experimental de baja latencia |
 | T-048 | Tildes y enie en todo texto visible (UI y mensajes de error de los paquetes); "Fácil"/"Difícil" se muestran con tilde sin cambiar el `difficultyName` guardado; `tildes.test.ts` vigila palabras comunes sin tilde y rayas |
 | T-034 | Mapeador: Mayus+arrastrar elige (rectangulo alineado a la grilla), Ctrl+A/C/X/V, Supr, Alt+flechas mueve (slot o columna), Q cuantiza; cada operacion es un paso de deshacer; el portapapeles sobrevive entre dificultades |
@@ -71,7 +72,8 @@ centrados en cero. El motor esta bien sincronizado.
 
 ## En curso
 
-- **T-060 (LN y offset en vivo) y T-061 (diagnostico de tirones):** despachados el 8 de octubre.
+- **T-060 (LN que desaparecen y offset en vivo):** detenido a pedido de Arnold el 8 de octubre, SIN REVISAR. Rama `fix/ln-y-offset` (worktree `.claude/worktrees/agent-adfebc9a3b6dbe7b4`), cuatro commits: cuerpo de LN, media en vivo y `-`/`=` en partida, "Ajustar offset" en la pausa, "Calibrar" en ajustes. Le faltaba el build y el e2e completos. Al retomar: checks y e2e en la rama, revisar el signo del offset con su e2e, fusionar (choca poco con T-061 en `game.ts`).
+- **T-061, nota:** el e2e `diagnostico-tirones.spec.ts` fallo 1 vez de 28 sin poder ver el error (la primera corrida tras un build en frio, con otro agente corriendo su e2e en el mismo puerto 4173). Sospecha: la linea de resultados formatea un "peor" de mas de 999 ms con separador de miles y la regex del test espera `\d+ ms`. Revisar antes de dar el test por estable.
 - **T-062 (modo practica):** escrito, se despacha cuando entren T-060 y T-061 (mismo bucle de juego).
 
 
@@ -81,6 +83,7 @@ centrados en cero. El motor esta bien sincronizado.
 
 ## Lo que sigue despues
 
+- **Tirones en el Chrome/Opera de Arnold:** ve el "ms max" casi siempre >= 33 ms (43 fps) en tramos densos (Ghoul), incluso con fondo, skin y contadores reducidos y con baja latencia. Enchufado, plan Equilibrado, 60 Hz; hay un "Meta Virtual Monitor" (Quest Link) instalado, sospechoso. Pendiente de Arnold: probar https://www.testufo.com en el mismo navegador y pegar el JSON de "Copiar diagnóstico" tras jugar Ghoul. Arnold propuso cambiar de tecnologia si el problema es la web: no antes de esos datos.
 - **T-059, prueba de Arnold:** jugar el Difícil de la demo unos 40 s en su
   Chrome con el contador nuevo y mirar el "ms max". El arnes solo corre headless
   (sin vsync real ni contencion con otros programas). Si aparece el tiron de
