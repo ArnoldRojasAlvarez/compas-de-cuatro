@@ -11,9 +11,22 @@ export interface AccionesPausa {
   salir: () => void;
 }
 
+/**
+ * T-060: el boton "Ajustar offset (+61 ms)" del menu. `aplicar` hace el ajuste y
+ * devuelve el texto con el que el boton queda (ya apagado), por ejemplo
+ * `Offset de la canción +61 ms`.
+ */
+export interface AjusteDeOffsetEnPausa {
+  etiqueta: string;
+  aplicar: () => string;
+}
+
 export interface MenuPausa {
-  /** Muestra el menu (Continuar, Reintentar, Salir). */
-  mostrarMenu(): void;
+  /**
+   * Muestra el menu (Continuar, Reintentar, Salir). Con `ajuste` suma, entre
+   * Reintentar y Salir, el boton de ajustar el offset segun lo jugado hasta ahi.
+   */
+  mostrarMenu(ajuste?: AjusteDeOffsetEnPausa | null): void;
   /** Muestra el numero grande de la cuenta regresiva en lugar del menu. */
   mostrarCuenta(numero: number): void;
   /** Quita la superposicion del documento. */
@@ -44,10 +57,19 @@ export function crearMenuPausa(contenedor: HTMLElement, acciones: AccionesPausa)
   const continuar = boton('Continuar', 'tetra-pausa-boton tetra-boton-primario', acciones.continuar);
   const reintentar = boton('Reintentar', 'tetra-pausa-boton', acciones.reintentar);
   const salir = boton('Salir al song select', 'tetra-pausa-boton', acciones.salir);
+  // T-060: existe solo cuando hay golpes suficientes; mostrarMenu() lo pone o lo quita.
+  let ajusteVigente: AjusteDeOffsetEnPausa | null = null;
+  const ajustar = boton('', 'tetra-pausa-boton tetra-pausa-ajuste', () => {
+    if (ajusteVigente === null || ajustar.disabled) return;
+    ajustar.textContent = ajusteVigente.aplicar();
+    ajustar.disabled = true;
+    continuar.focus();
+  });
+  ajustar.hidden = true;
   const pista = document.createElement('p');
   pista.className = 'tetra-pausa-pista';
   pista.textContent = 'Esc para continuar';
-  panel.append(titulo, continuar, reintentar, salir, pista);
+  panel.append(titulo, continuar, reintentar, ajustar, salir, pista);
 
   const cuenta = document.createElement('div');
   cuenta.className = 'tetra-pausa-cuenta';
@@ -60,7 +82,11 @@ export function crearMenuPausa(contenedor: HTMLElement, acciones: AccionesPausa)
   let ultimoNumero = -1;
 
   return {
-    mostrarMenu(): void {
+    mostrarMenu(ajuste?: AjusteDeOffsetEnPausa | null): void {
+      ajusteVigente = ajuste ?? null;
+      ajustar.hidden = ajusteVigente === null;
+      ajustar.disabled = false;
+      if (ajusteVigente !== null) ajustar.textContent = ajusteVigente.etiqueta;
       cuenta.hidden = true;
       panel.hidden = false;
       ultimoNumero = -1;

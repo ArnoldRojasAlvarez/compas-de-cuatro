@@ -25,7 +25,8 @@
 }
 
 .tetra-pausa-panel[hidden],
-.tetra-pausa-cuenta[hidden] {
+.tetra-pausa-cuenta[hidden],
+#app .tetra-pausa-ajuste[hidden] {
   display: none;
 }
 

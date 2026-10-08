@@ -3,7 +3,7 @@
 // la media en vivo lo ve tarde (+), que subir el offset con = la acerca a 0 (y no
 // la aleja: el signo es el punto delicado), que el offset de la cancion queda
 // guardado y que los golpes que siguen caen de verdad cerca del centro. Tambien
-// que en el auto nada de esto aplica.
+// el boton "Ajustar offset" de la pausa y que en el auto nada de esto aplica.
 //
 // El jugador simulado se mueve con el AUDIO, no con el reloj de juego: pulsa cuando
 // `clock.now() + clock.userOffset` (el instante real de la cancion) pasa de la nota
@@ -254,6 +254,61 @@ test('Ctrl + = no ajusta (es el zoom del navegador)', async ({
   await expect(page.locator('.tetra-offset-aviso')).toBeHidden();
   expect(await userOffsetDelReloj(page)).toBe(0);
   expect(await offsetsLocales(page)).toEqual([]);
+});
+
+test('la pausa ofrece Ajustar offset con 20 golpes o mas, lo aplica y reinicia la media en vivo', async ({
+  page,
+}) => {
+  test.setTimeout(150_000);
+  await importarYElegir(page, 'Offset en pausa');
+  await page.locator('.tetra-song-select-jugar').click();
+  await esperarPartida(page);
+
+  const dialogo = page.getByRole('dialog', { name: 'Partida en pausa' });
+  // Por clase y no por nombre: tras aplicarlo el boton cambia de texto.
+  const ajustar = dialogo.locator('.tetra-pausa-ajuste');
+
+  // Con 10 golpes todavia no hay boton.
+  await tocarConDesfase(page, 0, 10);
+  await page.keyboard.press('Escape');
+  await expect(dialogo).toBeVisible();
+  await expect(ajustar).toBeHidden();
+  // Esc otra vez continua (cuenta de 3 s con el reloj de otro AudioContext).
+  await page.keyboard.press('Escape');
+  await expect(dialogo).toBeHidden({ timeout: 10_000 });
+
+  // 20 o mas: aparece, con la media tarde (+) entre parentesis.
+  await tocarConDesfase(page, 10, 28);
+  await page.keyboard.press('Escape');
+  await expect(dialogo).toBeVisible();
+  await expect(ajustar).toBeVisible();
+  const etiqueta = (await ajustar.textContent()) ?? '';
+  const m = /^Ajustar offset \(\+(\d+) ms\)$/.exec(etiqueta);
+  expect(m, `etiqueta: ${etiqueta}`).not.toBeNull();
+  const propuesto = Number(m![1]);
+  expect(propuesto).toBeGreaterThanOrEqual(55);
+  expect(propuesto).toBeLessThanOrEqual(90);
+
+  // Aplicarlo: el boton queda apagado con el offset nuevo, y el reloj y lo guardado lo siguen.
+  await ajustar.click();
+  await expect(ajustar).toBeDisabled();
+  await expect(ajustar).toHaveText(`Offset de la canción +${propuesto} ms`);
+  expect(await userOffsetDelReloj(page)).toBe(propuesto);
+  expect(await offsetsLocales(page)).toEqual([String(propuesto)]);
+
+  // Continuar: la media en vivo arranca de cero (sin numero) y los golpes siguientes caen cerca del centro.
+  await dialogo.getByRole('button', { name: 'Continuar' }).click();
+  await expect(dialogo).toBeHidden({ timeout: 10_000 });
+  await expect(page.locator('.tetra-error-media-texto')).toBeHidden();
+  await tocarConDesfase(page, 28, 44);
+  await expect(page.locator('.tetra-error-media-texto')).toBeVisible();
+  const media = (await mediaEnVivo(page))!;
+  expect(Math.abs(media)).toBeLessThanOrEqual(15);
+
+  // Con menos de 20 golpes desde el ajuste, la pausa ya no ofrece nada.
+  await page.keyboard.press('Escape');
+  await expect(dialogo).toBeVisible();
+  await expect(ajustar).toBeHidden();
 });
 
 test('viendo el auto, - y = no ajustan nada', async ({ page }) => {

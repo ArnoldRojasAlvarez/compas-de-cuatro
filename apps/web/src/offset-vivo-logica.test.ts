@@ -2,7 +2,9 @@
 
 import { describe, expect, it } from 'vitest';
 import {
+  GOLPES_MINIMOS_PARA_AJUSTAR,
   crearSesgoAcumulado,
+  etiquetaDeAjusteEnPausa,
   sentidoDeTeclaDeOffset,
   textoDeAvisoDeOffset,
 } from './offset-vivo-logica.js';
@@ -88,5 +90,22 @@ describe('crearSesgoAcumulado', () => {
     s.agregar(Number.NaN, 0);
     s.agregar(10, Number.POSITIVE_INFINITY);
     expect(s.cantidad()).toBe(0);
+  });
+});
+
+describe('etiquetaDeAjusteEnPausa', () => {
+  it('con menos de 20 golpes no hay boton', () => {
+    expect(GOLPES_MINIMOS_PARA_AJUSTAR).toBe(20);
+    expect(etiquetaDeAjusteEnPausa(19, 61)).toBeNull();
+    expect(etiquetaDeAjusteEnPausa(20, 61)).toBe('Ajustar offset (+61 ms)');
+  });
+
+  it('muestra el cambio con signo', () => {
+    expect(etiquetaDeAjusteEnPausa(50, -24.4)).toBe('Ajustar offset (-24 ms)');
+  });
+
+  it('si no cambiaria nada no hay boton', () => {
+    expect(etiquetaDeAjusteEnPausa(50, 0)).toBeNull();
+    expect(etiquetaDeAjusteEnPausa(50, 0.3)).toBeNull();
   });
 });

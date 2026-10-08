@@ -30,6 +30,7 @@ import { clampOffsetLocal, guardarOffsetLocal } from './offset-local.js';
 import { deltaDeOffset } from './ajustes-barras-logica.js';
 import {
   crearSesgoAcumulado,
+  etiquetaDeAjusteEnPausa,
   sentidoDeTeclaDeOffset,
   textoDeAvisoDeOffset,
 } from './offset-vivo-logica.js';
@@ -62,7 +63,7 @@ import { crearFondoDePartida, crearIntroDePartida } from './escena.js';
 import { medidasDePista, type EscenaPartida } from './escena-logica.js';
 import { CLASE_EN_JUEGO, EVENTO_TIEMPO_JUGADO } from './header.js';
 import { sumarTiempoJugado } from './tiempo-jugado.js';
-import { crearMenuPausa, type MenuPausa } from './pausa.js';
+import { crearMenuPausa, type AjusteDeOffsetEnPausa, type MenuPausa } from './pausa.js';
 import { crearContadores } from './contadores.js';
 import { crearAvisosDeAtajos } from './atajos.js';
 import './reproduccion.css';
@@ -620,9 +621,11 @@ export function runGame(
     let avisoOffsetDesde: Ms | null = null;
 
     const desviaciones: Desviacion[] = [];
-    // T-060: error y offset en vigor de cada golpe juzgado (sin miss), para
-    // "Corregir offset" de los resultados.
+    // T-060: error y offset en vigor de cada golpe juzgado (sin miss). El total
+    // alimenta "Corregir offset" de los resultados; el otro, el boton de la pausa,
+    // y se vacia cada vez que se aplica ese ajuste.
     const sesgoTotal = crearSesgoAcumulado();
+    const sesgoDesdeElAjuste = crearSesgoAcumulado();
     function registrar(resultado: HitResult | null, t: Ms): void {
       if (resultado === null) return;
       desviaciones.push({
@@ -633,6 +636,7 @@ export function runGame(
       });
       if (resultado.judgement !== 'miss') {
         sesgoTotal.agregar(resultado.error, offsetEditable);
+        sesgoDesdeElAjuste.agregar(resultado.error, offsetEditable);
       }
       contadores.golpe(resultado.error, resultado.judgement, t, offsetEditable);
     }
@@ -831,7 +835,7 @@ export function runGame(
         reintentar: () => reintentar(),
         salir: () => abortar(),
       });
-      menuPausa.mostrarMenu();
+      menuPausa.mostrarMenu(ajusteDeOffsetEnPausa());
     }
 
     function iniciarCuenta(): void {
@@ -861,7 +865,7 @@ export function runGame(
       if (siguiente === null) return;
       fase = siguiente;
       cerrarCuenta();
-      menuPausa?.mostrarMenu();
+      menuPausa?.mostrarMenu(ajusteDeOffsetEnPausa());
     }
 
     function reanudar(): void {
@@ -1012,6 +1016,32 @@ export function runGame(
         textoDeAvisoDeOffset(valor, editaLocal),
         pasoDeAlphaDeAvisoDeVelocidad(0),
       );
+    }
+
+    /**
+     * T-060: el boton de la pausa. Con 20 golpes juzgados o mas (desde el ultimo
+     * ajuste), ofrece llevar el offset a donde dejaria la media en 0 (la misma
+     * cuenta que "Corregir offset", `calcularOffsetCorregido`) y vaciar la media
+     * en vivo. `null` si no hay boton que mostrar.
+     */
+    function ajusteDeOffsetEnPausa(): AjusteDeOffsetEnPausa | null {
+      if (reproducir !== undefined) return null;
+      const corregido = sesgoDesdeElAjuste.offsetCorregido(offsetEditable);
+      const destino = editaLocal ? clampOffsetLocal(corregido) : Math.round(corregido);
+      const etiqueta = etiquetaDeAjusteEnPausa(
+        sesgoDesdeElAjuste.cantidad(),
+        destino - offsetEditable,
+      );
+      if (etiqueta === null) return null;
+      return {
+        etiqueta,
+        aplicar: () => {
+          const valor = fijarOffsetEditable(destino);
+          sesgoDesdeElAjuste.reiniciar();
+          contadores.reiniciarMedia();
+          return textoDeAvisoDeOffset(valor, editaLocal);
+        },
+      };
     }
 
     window.addEventListener('keydown', manejarAtajoAbajo);

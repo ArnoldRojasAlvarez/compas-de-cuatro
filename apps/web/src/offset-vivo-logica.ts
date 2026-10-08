@@ -13,6 +13,9 @@ import type { Ms } from '@tetra/core';
 import { formatearOffset } from './ajustes-barras-logica.js';
 import { calcularOffsetCorregido } from './estadisticas.js';
 
+/** Golpes juzgados que hacen falta para que el boton de la pausa ofrezca ajustar el offset. */
+export const GOLPES_MINIMOS_PARA_AJUSTAR = 20;
+
 /**
  * Sentido de una tecla de ajuste de offset: +1 sube el offset (`=`, `+`, el `+`
  * del teclado numerico), -1 lo baja (`-`, `_`, el `-` del numerico), 0 si no es
@@ -88,4 +91,15 @@ export function crearSesgoAcumulado(): SesgoAcumulado {
       sumaOffsets = 0;
     },
   };
+}
+
+/**
+ * El boton de la pausa: `Ajustar offset (+61 ms)`. `delta` es cuanto cambia el
+ * offset al aplicarlo (el nuevo menos el de ahora). Con delta 0 o menos de
+ * `GOLPES_MINIMOS_PARA_AJUSTAR` golpes no hay boton (`null`).
+ */
+export function etiquetaDeAjusteEnPausa(golpes: number, delta: Ms): string | null {
+  if (golpes < GOLPES_MINIMOS_PARA_AJUSTAR) return null;
+  if (Math.round(delta) === 0) return null;
+  return `Ajustar offset (${formatearOffset(delta)})`;
 }
