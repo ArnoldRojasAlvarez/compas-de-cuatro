@@ -15,6 +15,7 @@ import {
   type ScoreState,
 } from '@tetra/core';
 import { erroresJuzgados, media, type GolpeRegistrado } from './estadisticas.js';
+import { formatearPulsaciones } from './contadores-logica.js';
 
 /** La clave de record de una dificultad: el hash de su contenido, como texto. */
 export function claveDeRecord(chart: Chart): string {
@@ -97,8 +98,15 @@ export function textoDeConteos(counts: Record<Judgement, number>): string {
     .join(' · ');
 }
 
-/** El detalle de la ultima partida para el `title` del record. */
-export function detalleDeUltima(record: RecordDeMapa): string {
+/**
+ * El detalle de la ultima partida para el `title` del record. T-057: si la
+ * partida guardo sus pulsaciones, se agregan por tecla ("D 412 · F 398 ·
+ * J 401 · K 405") con `etiquetasDeTeclas` (una por columna; sin ellas, 1 a 4).
+ */
+export function detalleDeUltima(
+  record: RecordDeMapa,
+  etiquetasDeTeclas: readonly string[] = [],
+): string {
   const u = record.ultima;
   const dia = u.fecha.slice(0, 10);
   const partes = [
@@ -108,8 +116,48 @@ export function detalleDeUltima(record: RecordDeMapa): string {
     `combo ${u.maxCombo}`,
     textoDeConteos(u.counts),
   ];
+  if (u.pulsaciones !== undefined && u.pulsaciones.length === 4) {
+    partes.push(formatearPulsaciones(etiquetasDeTeclas, u.pulsaciones));
+  }
   if (dia !== '') partes.push(dia);
   return partes.join(' · ');
+}
+
+/** Desde cuantos ms de desviacion media (en valor absoluto, ya redondeada) se sugiere ajustar el offset. */
+export const DESVIACION_ALTA_MS = 8;
+
+/** La desviacion media redondeada a ms enteros, sin -0. */
+function enteroDeDesviacion(ms: number): number {
+  const entero = Math.round(ms);
+  return entero === 0 ? 0 : entero;
+}
+
+/** "+4 ms" (tarde), "-3 ms" (temprano) o "0 ms". Sin valor valido, "0 ms". */
+export function formatearDesviacion(ms: number): string {
+  const entero = Number.isFinite(ms) ? enteroDeDesviacion(ms) : 0;
+  return `${entero > 0 ? '+' : ''}${entero} ms`;
+}
+
+/**
+ * true si la desviacion media (la que se ve, redondeada) supera +-`DESVIACION_ALTA_MS`:
+ * mas que ruido, un sesgo que el offset de la cancion podria corregir. Justo en
+ * 8 no cuenta.
+ */
+export function desviacionEsAlta(ms: number): boolean {
+  return Number.isFinite(ms) && Math.abs(enteroDeDesviacion(ms)) > DESVIACION_ALTA_MS;
+}
+
+/**
+ * `title` de la desviacion media: "En promedio pegas tarde por 4 ms". Si es
+ * alta, agrega la sugerencia de ajustar el offset de la cancion.
+ */
+export function tituloDeDesviacion(ms: number): string {
+  const entero = Number.isFinite(ms) ? enteroDeDesviacion(ms) : 0;
+  const base =
+    entero === 0
+      ? 'En promedio pegas justo a tiempo'
+      : `En promedio pegas ${entero > 0 ? 'tarde' : 'temprano'} por ${Math.abs(entero)} ms`;
+  return desviacionEsAlta(ms) ? `${base}. Prueba ajustar el offset de esta cancion.` : base;
 }
 
 /** Clase CSS del rango (el color lo pone song-select.css). */

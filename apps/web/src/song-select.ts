@@ -32,6 +32,9 @@ import { runGame, type EscenaPartida } from './game.js';
 import { decodificarBlobDeAudio, mensajeDeErrorDeCarga } from './cargador-logica.js';
 import { cargarAudioDelClickTrack, cargarChartDelClickTrack } from './click-track.js';
 import { fondoEscena } from './fondo-escena.js';
+import { leerKeyMap } from './keymap.js';
+import { nombreLegibleDeCodigo } from './teclas.js';
+import { formatearOffsetLocal, guardarOffsetLocal, leerOffsetLocal } from './offset-local.js';
 import { cambiarBotonIcono, crearBotonIcono, crearIcono } from './iconos.js';
 import { EVENTO_BIBLIOTECA_CAMBIO } from './musica-menu-logica.js';
 import { crearReproductorDePreview } from './preview.js';
@@ -56,7 +59,9 @@ import {
   avisoDeRecord,
   claseDeRango,
   claveDeRecord,
+  desviacionEsAlta,
   detalleDeUltima,
+  formatearDesviacion,
   formatearMiles,
   formatearPrecision,
   mejorRangoDeCancion,
@@ -64,6 +69,7 @@ import {
   partidaDesdeScore,
   type MedidoEnLaPartida,
   textoDeIntentos,
+  tituloDeDesviacion,
 } from './records-logica.js';
 
 /** Fondo de la escena en el song select: la portada se nota, pero desenfocada para que el texto mande. */
@@ -736,8 +742,19 @@ export function mostrarSongSelect(contenedor: HTMLElement, opciones: OpcionesSon
     const intentos = document.createElement('span');
     intentos.className = 'tetra-ss-record-intentos';
     intentos.textContent = textoDeIntentos(record.intentos);
-    intentos.title = detalleDeUltima(record);
+    // T-057: las pulsaciones por tecla de la ultima partida, con las etiquetas del remapeo actual.
+    intentos.title = detalleDeUltima(record, leerKeyMap().map(nombreLegibleDeCodigo));
     resumen.append(crearLetraDeRango(mejor.rango, 'tetra-ss-record-rango'), precision, score, intentos);
+    // T-057: desviacion media de la mejor partida; pasados +-8 ms se pinta en acento 2.
+    if (mejor.desviacionMedia !== undefined) {
+      const desviacion = document.createElement('span');
+      desviacion.className = desviacionEsAlta(mejor.desviacionMedia)
+        ? 'tetra-ss-record-desviacion tetra-ss-record-desviacion-alta'
+        : 'tetra-ss-record-desviacion';
+      desviacion.textContent = formatearDesviacion(mejor.desviacionMedia);
+      desviacion.title = tituloDeDesviacion(mejor.desviacionMedia);
+      resumen.appendChild(desviacion);
+    }
 
     const conteos = document.createElement('p');
     conteos.className = 'tetra-ss-record-conteos';
@@ -802,6 +819,57 @@ export function mostrarSongSelect(contenedor: HTMLElement, opciones: OpcionesSon
       perfil.appendChild(fila);
     }
     return perfil;
+  }
+
+  // -- T-057: offset de la cancion enfocada. El control vive en la fila de
+  // acciones: el reloj siempre, y `- +3 ms +` cuando hay offset (o al pasar el
+  // mouse / enfocar). Las teclas - y = lo ajustan de a 1 ms. --
+
+  /** El control de offset de la cancion enfocada que esta en pantalla (renderizarDetalle lo recrea), para actualizarlo en el lugar. */
+  let controlOffset: { raiz: HTMLElement; valor: HTMLElement } | null = null;
+
+  /** Suma `delta` ms al offset local de la cancion enfocada, lo guarda y refresca el control sin reconstruir el detalle. */
+  function ajustarOffsetLocal(delta: number): void {
+    const cancion = cancionEnfocada();
+    if (!cancion || controlOffset === null) return;
+    const nuevo = guardarOffsetLocal(cancion.id, leerOffsetLocal(cancion.id) + delta);
+    pintarControlOffset(controlOffset, nuevo);
+  }
+
+  function pintarControlOffset(control: { raiz: HTMLElement; valor: HTMLElement }, ms: number): void {
+    control.valor.textContent = formatearOffsetLocal(ms);
+    control.raiz.classList.toggle('tetra-ss-offset--activo', ms !== 0);
+  }
+
+  /**
+   * `sugerido`: la desviacion media del record es alta (T-057), asi que el
+   * control queda a la vista aunque el offset sea 0.
+   */
+  function crearControlDeOffset(songId: SongId, sugerido: boolean): HTMLElement {
+    const raiz = document.createElement('div');
+    raiz.className = sugerido ? 'tetra-ss-offset tetra-ss-offset--sugerido' : 'tetra-ss-offset';
+    raiz.title = 'Offset de esta cancion, se suma al global. Shift + clic: 5 ms. Teclas - y =: 1 ms';
+
+    // El reloj es el unico siempre visible: enfocarlo (o pasar el mouse) abre el ajuste.
+    const reloj = crearBotonIcono('reloj', 'Offset de esta cancion', 'tetra-ss-offset-reloj');
+    reloj.dataset.foco = 'offset';
+    const ajuste = document.createElement('span');
+    ajuste.className = 'tetra-ss-offset-ajuste';
+
+    const menos = crearBotonIcono('menos', 'Offset de esta cancion, 1 ms antes', 'tetra-ss-offset-paso');
+    const valor = document.createElement('span');
+    valor.className = 'tetra-ss-offset-valor';
+    const mas = crearBotonIcono('mas', 'Offset de esta cancion, 1 ms despues', 'tetra-ss-offset-paso');
+    menos.dataset.foco = 'offset-menos';
+    mas.dataset.foco = 'offset-mas';
+    menos.addEventListener('click', (e) => ajustarOffsetLocal(e.shiftKey ? -5 : -1));
+    mas.addEventListener('click', (e) => ajustarOffsetLocal(e.shiftKey ? 5 : 1));
+    ajuste.append(menos, valor, mas);
+
+    raiz.append(reloj, ajuste);
+    controlOffset = { raiz, valor };
+    pintarControlOffset(controlOffset, leerOffsetLocal(songId));
+    return raiz;
   }
 
   // -- Acciones secundarias de la cancion enfocada (botones-icono) --
@@ -961,6 +1029,11 @@ export function mostrarSongSelect(contenedor: HTMLElement, opciones: OpcionesSon
     botonJugar.dataset.foco = 'jugar';
     botonJugar.addEventListener('click', () => void jugarDificultadEnfocada());
     acciones.appendChild(botonJugar);
+
+    const desviacionAlta =
+      recordEnfocado?.mejor.desviacionMedia !== undefined &&
+      desviacionEsAlta(recordEnfocado.mejor.desviacionMedia);
+    acciones.appendChild(crearControlDeOffset(cancion.id, desviacionAlta));
 
     const abrirEnMapeador = opciones.aMapeador;
     if (abrirEnMapeador) {
@@ -1155,8 +1228,17 @@ export function mostrarSongSelect(contenedor: HTMLElement, opciones: OpcionesSon
     });
   }
 
-  async function jugar(chart: Chart, audio: AudioBuffer, escena?: EscenaPartida): Promise<void> {
-    const opcionesPartida = escena === undefined ? {} : { escena };
+  async function jugar(
+    chart: Chart,
+    audio: AudioBuffer,
+    escena?: EscenaPartida,
+    cancionId?: SongId,
+  ): Promise<void> {
+    // T-057: una cancion de la biblioteca suma su offset local al global (y "Corregir offset" lo ajusta a el).
+    const opcionesPartida = {
+      ...(escena !== undefined && { escena }),
+      ...(cancionId !== undefined && { offsetLocal: leerOffsetLocal(cancionId), idCancion: cancionId }),
+    };
     // Sin fondo propio la partida deja ver la escena: que no quede la portada
     // de otra cancion (por ejemplo al jugar el click track) detras de la pista.
     if (escena?.fondo === undefined) fondoEscena().limpiar();
@@ -1205,7 +1287,7 @@ export function mostrarSongSelect(contenedor: HTMLElement, opciones: OpcionesSon
       } finally {
         await ctxDeDecodificacion.close();
       }
-      await jugar(chart, audioBuffer, escenaDeCancion(cancion, chart));
+      await jugar(chart, audioBuffer, escenaDeCancion(cancion, chart), cancion.id);
     } catch (error) {
       mostrarError(mensajeDeErrorDeCarga(error));
     } finally {
@@ -1365,6 +1447,11 @@ export function mostrarSongSelect(contenedor: HTMLElement, opciones: OpcionesSon
       );
       evento.preventDefault();
       if (destino >= 0 && destino !== estado.dificultadEnfocadaIndice) enfocarDificultad(destino);
+    } else if (evento.key === '-' || evento.key === '_' || evento.key === '=' || evento.key === '+') {
+      // T-057: offset de la cancion enfocada, de a 1 ms.
+      if (cancionEnfocada() === undefined) return;
+      evento.preventDefault();
+      ajustarOffsetLocal(evento.key === '-' || evento.key === '_' ? -1 : 1);
     } else if (evento.key === 'Enter') {
       // Con un boton enfocado, Enter ya es su clic: no se juega ademas.
       if (objetivo instanceof Element && objetivo.closest('button, a, summary')) return;

@@ -15,9 +15,15 @@ import {
   type PlayfieldOptions,
   type TexturasDeSkin,
 } from '@tetra/engine';
-import { mostrarResultados, type Desviacion } from './results.js';
-import { leerOffset } from './offset.js';
-import { leerVelocidad, velocidadAScrollDuration } from './velocidad.js';
+import { mostrarResultados, type CorreccionDeOffset, type Desviacion } from './results.js';
+import { guardarOffset, leerOffset } from './offset.js';
+import { guardarOffsetLocal } from './offset-local.js';
+import { guardarVelocidad, leerVelocidad, velocidadAScrollDuration } from './velocidad.js';
+import {
+  moverVelocidad,
+  pasoDeAlphaDeAvisoDeVelocidad,
+  textoDeAvisoDeVelocidad,
+} from './velocidad-aviso-logica.js';
 import { leerKeyMap } from './keymap.js';
 import { nombreLegibleDeCodigo } from './teclas.js';
 import { leerMostrarFps } from './graficos.js';
@@ -370,6 +376,14 @@ export interface OpcionesPartida {
   inicioMs?: Ms;
   /** T-053: fondo, video e intro de la cancion (y el fondo de los resultados). Sin esto, la partida se ve como siempre. */
   escena?: EscenaPartida;
+  /**
+   * T-057: offset de esta cancion en ms, que se suma al global en el reloj. Con
+   * `idCancion`, "Corregir offset" de los resultados ajusta este (aunque sea 0)
+   * y no el global. Sin alguno de los dos, se corrige el global como siempre.
+   */
+  offsetLocal?: Ms;
+  /** T-057: id de la cancion de la biblioteca, para guardar su offset local. */
+  idCancion?: string;
 }
 
 export type { EscenaPartida };
@@ -408,16 +422,16 @@ export function runGame(
     contenedor.innerHTML = '';
     document.body.classList.add(CLASE_EN_JUEGO);
 
-    // T-008: la velocidad se lee una sola vez al arrancar, igual que el
-    // offset (ver el comentario de leerOffset() mas abajo): no hay pausa ni
-    // ajuste en caliente en el alcance de este ticket, solo elegirla antes
-    // de jugar.
+    // T-008: la velocidad se lee al arrancar. Desde T-057 F3/F4 la cambian en
+    // caliente: mutan `opcionesPista.scrollDuration`, que el playfield lee por
+    // referencia en cada render (ver manejarVelocidad mas abajo).
+    let velocidadActual = leerVelocidad();
     const medidasIniciales = medidasDePista(window.innerHeight);
     const opcionesPista: PlayfieldOptions = {
       height: medidasIniciales.alto,
       columnWidth: medidasIniciales.anchoCarril,
       receptorOffset: medidasIniciales.receptorOffset,
-      scrollDuration: velocidadAScrollDuration(leerVelocidad()),
+      scrollDuration: velocidadAScrollDuration(velocidadActual),
     };
     const escena = opciones.escena;
     const atenuacion = leerAtenuacion();
@@ -460,7 +474,27 @@ export function runGame(
     const volumen = ctx.createGain();
     volumen.gain.value = gananciaDeVolumen(leerVolumen());
     volumen.connect(ctx.destination);
-    const clock = createAudioClock(ctx, audio, { userOffset: leerOffset(), destino: volumen });
+    // T-057: el offset local de la cancion se suma al global.
+    const offsetGlobal = leerOffset();
+    const offsetLocal = opciones.offsetLocal;
+    const idCancion = opciones.idCancion;
+    const clock = createAudioClock(ctx, audio, {
+      userOffset: offsetGlobal + (offsetLocal ?? 0),
+      destino: volumen,
+    });
+    // Que corrige "Corregir offset" de los resultados: el local de la cancion
+    // si la partida trajo uno (aunque sea 0), si no el global.
+    const correccionDeOffset: CorreccionDeOffset =
+      offsetLocal !== undefined && idCancion !== undefined
+        ? { actual: offsetLocal, guardar: (ms) => guardarOffsetLocal(idCancion, ms), local: true }
+        : {
+            actual: offsetGlobal,
+            guardar: (ms) => {
+              guardarOffset(ms);
+              return ms;
+            },
+            local: false,
+          };
     const engine = createJudgeEngine(chart);
     window.__tetraDebug = { clock, ctx, volumen };
 
@@ -483,6 +517,8 @@ export function runGame(
     let introSaltada = false;
     // Reintento mantenido: instante de juego del keydown de la tecla, o null si no se mantiene.
     let reintentoDesde: Ms | null = null;
+    // T-057: instante de juego (clock.now()) del ultimo cambio de velocidad, o null sin aviso a la vista.
+    let avisoVelocidadDesde: Ms | null = null;
 
     const desviaciones: Desviacion[] = [];
     function registrar(resultado: HitResult | null, t: Ms): void {
@@ -564,6 +600,7 @@ export function runGame(
       window.removeEventListener('keydown', manejarEscape);
       window.removeEventListener('keydown', manejarAtajoAbajo);
       window.removeEventListener('keyup', manejarAtajoArriba);
+      window.removeEventListener('keydown', manejarVelocidad);
       window.removeEventListener('blur', cancelarReintento);
       window.removeEventListener('resize', ajustarAlVentana);
       volumen.disconnect();
@@ -577,10 +614,6 @@ export function runGame(
     function finalizar(): void {
       if (detenido) return;
       const estadoFinal = { ...engine.state, counts: { ...engine.state.counts } };
-      // Se lee clock.userOffset antes de limpiar(): es el offset con el que
-      // se jugo esta partida, lo que necesita el boton de "corregir offset"
-      // de la pantalla de resultados (T-007) para calcular el offset nuevo.
-      const offsetDeEstaPartida = clock.userOffset;
       limpiar();
       playfieldParaLimpieza?.destroy();
       liberarSkinPropia();
@@ -590,7 +623,7 @@ export function runGame(
         contenedor,
         estadoFinal,
         desviaciones,
-        offsetDeEstaPartida,
+        correccionDeOffset,
         escena,
         pulsaciones,
       );
@@ -789,7 +822,32 @@ export function runGame(
       avisos.mostrarSalto(false);
     }
 
+    // T-057: F3 baja y F4 sube la velocidad de caida, con efecto inmediato. El
+    // aviso se mide con clock.now() (el bucle de juego lo desvanece). Una tecla
+    // asignada a una columna no dispara el atajo. F3/F4 hacen otras cosas en el
+    // navegador (buscar, etc.): durante la partida se les quita.
+    function manejarVelocidad(evento: KeyboardEvent): void {
+      if (evento.code !== 'F3' && evento.code !== 'F4') return;
+      if (detenido || keyMap.includes(evento.code)) return;
+      evento.preventDefault();
+      if (evento.repeat || !appInicializada || fase !== 'jugando') return;
+      const nueva = moverVelocidad(velocidadActual, evento.code === 'F4' ? 1 : -1);
+      if (nueva !== velocidadActual) {
+        velocidadActual = nueva;
+        opcionesPista.scrollDuration = velocidadAScrollDuration(nueva);
+        try {
+          guardarVelocidad(nueva);
+        } catch {
+          // Sin almacenamiento la velocidad vale solo para esta partida.
+        }
+      }
+      // Aunque este en el tope se avisa: el jugador ve que ya no puede ir mas alla.
+      avisoVelocidadDesde = clock.now();
+      avisos.mostrarVelocidad(textoDeAvisoDeVelocidad(nueva), pasoDeAlphaDeAvisoDeVelocidad(0));
+    }
+
     window.addEventListener('keydown', manejarAtajoAbajo);
+    window.addEventListener('keydown', manejarVelocidad);
     window.addEventListener('keyup', manejarAtajoArriba);
     // Perder el foco con la tecla apretada: el keyup no llega, el aro no debe quedar colgado.
     window.addEventListener('blur', cancelarReintento);
@@ -875,6 +933,13 @@ export function runGame(
               return;
             }
             avisos.mostrarReintento(progresoDeReintento(mantenidoMs));
+          }
+
+          // El aviso de velocidad se desvanece solo, medido contra el reloj.
+          if (avisoVelocidadDesde !== null) {
+            const paso = pasoDeAlphaDeAvisoDeVelocidad(t - avisoVelocidadDesde);
+            avisos.mostrarVelocidad(textoDeAvisoDeVelocidad(velocidadActual), paso);
+            if (paso === 0) avisoVelocidadDesde = null;
           }
 
           // 2. La entrada, despachada con el tiempo de cada evento (no con t).

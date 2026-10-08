@@ -5,11 +5,14 @@
 //     mientras se mantiene la tecla y solo existe a la vista mientras se mantiene.
 //   - "Espacio para saltar" (abajo a la derecha): visible mientras el salto de
 //     intro este disponible.
+//   - T-057: "Velocidad 7 · 514 ms" (arriba al centro): aparece al cambiar la
+//     velocidad con F3/F4 y se desvanece solo.
 //
 // Aca no se mide tiempo: game.ts le pasa el progreso (de `clock.now()` y del
 // `event.timeStamp` del keydown) y si el salto esta disponible.
 
 import './atajos.css';
+import { PASOS_DE_ALPHA_AVISO } from './velocidad-aviso-logica.js';
 
 const NS_SVG = 'http://www.w3.org/2000/svg';
 
@@ -25,6 +28,11 @@ export interface AvisosDeAtajos {
   mostrarReintento(progreso: number): void;
   /** Muestra u oculta "Espacio para saltar". Solo escribe cuando cambia. */
   mostrarSalto(visible: boolean): void;
+  /**
+   * T-057: el aviso de velocidad con su opacidad en pasos de 0 a
+   * `PASOS_DE_ALPHA_AVISO` (0 lo oculta). Solo escribe lo que cambia.
+   */
+  mostrarVelocidad(texto: string, paso: number): void;
 }
 
 /** Crea los dos avisos como hijos de `hud` (la capa `.tetra-hud`). */
@@ -59,11 +67,19 @@ export function crearAvisosDeAtajos(hud: HTMLElement): AvisosDeAtajos {
   salto.hidden = true;
   salto.textContent = 'Espacio para saltar';
 
-  hud.append(reintento, salto);
+  // -- Aviso de velocidad --
+  const velocidad = document.createElement('div');
+  velocidad.className = 'tetra-velocidad-aviso';
+  velocidad.hidden = true;
+  velocidad.setAttribute('role', 'status');
+
+  hud.append(reintento, salto, velocidad);
 
   // Paso del aro (0 a PASOS_ARO).
   let paso = 0;
   let saltoVisible = false;
+  let textoVelocidad = '';
+  let pasoVelocidad = 0;
 
   return {
     mostrarReintento(progreso: number): void {
@@ -86,6 +102,18 @@ export function crearAvisosDeAtajos(hud: HTMLElement): AvisosDeAtajos {
       if (visible === saltoVisible) return;
       saltoVisible = visible;
       salto.hidden = !visible;
+    },
+
+    mostrarVelocidad(texto: string, paso: number): void {
+      const nuevo = Math.min(PASOS_DE_ALPHA_AVISO, Math.max(0, Math.round(paso)));
+      if (texto !== textoVelocidad) {
+        textoVelocidad = texto;
+        velocidad.textContent = texto;
+      }
+      if (nuevo === pasoVelocidad) return;
+      pasoVelocidad = nuevo;
+      velocidad.hidden = nuevo === 0;
+      velocidad.style.opacity = String(nuevo / PASOS_DE_ALPHA_AVISO);
     },
   };
 }

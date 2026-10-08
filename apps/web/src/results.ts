@@ -16,7 +16,6 @@ import {
   etiquetaDeSigno,
   media,
 } from './estadisticas.js';
-import { guardarOffset } from './offset.js';
 import { leerKeyMap } from './keymap.js';
 import { nombreLegibleDeCodigo } from './teclas.js';
 import { formatearPulsaciones, formatearUR, unstableRate } from './contadores-logica.js';
@@ -362,17 +361,32 @@ function crearFilaDeTeclasYUR(
 }
 
 /**
+ * T-057: que offset corrige el boton de abajo. Con una cancion de la
+ * biblioteca es el offset LOCAL de esa cancion (para que corregirla no
+ * descuadre a las demas); sin ella (click track, mapeador) es el global.
+ * game.ts decide cual y arma `guardar`.
+ */
+export interface CorreccionDeOffset {
+  /** El offset que se corrige, tal como estaba al jugar. */
+  actual: Ms;
+  /** Guarda el offset nuevo y devuelve el que quedo guardado (el local se recorta a +-300). */
+  guardar(ms: Ms): Ms;
+  /** true si es el offset de la cancion, no el global (solo cambia el texto del boton). */
+  local: boolean;
+}
+
+/**
  * Boton "corregir offset segun esta partida" (T-007, "Parte B"): aplica
  * `calcularOffsetCorregido` sobre la media de esta partida y guarda el
- * resultado con `guardarOffset`, para que la proxima partida arranque con
- * el offset corregido (ver game.ts, donde se lee al construir el reloj).
+ * resultado con `correccion.guardar`, para que la proxima partida arranque
+ * con el offset corregido (ver game.ts, donde se lee al construir el reloj).
  *
  * No se muestra si no hubo golpes juzgados o si la media ya esta en 0:
  * no hay nada que corregir (T-007, criterios de aceptacion).
  */
 function crearBotonCorregirOffset(
   desviaciones: readonly Desviacion[],
-  offsetActual: Ms,
+  correccion: CorreccionDeOffset,
 ): HTMLElement | null {
   const errores = erroresJuzgados(desviaciones);
   const mediaError = media(errores);
@@ -384,11 +398,12 @@ function crearBotonCorregirOffset(
   boton.type = 'button';
   boton.className = 'tetra-resultados-corregir';
   boton.textContent = 'Corregir offset';
-  boton.title = `Ajusta el offset segun la media de esta partida (${formatearMedia(mediaError)}). Se aplica en la proxima.`;
+  boton.title = `Ajusta el offset segun la media de esta partida (${formatearMedia(mediaError)}). Se aplica en la proxima${correccion.local ? ' de esta cancion' : ''}.`;
 
   boton.addEventListener('click', () => {
-    const offsetNuevo = Math.round(calcularOffsetCorregido(offsetActual, mediaError));
-    guardarOffset(offsetNuevo);
+    const offsetNuevo = correccion.guardar(
+      Math.round(calcularOffsetCorregido(correccion.actual, mediaError)),
+    );
     boton.disabled = true;
     boton.textContent = `Offset: ${offsetNuevo} ms`;
   });
@@ -440,9 +455,9 @@ function crearBloquePrincipal(estado: ScoreState): HTMLElement {
  * lo que hubiera. DOM plano: nada de Pixi ni de React (ver CLAUDE.md,
  * regla 4, y T-004, "Pantalla de resultados").
  *
- * `offsetActual` es el `userOffset` con el que se jugo esta partida (ver
- * game.ts): hace falta para que el boton de "corregir offset" de T-007
- * sepa a partir de que valor calcular el offset nuevo.
+ * `correccion` dice que offset corrige el boton de "corregir offset" de
+ * T-007 (el global o, desde T-057, el de la cancion) y a partir de que valor
+ * calcular el nuevo (ver game.ts).
  *
  * T-053: con `escena`, el fondo de la cancion queda detras (borroso y
  * atenuado) y arriba van el titulo y la dificultad en una linea chica. La
@@ -453,7 +468,7 @@ export function mostrarResultados(
   contenedor: HTMLElement,
   estado: ScoreState,
   desviaciones: readonly Desviacion[],
-  offsetActual: Ms,
+  correccion: CorreccionDeOffset,
   escena?: EscenaPartida,
   pulsaciones?: readonly number[],
 ): void {
@@ -517,7 +532,7 @@ export function mostrarResultados(
   seccionGrafico.appendChild(cajaGrafico);
   panel.appendChild(seccionGrafico);
 
-  const botonCorregir = crearBotonCorregirOffset(desviaciones, offsetActual);
+  const botonCorregir = crearBotonCorregirOffset(desviaciones, correccion);
   if (botonCorregir) {
     panel.appendChild(botonCorregir);
   }

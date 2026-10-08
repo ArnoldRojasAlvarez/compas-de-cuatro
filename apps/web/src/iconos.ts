@@ -10,6 +10,8 @@ export type NombreIcono =
   | 'volver'
   | 'filtros'
   | 'mas'
+  | 'menos'
+  | 'reloj'
   | 'azar'
   | 'editar'
   | 'exportar'
@@ -39,6 +41,8 @@ const ICONOS: Record<NombreIcono, DefinicionIcono> = {
     ],
   },
   mas: { trazos: ['M12 5v14', 'M5 12h14'] },
+  menos: { trazos: ['M5 12h14'] },
+  reloj: { trazos: ['M12 7.5V12l3 2'], circulos: [[12, 12, 8.5]] },
   azar: {
     trazos: [
       'M3 7h3c3 0 5 2.2 7 5s4 5 7 5h1',

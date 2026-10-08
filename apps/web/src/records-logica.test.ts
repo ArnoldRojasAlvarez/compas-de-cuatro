@@ -6,7 +6,10 @@ import type { Chart, Judgement, PartidaJugada, RecordDeMapa, ScoreState } from '
 import {
   avisoDeRecord,
   claveDeRecord,
+  DESVIACION_ALTA_MS,
+  desviacionEsAlta,
   detalleDeUltima,
+  formatearDesviacion,
   formatearMiles,
   formatearPrecision,
   mejorRangoDeCancion,
@@ -14,6 +17,7 @@ import {
   partidaDesdeScore,
   textoDeConteos,
   textoDeIntentos,
+  tituloDeDesviacion,
 } from './records-logica.js';
 
 const NBSP = ' ';
@@ -198,6 +202,80 @@ describe('conteos', () => {
     expect(d).toContain('2026-10-05');
     // No es el detalle del mejor.
     expect(d).not.toContain('900');
+  });
+});
+
+describe('detalle de la ultima con pulsaciones (T-057)', () => {
+  function recordConUltima(ultima: PartidaJugada): RecordDeMapa {
+    return { hash: 'h', mejor: partida(900_000), ultima, intentos: 2 };
+  }
+
+  it('agrega las pulsaciones por tecla con las etiquetas dadas', () => {
+    const d = detalleDeUltima(
+      recordConUltima({ ...partida(1000), pulsaciones: [412, 398, 401, 405] }),
+      ['D', 'F', 'J', 'K'],
+    );
+    expect(d).toContain('D 412 · F 398 · J 401 · K 405');
+    // La fecha sigue al final.
+    expect(d.endsWith('2026-10-05')).toBe(true);
+  });
+
+  it('sin etiquetas usa el numero de columna', () => {
+    const d = detalleDeUltima(recordConUltima({ ...partida(1000), pulsaciones: [1, 2, 3, 4] }));
+    expect(d).toContain('1 1 · 2 2 · 3 3 · 4 4');
+  });
+
+  it('una partida sin pulsaciones no agrega nada (un record viejo de T-055)', () => {
+    const d = detalleDeUltima(recordConUltima(partida(1000)), ['D', 'F', 'J', 'K']);
+    expect(d).not.toContain('D ');
+    expect(d).not.toContain('NaN');
+    expect(d).not.toContain('undefined');
+  });
+});
+
+describe('desviacion media del record (T-057)', () => {
+  it('formatea con signo explicito: tarde +, temprano -', () => {
+    expect(formatearDesviacion(4)).toBe('+4 ms');
+    expect(formatearDesviacion(-3)).toBe('-3 ms');
+    expect(formatearDesviacion(4.6)).toBe('+5 ms');
+    expect(formatearDesviacion(-3.4)).toBe('-3 ms');
+  });
+
+  it('cero y casi cero no llevan signo ni -0', () => {
+    expect(formatearDesviacion(0)).toBe('0 ms');
+    expect(formatearDesviacion(-0.3)).toBe('0 ms');
+    expect(formatearDesviacion(0.3)).toBe('0 ms');
+  });
+
+  it('un valor no valido da 0 ms', () => {
+    expect(formatearDesviacion(Number.NaN)).toBe('0 ms');
+  });
+
+  it('el title dice tarde o temprano y por cuantos ms', () => {
+    expect(tituloDeDesviacion(4)).toBe('En promedio pegas tarde por 4 ms');
+    expect(tituloDeDesviacion(-3)).toBe('En promedio pegas temprano por 3 ms');
+    expect(tituloDeDesviacion(0)).toBe('En promedio pegas justo a tiempo');
+  });
+
+  it('pasado +-8 ms es alta, hasta 8 inclusive no', () => {
+    expect(DESVIACION_ALTA_MS).toBe(8);
+    expect(desviacionEsAlta(8)).toBe(false);
+    expect(desviacionEsAlta(-8)).toBe(false);
+    expect(desviacionEsAlta(9)).toBe(true);
+    expect(desviacionEsAlta(-9)).toBe(true);
+    expect(desviacionEsAlta(0)).toBe(false);
+    // Redondeada: 8.4 se ve como "+8 ms", no se marca; 8.6 se ve "+9 ms", si.
+    expect(desviacionEsAlta(8.4)).toBe(false);
+    expect(desviacionEsAlta(8.6)).toBe(true);
+    expect(desviacionEsAlta(Number.NaN)).toBe(false);
+  });
+
+  it('solo si es alta el title sugiere ajustar el offset de la cancion', () => {
+    expect(tituloDeDesviacion(5)).not.toContain('offset');
+    expect(tituloDeDesviacion(-8)).not.toContain('offset');
+    expect(tituloDeDesviacion(12)).toContain('offset de esta cancion');
+    expect(tituloDeDesviacion(-12)).toContain('temprano por 12 ms');
+    expect(tituloDeDesviacion(-12)).toContain('offset de esta cancion');
   });
 });
 

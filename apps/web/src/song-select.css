@@ -1023,3 +1023,54 @@
     font-size: var(--tipo-xl);
   }
 }
+
+/* T-057: desviacion media de la mejor partida, al lado de los intentos, mono y tenue. */
+.tetra-ss-record-desviacion {
+  font-size: var(--tipo-xs);
+  color: var(--tinta-3);
+  cursor: help;
+}
+
+/* Pasados +-8 ms de desviacion: acento 2, y el control de offset de abajo queda a la vista. */
+.tetra-ss-record-desviacion-alta {
+  color: var(--acento-2);
+}
+
+/* T-057: offset de la cancion. El reloj va siempre; el ajuste `- +3 ms +` aparece
+   si hay offset, si el record lo sugiere o al pasar el mouse / enfocar. */
+.tetra-ss-offset {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+#app .tetra-ss-offset--activo .tetra-ss-offset-reloj {
+  color: var(--acento);
+}
+
+.tetra-ss-offset-ajuste {
+  display: none;
+  align-items: center;
+  font-family: var(--fuente-datos);
+  font-size: var(--tipo-xs);
+  font-variant-numeric: tabular-nums;
+  color: var(--tinta-2);
+}
+
+.tetra-ss-offset--activo .tetra-ss-offset-ajuste,
+.tetra-ss-offset--sugerido .tetra-ss-offset-ajuste,
+.tetra-ss-offset:hover .tetra-ss-offset-ajuste,
+.tetra-ss-offset:focus-within .tetra-ss-offset-ajuste {
+  display: inline-flex;
+}
+
+#app .tetra-ss-offset-paso {
+  width: 28px;
+  height: 28px;
+}
+
+.tetra-ss-offset-valor {
+  min-width: 6ch;
+  text-align: center;
+  white-space: nowrap;
+}
