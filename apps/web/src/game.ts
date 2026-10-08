@@ -7,7 +7,7 @@
 
 import { Application } from 'pixi.js';
 import type { Chart, HitResult, Ms, ScoreState } from '@tetra/core';
-import { createJudgeEngine } from '@tetra/core';
+import { createJudgeEngine, windowsForOD } from '@tetra/core';
 import { createAudioClock } from '@tetra/audio';
 import {
   createKeyboardInput,
@@ -19,8 +19,16 @@ import { mostrarResultados, type Desviacion } from './results.js';
 import { leerOffset } from './offset.js';
 import { leerVelocidad, velocidadAScrollDuration } from './velocidad.js';
 import { leerKeyMap } from './keymap.js';
+import { nombreLegibleDeCodigo } from './teclas.js';
 import { leerMostrarFps } from './graficos.js';
-import { leerAtenuacion, leerVideoDeFondo, opacidadDePistaSegunAtenuacion } from './apariencia.js';
+import {
+  leerAtenuacion,
+  leerMostrarBarraDeError,
+  leerMostrarJuicios,
+  leerMostrarTeclas,
+  leerVideoDeFondo,
+  opacidadDePistaSegunAtenuacion,
+} from './apariencia.js';
 import { gananciaDeVolumen, leerVolumen } from './volumen.js';
 import { liberarTexturasDeSkin, resolverSkinDePartida } from './skin-activa.js';
 import { crearFondoDePartida, crearIntroDePartida } from './escena.js';
@@ -28,6 +36,14 @@ import { medidasDePista, type EscenaPartida } from './escena-logica.js';
 import { CLASE_EN_JUEGO, EVENTO_TIEMPO_JUGADO } from './header.js';
 import { sumarTiempoJugado } from './tiempo-jugado.js';
 import { crearMenuPausa, type MenuPausa } from './pausa.js';
+import { crearContadores } from './contadores.js';
+import { crearAvisosDeAtajos } from './atajos.js';
+import {
+  destinoDelSalto,
+  progresoDeReintento,
+  reintentoCompleto,
+  saltoDisponible,
+} from './contadores-logica.js';
 import { filtrarNotasDesde, inicioDeLaCancion } from './partida-logica.js';
 import { numeroDeCuenta, transicionPausa, type FasePausa } from './pausa-logica.js';
 import {
@@ -60,7 +76,14 @@ const LEAD_IN_MS: Ms = 1500;
  * discrimina por `estado`.
  */
 export type ResultadoPartida =
-  | { readonly estado: 'completado'; readonly score: ScoreState }
+  | {
+      readonly estado: 'completado';
+      readonly score: ScoreState;
+      /** T-056: pulsaciones (keydown) por columna en toda la partida, 4 numeros. */
+      readonly pulsaciones: readonly number[];
+      /** T-056: las mismas desviaciones que recibe la pantalla de resultados (tiempo, error, juicio). */
+      readonly desviaciones: readonly Desviacion[];
+    }
   | { readonly estado: 'abortado' }
   | { readonly estado: 'reintentar' };
 
@@ -121,6 +144,8 @@ interface CacheHud {
 }
 
 interface HudPartida {
+  /** La capa `.tetra-hud`: de ella cuelgan tambien los contadores y los avisos de atajos (T-056). */
+  raiz: HTMLElement;
   comboRaiz: HTMLElement;
   comboValor: HTMLElement;
   score: HTMLElement;
@@ -209,6 +234,7 @@ function crearHud(envoltorio: HTMLElement, mostrarFps: boolean): HudPartida {
   });
 
   return {
+    raiz: hud,
     comboRaiz,
     comboValor,
     score: score.valor,
@@ -402,6 +428,7 @@ export function runGame(
     const partida = document.createElement('div');
     partida.className = 'tetra-partida';
     partida.style.setProperty('--ancho-carril', `${opcionesPista.columnWidth}px`);
+    partida.style.setProperty('--receptor-offset', `${opcionesPista.receptorOffset}px`);
     const lienzo = document.createElement('div');
     lienzo.className = 'tetra-lienzo';
     partida.appendChild(lienzo);
@@ -437,14 +464,35 @@ export function runGame(
     const engine = createJudgeEngine(chart);
     window.__tetraDebug = { clock, ctx, volumen };
 
+    // T-056: el remapeo se lee una vez, igual que el offset y la velocidad; lo
+    // usan la entrada, las cajitas de teclas y los atajos (que no pisan una
+    // tecla de columna).
+    const keyMap = leerKeyMap();
+    const contadores = crearContadores(hud.raiz, {
+      teclas: leerMostrarTeclas(),
+      juicios: leerMostrarJuicios(),
+      barraDeError: leerMostrarBarraDeError(),
+      etiquetasDeTeclas: keyMap.map(nombreLegibleDeCodigo),
+      ventanas: windowsForOD(chart.overallDifficulty),
+    });
+    const avisos = crearAvisosDeAtajos(hud.raiz);
+    // Pulsaciones reales (keydown, sin repeticion) por columna, para los resultados.
+    const pulsaciones: number[] = [0, 0, 0, 0];
+    // Primera nota que se juega: de ella salen el aviso y el destino del salto de intro.
+    const primeraNota: Ms | undefined = chart.notes[0]?.time;
+    let introSaltada = false;
+    // Reintento mantenido: instante de juego del keydown de la tecla, o null si no se mantiene.
+    let reintentoDesde: Ms | null = null;
+
     const desviaciones: Desviacion[] = [];
-    function registrar(resultado: HitResult | null): void {
+    function registrar(resultado: HitResult | null, t: Ms): void {
       if (resultado === null) return;
       desviaciones.push({
         time: resultado.note.time,
         error: resultado.error,
         judgement: resultado.judgement,
       });
+      contadores.golpe(resultado.error, resultado.judgement, t);
     }
 
     // T-004, "El punto critico: el tiempo de la pulsacion":
@@ -514,6 +562,9 @@ export function runGame(
       clock.stop();
       input?.destroy();
       window.removeEventListener('keydown', manejarEscape);
+      window.removeEventListener('keydown', manejarAtajoAbajo);
+      window.removeEventListener('keyup', manejarAtajoArriba);
+      window.removeEventListener('blur', cancelarReintento);
       window.removeEventListener('resize', ajustarAlVentana);
       volumen.disconnect();
       delete window.__tetraDebug;
@@ -535,8 +586,20 @@ export function runGame(
       liberarSkinPropia();
       app.destroy(true, { children: true });
       contenedor.innerHTML = '';
-      mostrarResultados(contenedor, estadoFinal, desviaciones, offsetDeEstaPartida, escena);
-      resolve({ estado: 'completado', score: estadoFinal });
+      mostrarResultados(
+        contenedor,
+        estadoFinal,
+        desviaciones,
+        offsetDeEstaPartida,
+        escena,
+        pulsaciones,
+      );
+      resolve({
+        estado: 'completado',
+        score: estadoFinal,
+        pulsaciones: pulsaciones.slice(),
+        desviaciones,
+      });
     }
 
     /**
@@ -596,6 +659,7 @@ export function runGame(
       const siguiente = transicionPausa(fase, 'pausar');
       if (siguiente === null) return;
       fase = siguiente;
+      cancelarReintento();
       if (rafId !== 0) {
         cancelAnimationFrame(rafId);
         rafId = 0;
@@ -688,6 +752,48 @@ export function runGame(
     // puede abortar incluso mientras app.init() todavia esta cargando.
     window.addEventListener('keydown', manejarEscape);
 
+    // T-056: atajos. Mantener ` (Backquote) 0,5 s reintenta; Espacio salta la
+    // intro. Nada de temporizadores: el keydown se fecha con `event.timeStamp`
+    // (convertido al reloj de juego con toGameTime) y el bucle de juego mide
+    // cuanto se lleva mantenida con `clock.now()`. Una tecla asignada a una
+    // columna no dispara el atajo: la columna manda.
+    function cancelarReintento(): void {
+      reintentoDesde = null;
+      avisos.mostrarReintento(0);
+    }
+
+    function manejarAtajoAbajo(evento: KeyboardEvent): void {
+      if (evento.repeat || detenido || !appInicializada || fase !== 'jugando') return;
+      if (keyMap.includes(evento.code)) return;
+      if (evento.code === 'Backquote') {
+        evento.preventDefault();
+        reintentoDesde = toGameTime(evento.timeStamp);
+      } else if (evento.code === 'Space') {
+        evento.preventDefault();
+        saltarIntro();
+      }
+    }
+
+    function manejarAtajoArriba(evento: KeyboardEvent): void {
+      if (evento.code === 'Backquote') cancelarReintento();
+    }
+
+    /** Pone el reloj 2 s antes de la primera nota. El video sigue al reloj solo (fondo.sincronizar). */
+    function saltarIntro(): void {
+      if (introSaltada || primeraNota === undefined) return;
+      if (!saltoDisponible(clock.now(), primeraNota)) return;
+      introSaltada = true;
+      clock.seek(destinoDelSalto(primeraNota));
+      // El frame siguiente no debe medir los segundos saltados como un frame lento.
+      ultimoT = clock.now();
+      avisos.mostrarSalto(false);
+    }
+
+    window.addEventListener('keydown', manejarAtajoAbajo);
+    window.addEventListener('keyup', manejarAtajoArriba);
+    // Perder el foco con la tecla apretada: el keyup no llega, el aro no debe quedar colgado.
+    window.addEventListener('blur', cancelarReintento);
+
     // T-053: la pista ocupa el alto de la ventana. Al redimensionar se recalculan
     // las medidas y se le avisa al renderer y al playfield. Los dibujos de la
     // skin se hicieron para el ancho de carril inicial: si la ventana cambia
@@ -699,6 +805,7 @@ export function runGame(
       opcionesPista.columnWidth = medidas.anchoCarril;
       opcionesPista.receptorOffset = medidas.receptorOffset;
       partida.style.setProperty('--ancho-carril', `${medidas.anchoCarril}px`);
+      partida.style.setProperty('--receptor-offset', `${medidas.receptorOffset}px`);
       app.renderer.resize(medidas.anchoCarril * 4, medidas.alto);
       playfieldParaLimpieza?.resize(medidas.anchoCarril * 4, medidas.alto);
     }
@@ -742,7 +849,7 @@ export function runGame(
         // persiste con apps/web/src/keymap.ts; se lee y se aplica aca, una
         // sola vez al arrancar la partida, mismo momento que el offset y la
         // velocidad de arriba.
-        input.setKeyMap(leerKeyMap());
+        input.setKeyMap(keyMap);
 
         if (inicioMs > 0) {
           // T-035: arranca la cancion LEAD_IN_MS antes del inicio pedido (con la
@@ -760,25 +867,39 @@ export function runGame(
           // 1. El reloj.
           const t = clock.now();
 
+          // El reintento mantenido se mide contra el reloj, desde el keydown.
+          if (reintentoDesde !== null) {
+            const mantenidoMs = t - reintentoDesde;
+            if (reintentoCompleto(mantenidoMs)) {
+              reintentar();
+              return;
+            }
+            avisos.mostrarReintento(progresoDeReintento(mantenidoMs));
+          }
+
           // 2. La entrada, despachada con el tiempo de cada evento (no con t).
           for (const evento of input!.drain()) {
             if (evento.type === 'down') {
+              const total = (pulsaciones[evento.column] ?? 0) + 1;
+              pulsaciones[evento.column] = total;
+              contadores.teclaAbajo(evento.column, total);
               playfield.setPressed(evento.column, true);
               const resultado = engine.press(evento.time, evento.column);
               if (resultado) playfield.showJudgement(evento.column, resultado.judgement);
-              registrar(resultado);
+              registrar(resultado, t);
             } else {
+              contadores.teclaArriba(evento.column);
               playfield.setPressed(evento.column, false);
               const resultado = engine.release(evento.time, evento.column);
               if (resultado) playfield.showJudgement(evento.column, resultado.judgement);
-              registrar(resultado);
+              registrar(resultado, t);
             }
           }
 
           // 3. El juicio: misses por tiempo, una vez por frame.
           for (const resultado of engine.update(t)) {
             playfield.showJudgement(resultado.note.column, resultado.judgement);
-            registrar(resultado);
+            registrar(resultado, t);
           }
 
           // 4. El dibujo.
@@ -789,6 +910,8 @@ export function runGame(
 
           // 5. El HUD.
           actualizarHud(hud, engine.state, t, clock.duration, t - ultimoT);
+          contadores.actualizar(t, engine.state.counts);
+          avisos.mostrarSalto(!introSaltada && saltoDisponible(t, primeraNota));
           ultimoT = t;
 
           if (engine.finished || t >= clock.duration) {
@@ -811,6 +934,7 @@ export function runGame(
         };
         soltarTeclas = () => {
           for (const columna of [0, 1, 2, 3] as const) playfield.setPressed(columna, false);
+          contadores.soltarTeclas();
         };
 
         // eslint-disable-next-line no-restricted-globals -- ver comentario dentro de frame().

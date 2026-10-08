@@ -40,8 +40,14 @@ import { guardarVolumen, leerVolumen } from './volumen.js';
 import {
   formatearPorcentaje,
   guardarAtenuacion,
+  guardarMostrarBarraDeError,
+  guardarMostrarJuicios,
+  guardarMostrarTeclas,
   guardarVideoDeFondo,
   leerAtenuacion,
+  leerMostrarBarraDeError,
+  leerMostrarJuicios,
+  leerMostrarTeclas,
   leerVideoDeFondo,
 } from './apariencia.js';
 import {
@@ -826,7 +832,7 @@ export function mostrarAjustes(contenedor: HTMLElement, opciones: OpcionesAjuste
       'Apariencia',
       'apariencia',
       crearControlDeSkin(mostrarError),
-      // Los tres controles de debajo de las skins van en una sola fila (ver ajustes.css).
+      // Los seis controles de debajo de las skins van en una rejilla de tres columnas (ver ajustes.css).
       agruparEnFila(
         crearControlDeAtenuacion(),
         crearInterruptor(
@@ -842,6 +848,28 @@ export function mostrarAjustes(contenedor: HTMLElement, opciones: OpcionesAjuste
           'Muestra los cuadros por segundo y los ms por cuadro durante la partida.',
           leerMostrarFps(),
           guardarMostrarFps,
+        ),
+        // T-056: los contadores de la partida, la segunda fila de la misma rejilla.
+        crearInterruptor(
+          'tetra-teclas-casilla',
+          'Teclas',
+          'Cajitas con las pulsaciones de cada tecla, bajo la pista.',
+          leerMostrarTeclas(),
+          guardarMostrarTeclas,
+        ),
+        crearInterruptor(
+          'tetra-juicios-casilla',
+          'Juicios',
+          'Cuantas notas llevas de cada juicio, al costado de la pista.',
+          leerMostrarJuicios(),
+          guardarMostrarJuicios,
+        ),
+        crearInterruptor(
+          'tetra-barra-error-casilla',
+          'Barra de error',
+          'Una marca por golpe que muestra si pegaste temprano o tarde, bajo la linea de juicio.',
+          leerMostrarBarraDeError(),
+          guardarMostrarBarraDeError,
         ),
       ),
     ),

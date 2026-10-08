@@ -17,6 +17,9 @@ import {
   media,
 } from './estadisticas.js';
 import { guardarOffset } from './offset.js';
+import { leerKeyMap } from './keymap.js';
+import { nombreLegibleDeCodigo } from './teclas.js';
+import { formatearPulsaciones, formatearUR, unstableRate } from './contadores-logica.js';
 import { colorConAlpha, fraccionesDeJuicio, rangoDePrecision } from './resultados-logica.js';
 import { agregarImagenDeFondo } from './escena.js';
 import { lineaDeAutoria, type EscenaPartida } from './escena-logica.js';
@@ -329,6 +332,36 @@ function crearBloqueEstadisticas(desviaciones: readonly Desviacion[]): HTMLEleme
 }
 
 /**
+ * T-056: fila chica bajo los conteos por juicio, en mono y sin etiquetas
+ * largas: las pulsaciones por tecla ("D 412 · F 398 · J 401 · K 405", solo si
+ * quien llama las paso) y el UR (unstable rate: 10 x la desviacion estandar
+ * de los errores sin miss, en ms). Cada dato lleva `title` que lo explica.
+ */
+function crearFilaDeTeclasYUR(
+  desviaciones: readonly Desviacion[],
+  pulsaciones: readonly number[] | undefined,
+): HTMLElement {
+  const fila = document.createElement('div');
+  fila.className = 'tetra-resultados-extra';
+
+  if (pulsaciones !== undefined) {
+    const teclas = document.createElement('span');
+    teclas.className = 'tetra-resultados-teclas';
+    teclas.title = 'Pulsaciones por tecla en toda la partida, incluidas las que no dieron en una nota.';
+    teclas.textContent = formatearPulsaciones(leerKeyMap().map(nombreLegibleDeCodigo), pulsaciones);
+    fila.appendChild(teclas);
+  }
+
+  const ur = document.createElement('span');
+  ur.className = 'tetra-resultados-ur';
+  ur.title =
+    'UR (unstable rate): 10 x la desviacion estandar de tus golpes, en ms. Cuanto mas bajo, mas parejo tocas.';
+  ur.textContent = `UR ${formatearUR(unstableRate(erroresJuzgados(desviaciones)))}`;
+  fila.appendChild(ur);
+  return fila;
+}
+
+/**
  * Boton "corregir offset segun esta partida" (T-007, "Parte B"): aplica
  * `calcularOffsetCorregido` sobre la media de esta partida y guarda el
  * resultado con `guardarOffset`, para que la proxima partida arranque con
@@ -365,7 +398,8 @@ function crearBotonCorregirOffset(
 
 /** Bloque principal: letra de rango a la izquierda, precision, score y combo a la derecha. */
 function crearBloquePrincipal(estado: ScoreState): HTMLElement {
-  const rango = rangoDePrecision(estado.accuracy);
+  // Con los conteos, igual que el record (T-055): todo MAX/300 sin otro juicio es SS.
+  const rango = rangoDePrecision(estado.accuracy, estado.counts);
 
   const principal = document.createElement('section');
   principal.className = 'tetra-resultados-principal';
@@ -421,6 +455,7 @@ export function mostrarResultados(
   desviaciones: readonly Desviacion[],
   offsetActual: Ms,
   escena?: EscenaPartida,
+  pulsaciones?: readonly number[],
 ): void {
   contenedor.innerHTML = '';
 
@@ -463,6 +498,7 @@ export function mostrarResultados(
   for (const juicio of JUDGEMENTS) {
     conteos.appendChild(crearFilaConteo(juicio, estado.counts[juicio], fracciones[juicio]));
   }
+  conteos.appendChild(crearFilaDeTeclasYUR(desviaciones, pulsaciones));
   detalle.append(conteos, crearBloqueEstadisticas(desviaciones));
   panel.appendChild(detalle);
 

@@ -1,0 +1,62 @@
+/* Avisos de los atajos de la partida (atajos.ts, T-056): el aro del reintento
+   mantenido y "Espacio para saltar". Dentro de `.tetra-hud` (hud.css). */
+
+/* -- Aro del reintento: esquina superior izquierda, solo mientras se mantiene -- */
+
+.tetra-reintento {
+  position: absolute;
+  top: var(--espacio-4);
+  left: var(--espacio-5);
+  display: flex;
+  align-items: center;
+  gap: var(--espacio-2);
+  font-size: var(--tipo-xs);
+  color: var(--tinta-2);
+  text-shadow: 0 1px 2px rgb(0 0 0 / 0.55);
+}
+
+.tetra-reintento[hidden] {
+  display: none;
+}
+
+.tetra-reintento-aro {
+  width: 28px;
+  height: 28px;
+  /* El trazo arranca arriba y avanza en sentido horario. */
+  transform: rotate(-90deg);
+}
+
+.tetra-reintento-fondo,
+.tetra-reintento-relleno {
+  fill: none;
+  stroke-width: 2.5;
+}
+
+.tetra-reintento-fondo {
+  stroke: var(--linea);
+}
+
+.tetra-reintento-relleno {
+  stroke: var(--acento);
+  stroke-linecap: round;
+}
+
+/* -- Saltar intro: abajo a la derecha, por encima del FPS, chico y tenue -- */
+
+.tetra-saltar {
+  position: absolute;
+  right: var(--espacio-5);
+  bottom: calc(var(--espacio-4) + 1.75rem);
+  padding: var(--espacio-1) var(--espacio-2);
+  font-size: var(--tipo-xs);
+  color: var(--tinta-2);
+  white-space: nowrap;
+  background: color-mix(in srgb, var(--superficie) 60%, transparent);
+  border: 1px solid var(--linea);
+  border-radius: var(--radio-control);
+  text-shadow: 0 1px 2px rgb(0 0 0 / 0.55);
+}
+
+.tetra-saltar[hidden] {
+  display: none;
+}

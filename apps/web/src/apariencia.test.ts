@@ -7,8 +7,14 @@ import {
   clampAtenuacion,
   formatearPorcentaje,
   guardarAtenuacion,
+  guardarMostrarBarraDeError,
+  guardarMostrarJuicios,
+  guardarMostrarTeclas,
   guardarVideoDeFondo,
   leerAtenuacion,
+  leerMostrarBarraDeError,
+  leerMostrarJuicios,
+  leerMostrarTeclas,
   leerVideoDeFondo,
   opacidadDePistaSegunAtenuacion,
 } from './apariencia.js';
@@ -96,5 +102,38 @@ describe('formatearPorcentaje', () => {
     expect(formatearPorcentaje(0.126)).toBe('13%');
     expect(formatearPorcentaje(0)).toBe('0%');
     expect(formatearPorcentaje(1)).toBe('100%');
+  });
+});
+
+describe('interruptores de los contadores (T-056)', () => {
+  it('los tres vienen encendidos por defecto', () => {
+    const storage = crearStorageFalso();
+    expect(leerMostrarTeclas(storage)).toBe(true);
+    expect(leerMostrarJuicios(storage)).toBe(true);
+    expect(leerMostrarBarraDeError(storage)).toBe(true);
+  });
+
+  it('apagar uno se recuerda y no toca a los otros dos', () => {
+    const storage = crearStorageFalso();
+    guardarMostrarJuicios(false, storage);
+    expect(leerMostrarJuicios(storage)).toBe(false);
+    expect(leerMostrarTeclas(storage)).toBe(true);
+    expect(leerMostrarBarraDeError(storage)).toBe(true);
+
+    guardarMostrarBarraDeError(false, storage);
+    expect(leerMostrarBarraDeError(storage)).toBe(false);
+    expect(leerMostrarTeclas(storage)).toBe(true);
+  });
+
+  it('volver a encender se recuerda', () => {
+    const storage = crearStorageFalso();
+    guardarMostrarTeclas(false, storage);
+    expect(leerMostrarTeclas(storage)).toBe(false);
+    guardarMostrarTeclas(true, storage);
+    expect(leerMostrarTeclas(storage)).toBe(true);
+  });
+
+  it('un valor distinto de "true" cuenta como apagado, como en los otros interruptores', () => {
+    expect(leerMostrarTeclas(crearStorageFalso({ 'tetra:mostrar-teclas': 'no' }))).toBe(false);
   });
 });

@@ -1,0 +1,181 @@
+/* Contadores del HUD de la partida (contadores.ts, T-056): cajitas de teclas
+   bajo la pista, contador de juicios al costado y barra de error de timing.
+   Viven dentro de `.tetra-hud` (hud.css), que hereda la fuente mono y deja
+   pasar los clics. Chicos, en mono, sin etiquetas largas (docs/DISENO.md). Solo
+   tokens de tokens.css. --ancho-carril y --receptor-offset los escribe game.ts. */
+
+/* -- Cajitas de teclas: una por carril, pegadas al borde inferior de la pista -- */
+
+.tetra-teclas {
+  position: absolute;
+  left: 50%;
+  bottom: var(--espacio-2);
+  width: calc(var(--ancho-carril) * 4);
+  transform: translateX(-50%);
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--espacio-1);
+}
+
+.tetra-tecla {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--espacio-1);
+  min-width: 0;
+  padding: var(--espacio-1) var(--espacio-2);
+  font-size: var(--tipo-xs);
+  line-height: 1.4;
+  color: var(--tinta-2);
+  background: color-mix(in srgb, var(--superficie) 72%, transparent);
+  border: 1px solid var(--linea);
+  border-radius: var(--radio-control);
+  transition:
+    border-color var(--duracion-rapida) ease,
+    color var(--duracion-rapida) ease;
+}
+
+.tetra-tecla-nombre {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--tinta-3);
+}
+
+.tetra-tecla-cuenta {
+  white-space: nowrap;
+}
+
+/* Mientras la tecla esta apretada. */
+.tetra-tecla--abajo {
+  color: var(--tinta);
+  border-color: var(--acento);
+}
+
+/* -- Contador de juicios: seis numeros, sin titulo, con el color de cada juicio -- */
+
+.tetra-juicios {
+  position: absolute;
+  top: 50%;
+  left: calc(50% + var(--ancho-carril) * 2 + var(--espacio-5));
+  transform: translateY(-50%);
+  display: flex;
+  flex-direction: column;
+  gap: var(--espacio-1);
+  text-shadow:
+    0 1px 2px rgb(0 0 0 / 0.55),
+    0 0 12px rgb(0 0 0 / 0.5);
+}
+
+.tetra-juicio {
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.tetra-juicio--max {
+  color: var(--j-max);
+}
+
+.tetra-juicio--perfect {
+  color: var(--j-300);
+}
+
+.tetra-juicio--great {
+  color: var(--j-200);
+}
+
+.tetra-juicio--good {
+  color: var(--j-100);
+}
+
+.tetra-juicio--bad {
+  color: var(--j-50);
+}
+
+.tetra-juicio--miss {
+  color: var(--j-miss);
+}
+
+/* -- Barra de error: bajo la linea de juicio, ancha como la pista -- */
+
+.tetra-error {
+  position: absolute;
+  left: 50%;
+  bottom: max(calc(var(--receptor-offset, 100px) * 0.5), 52px);
+  width: calc(var(--ancho-carril) * 4);
+  height: 16px;
+  transform: translateX(-50%);
+}
+
+/* Las ventanas del OD como franjas tenues (el gradiente lo escribe contadores.ts). */
+.tetra-error-franjas {
+  position: absolute;
+  inset: 5px 0;
+  border-radius: 1px;
+}
+
+.tetra-error-centro {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  margin-left: -1px;
+  background: color-mix(in srgb, var(--tinta) 55%, transparent);
+}
+
+/* Una rayita por golpe: su left es la desviacion, su opacidad se desvanece en ~2 s. */
+.tetra-error-marca {
+  position: absolute;
+  top: 1px;
+  bottom: 1px;
+  width: 2px;
+  margin-left: -1px;
+  border-radius: 1px;
+  background: var(--tinta);
+  opacity: 0;
+  will-change: opacity;
+}
+
+.tetra-error-marca[data-juicio='max'] {
+  background: var(--j-max);
+}
+
+.tetra-error-marca[data-juicio='perfect'] {
+  background: var(--j-300);
+}
+
+.tetra-error-marca[data-juicio='great'] {
+  background: var(--j-200);
+}
+
+.tetra-error-marca[data-juicio='good'] {
+  background: var(--j-100);
+}
+
+.tetra-error-marca[data-juicio='bad'] {
+  background: var(--j-50);
+}
+
+/* Flechita bajo la barra: la media movil de los ultimos golpes. */
+.tetra-error-media {
+  position: absolute;
+  left: 50%;
+  top: 100%;
+  width: 0;
+  height: 0;
+  margin-left: -4px;
+  border-left: 4px solid transparent;
+  border-right: 4px solid transparent;
+  border-bottom: 5px solid var(--tinta);
+  opacity: 0;
+  transition: left 0.18s ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tetra-tecla,
+  .tetra-error-media {
+    transition: none;
+  }
+}

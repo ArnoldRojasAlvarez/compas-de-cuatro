@@ -91,10 +91,37 @@ describe('partidaDesdeScore', () => {
     expect(p.rango).toBe('SS');
   });
 
-  it('no incluye desviacionMedia ni pulsaciones (aun no estan en el resultado)', () => {
+  it('sin lo medido no inventa desviacionMedia ni pulsaciones', () => {
     const p = partidaDesdeScore(estado(), 'f');
     expect('desviacionMedia' in p).toBe(false);
     expect('pulsaciones' in p).toBe(false);
+  });
+
+  it('la desviacion media sale de los golpes juzgados, sin los miss', () => {
+    const p = partidaDesdeScore(estado(), 'f', {
+      desviaciones: [
+        { error: -10, judgement: 'max' },
+        { error: 20, judgement: 'great' },
+        { error: 150, judgement: 'miss' },
+      ],
+    });
+    // Con el miss adentro daria 53.3: tiene que quedar en 5.
+    expect(p.desviacionMedia).toBe(5);
+  });
+
+  it('solo miss: no hay media que guardar', () => {
+    const p = partidaDesdeScore(estado(), 'f', {
+      desviaciones: [{ error: 150, judgement: 'miss' }],
+    });
+    expect('desviacionMedia' in p).toBe(false);
+  });
+
+  it('copia las cuatro pulsaciones y descarta un arreglo que no tenga cuatro', () => {
+    const fuente = [412, 398, 401, 405];
+    const p = partidaDesdeScore(estado(), 'f', { pulsaciones: fuente });
+    expect(p.pulsaciones).toEqual([412, 398, 401, 405]);
+    expect(p.pulsaciones).not.toBe(fuente);
+    expect('pulsaciones' in partidaDesdeScore(estado(), 'f', { pulsaciones: [1, 2] })).toBe(false);
   });
 });
 

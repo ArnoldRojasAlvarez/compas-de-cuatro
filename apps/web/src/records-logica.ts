@@ -14,6 +14,7 @@ import {
   type RecordDeMapa,
   type ScoreState,
 } from '@tetra/core';
+import { erroresJuzgados, media, type GolpeRegistrado } from './estadisticas.js';
 
 /** La clave de record de una dificultad: el hash de su contenido, como texto. */
 export function claveDeRecord(chart: Chart): string {
@@ -25,15 +26,30 @@ export function claveDeRecord(chart: Chart): string {
  * conteos se copian (el motor puede reutilizar su objeto). `fecha` la pone
  * quien guarda: asi esta funcion queda pura.
  */
-export function partidaDesdeScore(estado: ScoreState, fecha: string): PartidaJugada {
+export function partidaDesdeScore(
+  estado: ScoreState,
+  fecha: string,
+  medido: MedidoEnLaPartida = {},
+): PartidaJugada {
+  const errores = medido.desviaciones === undefined ? [] : erroresJuzgados(medido.desviaciones);
   return {
     score: estado.score,
     accuracy: estado.accuracy,
     maxCombo: estado.maxCombo,
     counts: { ...estado.counts },
     rango: rangoDePrecision(estado.accuracy, estado.counts),
+    // T-056: sin golpes juzgados no hay media que guardar (no un 0 inventado).
+    ...(errores.length > 0 && { desviacionMedia: media(errores) }),
+    ...(medido.pulsaciones !== undefined &&
+      medido.pulsaciones.length === 4 && { pulsaciones: [...medido.pulsaciones] }),
     fecha,
   };
+}
+
+/** Lo que T-056 mide en la partida ademas del score: pulsaciones por columna y cada golpe. */
+export interface MedidoEnLaPartida {
+  pulsaciones?: readonly number[];
+  desviaciones?: readonly GolpeRegistrado[];
 }
 
 /** Miles separados por un espacio sin salto: "812 340". Redondea y no muestra decimales. */

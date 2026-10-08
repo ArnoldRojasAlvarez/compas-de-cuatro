@@ -1,9 +1,14 @@
 // T-053: preferencias de apariencia de la partida: cuanto se atenua el fondo
 // de la cancion y si se reproduce su video. Mismo patron que velocidad.ts:
 // localStorage inyectable (default `localStorage`) para probar en node.
+// T-056: tres interruptores mas, para los contadores del HUD (teclas, juicios
+// y barra de error), todos encendidos por defecto.
 
 const CLAVE_ATENUACION = 'tetra:atenuacion-fondo';
 const CLAVE_VIDEO = 'tetra:video-de-fondo';
+const CLAVE_TECLAS = 'tetra:mostrar-teclas';
+const CLAVE_JUICIOS = 'tetra:mostrar-juicios';
+const CLAVE_BARRA_ERROR = 'tetra:mostrar-barra-error';
 
 /** Atenuacion por defecto: el fondo se ve, pero la pista manda. */
 export const ATENUACION_DEFAULT = 0.8;
@@ -34,6 +39,40 @@ export function leerVideoDeFondo(storage: Storage = localStorage): boolean {
 
 export function guardarVideoDeFondo(valor: boolean, storage: Storage = localStorage): void {
   storage.setItem(CLAVE_VIDEO, String(valor));
+}
+
+/** Lee un interruptor guardado como 'true' / 'false'; sin nada guardado vale `porDefecto`. */
+function leerInterruptor(clave: string, porDefecto: boolean, storage: Storage): boolean {
+  const crudo = storage.getItem(clave);
+  if (crudo === null) return porDefecto;
+  return crudo === 'true';
+}
+
+/** T-056: cajitas con las pulsaciones por tecla bajo la pista. Encendido por defecto. */
+export function leerMostrarTeclas(storage: Storage = localStorage): boolean {
+  return leerInterruptor(CLAVE_TECLAS, true, storage);
+}
+
+export function guardarMostrarTeclas(valor: boolean, storage: Storage = localStorage): void {
+  storage.setItem(CLAVE_TECLAS, String(valor));
+}
+
+/** T-056: contador de notas por juicio al costado de la pista. Encendido por defecto. */
+export function leerMostrarJuicios(storage: Storage = localStorage): boolean {
+  return leerInterruptor(CLAVE_JUICIOS, true, storage);
+}
+
+export function guardarMostrarJuicios(valor: boolean, storage: Storage = localStorage): void {
+  storage.setItem(CLAVE_JUICIOS, String(valor));
+}
+
+/** T-056: barra de error de timing bajo la linea de juicio. Encendido por defecto. */
+export function leerMostrarBarraDeError(storage: Storage = localStorage): boolean {
+  return leerInterruptor(CLAVE_BARRA_ERROR, true, storage);
+}
+
+export function guardarMostrarBarraDeError(valor: boolean, storage: Storage = localStorage): void {
+  storage.setItem(CLAVE_BARRA_ERROR, String(valor));
 }
 
 /**

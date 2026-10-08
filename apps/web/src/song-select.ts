@@ -62,6 +62,7 @@ import {
   mejorRangoDeCancion,
   parejasDeConteos,
   partidaDesdeScore,
+  type MedidoEnLaPartida,
   textoDeIntentos,
 } from './records-logica.js';
 
@@ -1115,9 +1116,13 @@ export function mostrarSongSelect(contenedor: HTMLElement, opciones: OpcionesSon
    * estorba: el jugador ve igual sus resultados, solo que sin record. Solo se
    * llama con partidas completadas (una abandonada o reintentada no cuenta).
    */
-  async function registrarPartida(chart: Chart, score: ScoreState): Promise<void> {
+  async function registrarPartida(
+    chart: Chart,
+    score: ScoreState,
+    medido: MedidoEnLaPartida,
+  ): Promise<void> {
     try {
-      const partida = partidaDesdeScore(score, new Date().toISOString());
+      const partida = partidaDesdeScore(score, new Date().toISOString(), medido);
       const guardada = await guardarPartida(claveDe(chart), partida);
       const aviso = avisoDeRecord(guardada.esMejor, guardada.anterior, partida);
       const panel = raizApp().querySelector('.tetra-resultados');
@@ -1171,7 +1176,12 @@ export function mostrarSongSelect(contenedor: HTMLElement, opciones: OpcionesSon
     if (resultado.estado === 'completado') {
       // Solo las canciones de la biblioteca llevan record: el click track (sin
       // escena) es un diagnostico, no un mapa que se vaya a ver en la lista.
-      if (escena !== undefined) await registrarPartida(chart, resultado.score);
+      if (escena !== undefined) {
+        await registrarPartida(chart, resultado.score, {
+          pulsaciones: resultado.pulsaciones,
+          desviaciones: resultado.desviaciones,
+        });
+      }
       mostrarBotonVolverDesdeResultados();
     } else {
       volverAlSongSelect();

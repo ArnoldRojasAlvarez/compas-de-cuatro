@@ -147,20 +147,22 @@
   text-shadow: 0 0 48px color-mix(in srgb, currentColor 30%, transparent);
 }
 
+/* Mismos colores de rango que el record del song select (T-055). */
+.tetra-resultados-rango-SS,
 .tetra-resultados-rango-S {
-  color: var(--acento);
+  color: var(--acento-2);
 }
 
 .tetra-resultados-rango-A {
-  color: var(--j-200);
+  color: var(--acento);
 }
 
 .tetra-resultados-rango-B {
-  color: var(--j-100);
+  color: var(--j-200);
 }
 
 .tetra-resultados-rango-C {
-  color: var(--j-50);
+  color: var(--j-100);
 }
 
 .tetra-resultados-rango-D {
@@ -235,6 +237,26 @@
 .tetra-resultados-fila-cantidad {
   text-align: right;
   font-variant-numeric: tabular-nums;
+  color: var(--tinta);
+}
+
+/* T-056: pulsaciones por tecla y UR, una fila chica en mono bajo los conteos. */
+.tetra-resultados-extra {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: var(--espacio-1) var(--espacio-4);
+  margin-top: var(--espacio-1);
+  padding-top: var(--espacio-3);
+  border-top: 1px solid var(--linea);
+  font-family: var(--fuente-datos);
+  font-size: var(--tipo-xs);
+  font-variant-numeric: tabular-nums;
+  color: var(--tinta-2);
+}
+
+.tetra-resultados-ur {
+  margin-left: auto;
   color: var(--tinta);
 }
 
