@@ -1,6 +1,6 @@
 # Estado del proyecto
 
-Ultima actualizacion: 7 de octubre de 2026.
+Ultima actualizacion: 7 de octubre de 2026 (cierre del dia).
 
 Estado corto y siempre al dia. **Si sos una sesion NUEVA, empeza por
 `docs/HANDOFF.md`** (metodo de trabajo, reglas, lecciones), despues
@@ -8,7 +8,7 @@ Estado corto y siempre al dia. **Si sos una sesion NUEVA, empeza por
 
 ## Donde esta todo
 
-- `main`: limpio, verde, 1379 tests + 49 e2e.
+- `main`: limpio, verde, 1386 tests + 49 e2e.
 - Estado demo: menu con musica de la biblioteca, song select sobre la escena, partida con fondo y video, cuatro skins propias, cancion demo sembrada.
 - En curso: nada.
 
@@ -53,6 +53,7 @@ Estado corto y siempre al dia. **Si sos una sesion NUEVA, empeza por
 | T-052 | Escena: fondo de la cancion a pantalla completa; menu con musica de la biblioteca (pausa, siguiente); song select minimalista con preview visible, exportar y borrar, importar soltando en cualquier parte |
 | T-053 | Partida a pantalla completa con fondo atenuado y video sincronizado al reloj, intro, HUD limpio, volumen; resultados con fondo; ajustes con poco texto, skins en miniatura, atenuacion y video |
 | T-055 | Records por dificultad: mejor y ultima partida, intentos, conteos de cada juicio, rango SS; se ven en el song select (detalle, chips y lista) y con aviso de nuevo record en resultados |
+| T-048 | Tildes y enie en todo texto visible (UI y mensajes de error de los paquetes); "Fácil"/"Difícil" se muestran con tilde sin cambiar el `difficultyName` guardado; `tildes.test.ts` vigila palabras comunes sin tilde y rayas |
 | T-034 | Mapeador: Mayus+arrastrar elige (rectangulo alineado a la grilla), Ctrl+A/C/X/V, Supr, Alt+flechas mueve (slot o columna), Q cuantiza; cada operacion es un paso de deshacer; el portapapeles sobrevive entre dificultades |
 | T-046 | Minimapa del mapeador: onda, densidad de notas, huecos de mas de 8 compases en ambar, marcas cada 8 compases, cabezal y zona visible; clic o arrastre salta |
 | T-045 | Estadisticas globales: historial por partida completada (tienda `historial`, base v7, tope 2000, viaja en el respaldo, no se borra con la cancion), pantalla con partidas, tiempo, precision y desviacion medias (ponderadas por notas), graficos por dia, fallos por columna y temprano/tarde; cuarto boton del menu y el bloque Jugado del header |
@@ -69,13 +70,22 @@ centrados en cero. El motor esta bien sincronizado.
 
 ## En curso
 
-- **T-048 (tildes y enie en la interfaz):** despachado el 7 de octubre.
 
 
 | Ticket | Que es | Estado |
 |---|---|---|
 
 ## Lo que sigue despues
+
+- **Pendiente chico de T-048:** el titulo de la demo sigue "Primer Compas" (es un
+  dato guardado y la clave para no duplicarla). Para "Primer Compás" en
+  instalaciones nuevas: cambiar `TITULO_DEMO`, sumar el titulo viejo al chequeo
+  de duplicado en `demo/index.ts` y actualizar dos tests. Decision de Arnold.
+- **Mapeador:** hoy mover la seleccion es Alt+flechas (las flechas solas mueven
+  el cabezal). Si Arnold prefiere flechas solas con seleccion activa, es chico.
+- **Backlog restante:** T-038 responsive, T-043 accesibilidad y temas, T-047
+  primera ejecucion guiada, T-031 SV, T-033 tempo variable, T-036 automapa v2,
+  T-041 Prettier (solo cuando no haya trabajo en vuelo).
 
 - **Backlog de mejoras:** `docs/BACKLOG.md` indexa los tickets T-026 a T-048
   (pausa, hitsounds, records, mejoras del mapeador, modo presentacion, e2e,
