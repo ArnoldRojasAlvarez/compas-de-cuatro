@@ -27,7 +27,12 @@ import {
 import { mostrarResultados, type CorreccionDeOffset, type Desviacion } from './results.js';
 import { guardarOffset, leerOffset } from './offset.js';
 import { guardarOffsetLocal } from './offset-local.js';
-import { guardarVelocidad, leerVelocidad, velocidadAScrollDuration } from './velocidad.js';
+import {
+  VELOCIDAD_MIN,
+  guardarVelocidad,
+  leerVelocidad,
+  velocidadAScrollDuration,
+} from './velocidad.js';
 import {
   moverVelocidad,
   pasoDeAlphaDeAvisoDeVelocidad,
@@ -35,7 +40,7 @@ import {
 } from './velocidad-aviso-logica.js';
 import { leerKeyMap } from './keymap.js';
 import { nombreLegibleDeCodigo } from './teclas.js';
-import { leerMostrarFps } from './graficos.js';
+import { leerBajaLatencia, leerMostrarFps } from './graficos.js';
 import {
   leerAtenuacion,
   leerMostrarBarraDeError,
@@ -68,6 +73,7 @@ import {
   type ModoReproduccion,
 } from './replay-logica.js';
 import { numeroDeCuenta, transicionPausa, type FasePausa } from './pausa-logica.js';
+import { crearMedidorDeFps, formatearLecturaFps, type MedidorDeFps } from './fps-logica.js';
 import {
   escalaPulsoCombo,
   formatearPrecision,
@@ -169,8 +175,8 @@ interface CacheHud {
   hp: number;
   nivelVida: NivelDeVida;
   progreso: number;
-  fps: number;
-  decimasMs: number;
+  /** Ultimo texto escrito en el contador de fps (T-059: se escribe cuando cierra una ventana, ~2 veces por segundo). */
+  fpsTexto: string;
 }
 
 interface HudPartida {
@@ -184,9 +190,29 @@ interface HudPartida {
   vidaRelleno: HTMLElement;
   progresoRelleno: HTMLElement;
   fpsMs: HTMLElement | null;
+  /** T-059: promedia los frames de ~500 ms; solo existe con el contador de fps prendido. */
+  medidorFps: MedidorDeFps | null;
   /** Se lee una sola vez al armar el HUD (prefers-reduced-motion). */
   reducirMovimiento: boolean;
   cache: CacheHud;
+}
+
+/**
+ * T-059: lienzo y contexto WebGL2 de la pista con `desynchronized: true` (ver
+ * `leerBajaLatencia` en graficos.ts). `null` si el navegador no da un contexto WebGL2.
+ */
+function crearContextoDeBajaLatencia(): { canvas: HTMLCanvasElement; gl: WebGL2RenderingContext } | null {
+  const canvas = document.createElement('canvas');
+  const gl = canvas.getContext('webgl2', {
+    alpha: true,
+    premultipliedAlpha: true,
+    antialias: true,
+    stencil: true,
+    preserveDrawingBuffer: false,
+    powerPreference: 'default',
+    desynchronized: true,
+  });
+  return gl === null ? null : { canvas, gl };
 }
 
 function crearElemento(etiqueta: string, clase: string, texto?: string): HTMLElement {
@@ -273,6 +299,7 @@ function crearHud(envoltorio: HTMLElement, mostrarFps: boolean): HudPartida {
     vidaRelleno,
     progresoRelleno,
     fpsMs,
+    medidorFps: fpsMs ? crearMedidorDeFps() : null,
     reducirMovimiento: window.matchMedia('(prefers-reduced-motion: reduce)').matches,
     cache: {
       comboVisto: 0,
@@ -285,8 +312,7 @@ function crearHud(envoltorio: HTMLElement, mostrarFps: boolean): HudPartida {
       hp: 1,
       nivelVida: 'ok',
       progreso: 0,
-      fps: -1,
-      decimasMs: -1,
+      fpsTexto: '',
     },
   };
 }
@@ -296,14 +322,16 @@ function crearHud(envoltorio: HTMLElement, mostrarFps: boolean): HudPartida {
  * el frame anterior (ver `CacheHud`). `t` es el tiempo de este frame, de
  * `clock.now()`: el pulso del combo y el progreso se miden con el, nunca con
  * `performance.now()` ni con el delta de rAF (ver CLAUDE.md, "El reloj es el
- * audio"). `duracion` es `clock.duration`.
+ * audio"). `duracion` es `clock.duration`. `duracionFrameMs` es lo que duro el
+ * frame segun el callback de rAF (0 si no se conoce): solo lo usa el contador
+ * de fps, que es un diagnostico y no toca el gameplay.
  */
 function actualizarHud(
   hud: HudPartida,
   estado: ScoreState,
   t: number,
   duracion: number,
-  msPorFrame: number,
+  duracionFrameMs: number,
 ): void {
   const cache = hud.cache;
 
@@ -374,20 +402,18 @@ function actualizarHud(
     hud.progresoRelleno.style.transform = `scaleX(${progreso})`;
   }
 
-  if (!hud.fpsMs) return; // T-012 "Parte C": el interruptor de FPS esta apagado.
-  // fps y ms salen de la diferencia entre el t de este frame y el anterior,
-  // los dos leidos de clock.now(): ni performance.now() ni el delta de rAF
-  // entran en este calculo (ver CLAUDE.md, "El reloj es el audio"). Es una
-  // consecuencia practica de la misma regla: como el juego ya lee el reloj
-  // de audio cada frame para todo lo demas, ese mismo valor sirve tambien
-  // para el contador de fps, sin necesidad de otra fuente de tiempo. Se
-  // comparan enteros (fps y decimas de ms) antes de armar el string.
-  const fps = msPorFrame > 0 ? Math.round(1000 / msPorFrame) : 0;
-  const decimasMs = Math.round(msPorFrame * 10);
-  if (fps !== cache.fps || decimasMs !== cache.decimasMs) {
-    cache.fps = fps;
-    cache.decimasMs = decimasMs;
-    hud.fpsMs.textContent = `${fps} fps / ${(decimasMs / 10).toFixed(1)} ms`;
+  if (!hud.fpsMs || !hud.medidorFps) return; // T-012 "Parte C": el interruptor de FPS esta apagado.
+  // T-059: el promedio sale de los frames de ~500 ms de TIEMPO DE JUEGO (los t
+  // son de clock.now()) y el peor frame de la duracion que dio rAF; ver
+  // fps-logica.ts por que no es 1000 / dt de cada frame. El texto cambia dos
+  // veces por segundo, no una por frame: antes cada frame reescribia el nodo y
+  // forzaba estilos y layout 60 veces por segundo.
+  const lectura = hud.medidorFps.registrar(t, duracionFrameMs);
+  if (lectura === null) return;
+  const texto = formatearLecturaFps(lectura);
+  if (texto !== cache.fpsTexto) {
+    cache.fpsTexto = texto;
+    hud.fpsMs.textContent = texto;
   }
 }
 
@@ -470,6 +496,8 @@ export function runGame(
       columnWidth: medidasIniciales.anchoCarril,
       receptorOffset: medidasIniciales.receptorOffset,
       scrollDuration: velocidadAScrollDuration(velocidadActual),
+      // T-039: los pools de sprites se dimensionan para la velocidad mas lenta (F3 puede bajarla en caliente).
+      scrollDurationMaximo: velocidadAScrollDuration(VELOCIDAD_MIN),
     };
     const escena = opciones.escena;
     const atenuacion = leerAtenuacion();
@@ -628,7 +656,9 @@ export function runGame(
       void skinPropiaPendiente.then(liberarTexturasDeSkin);
     }
 
-    let ultimoT = inicioMs > 0 ? inicioDeLaCancion(inicioMs, LEAD_IN_MS) : -LEAD_IN_MS;
+    // T-059: `timestamp` del rAF del frame anterior (0 = no se conoce: al arrancar, tras una
+    // pausa o un salto del reloj). Solo para el peor frame del contador de fps, nunca para gameplay.
+    let tsFrameAnterior = 0;
     // true desde que app.init() resuelve: distingue, dentro de abortar(), si
     // ya hay que destruir la Application de Pixi (partida en curso) o si
     // todavia esta inicializando y el callback de mas abajo se va a
@@ -823,7 +853,9 @@ export function runGame(
       void ctx.resume().then(() => {
         if (detenido) return;
         fondo?.reanudar();
-        ultimoT = clock.now();
+        // La pausa no es un frame lento ni se promedia con el juego.
+        tsFrameAnterior = 0;
+        hud.medidorFps?.reiniciar();
         reanudarBucle?.();
       });
     }
@@ -892,8 +924,8 @@ export function runGame(
       clock.seek(destino);
       // T-044: lo que el replay tenia antes del destino se descarta sin juzgar.
       reproductor?.saltarHasta(destino);
-      // El frame siguiente no debe medir los segundos saltados como un frame lento.
-      ultimoT = clock.now();
+      // El contador de fps no debe medir los segundos saltados como un frame lento.
+      hud.medidorFps?.reiniciar();
       avisos.mostrarSalto(false);
     }
 
@@ -944,6 +976,12 @@ export function runGame(
     }
     window.addEventListener('resize', ajustarAlVentana);
 
+    // T-059: con el ajuste prendido, el contexto WebGL de la pista se crea aca con
+    // `desynchronized: true` y se le pasa a Pixi. Los demas atributos son los mismos
+    // que Pixi habria usado (transparente, antialias, stencil). Si el navegador no
+    // lo da, se sigue con el contexto de siempre.
+    const contextoBajaLatencia = leerBajaLatencia() ? crearContextoDeBajaLatencia() : null;
+
     Promise.all([
       app.init({
         width: opcionesPista.columnWidth * 4,
@@ -952,6 +990,10 @@ export function runGame(
         antialias: true,
         resolution: Math.min(window.devicePixelRatio || 1, 2),
         autoDensity: true,
+        ...(contextoBajaLatencia !== null && {
+          canvas: contextoBajaLatencia.canvas,
+          context: contextoBajaLatencia.gl,
+        }),
       }),
       skinPropiaPendiente ?? Promise.resolve(skin),
     ])
@@ -1034,11 +1076,14 @@ export function runGame(
           }
         };
 
-        function frame(): void {
+        function frame(tsRaf: number): void {
           if (detenido) return;
 
           // 1. El reloj.
           const t = clock.now();
+          // Solo para el contador de fps (diagnostico del HUD): lo que duro el frame segun rAF.
+          const duracionFrame = tsFrameAnterior > 0 ? tsRaf - tsFrameAnterior : 0;
+          tsFrameAnterior = tsRaf;
 
           // El reintento mantenido se mide contra el reloj, desde el keydown.
           if (reintentoDesde !== null) {
@@ -1082,10 +1127,9 @@ export function runGame(
           intro?.actualizar(t);
 
           // 5. El HUD.
-          actualizarHud(hud, engine.state, t, clock.duration, t - ultimoT);
+          actualizarHud(hud, engine.state, t, clock.duration, duracionFrame);
           contadores.actualizar(t, engine.state.counts);
           avisos.mostrarSalto(!introSaltada && saltoDisponible(t, primeraNota));
-          ultimoT = t;
 
           if (engine.finished || t >= clock.duration) {
             // Al terminar se expira sin margen: ningun miss de las ultimas notas

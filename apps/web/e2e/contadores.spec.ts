@@ -128,6 +128,15 @@ test('la barra de error pone cada golpe en su desviacion: tarde a la derecha, te
   expect(izquierdaTarde).toBeLessThan(100);
   await expect(tarde).not.toHaveCSS('opacity', '0');
 
+  // T-059: la flecha de la media se mueve con `transform` y no con `left` (animar `left` recalculaba
+  // el layout en casi cada frame mientras se jugaba). Tarde: se corre a la derecha del centro.
+  const flecha = await page.locator('.tetra-error-media').evaluate((el) => ({
+    transform: (el as HTMLElement).style.transform,
+    left: (el as HTMLElement).style.left,
+  }));
+  expect(flecha.left).toBe('');
+  expect(Number(/translateX\((-?[\d.]+)%\)/.exec(flecha.transform)?.[1] ?? Number.NaN)).toBeGreaterThan(0);
+
   await pulsarEnFase(page, 420);
   const marcas = page.locator('.tetra-error-marca[data-juicio]');
   await expect(marcas).toHaveCount(2);

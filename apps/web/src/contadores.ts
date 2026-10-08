@@ -213,7 +213,8 @@ export function crearContadores(
       marca.style.opacity = opacidades[PASOS_DE_ALPHA]!;
       // La flechita sigue la media movil de los ultimos golpes.
       media.agregar(error);
-      flecha.style.left = `${(50 + 50 * posicionEnBarra(media.valor(), ventanaMax)).toFixed(2)}%`;
+      // Desplazamiento desde el centro, en % del ancho de la barra (ver .tetra-error-media en contadores.css).
+      flecha.style.transform = `translateX(${(50 * posicionEnBarra(media.valor(), ventanaMax)).toFixed(2)}%)`;
       flecha.style.opacity = '1';
     },
 

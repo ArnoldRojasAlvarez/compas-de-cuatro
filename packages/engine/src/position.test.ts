@@ -10,7 +10,7 @@
 //   ese punto intermedio el test no distingue las dos implementaciones.
 // - Los limites de `progresoEsVisible` se prueban con valores justo adentro
 //   y justo afuera de [-0.1, 1.1], no solo con valores comodos como 0 o 2.
-// - `avanzarVentana` se compara contra una implementacion de referencia que
+// - `avanzarVentanaEnSitio` se compara contra una implementacion de referencia que
 //   si filtra el array completo cada vez (la que el ticket prohibe por
 //   rendimiento, pero que es trivialmente correcta): si los punteros
 //   monotonicos calculan mal el limite, el resultado diverge del filtro
@@ -21,7 +21,7 @@ import type { HoldNote, Note, TapNote } from '@tetra/core';
 import {
   PROGRESO_MAX_VISIBLE,
   PROGRESO_MIN_VISIBLE,
-  avanzarVentana,
+  avanzarVentanaEnSitio,
   calcularPosicionNota,
   calcularProgreso,
   progresoAY,
@@ -119,7 +119,7 @@ describe('calcularPosicionNota', () => {
 });
 
 // ---------------------------------------------------------------------------
-// avanzarVentana
+// avanzarVentanaEnSitio
 // ---------------------------------------------------------------------------
 
 function nota(time: number): TapNote {
@@ -134,13 +134,13 @@ function notaLarga(time: number, endTime: number): HoldNote {
  * Referencia deliberadamente ineficiente: recorre el array completo cada
  * vez y devuelve el conjunto de indices que deberian ser visibles. Es la
  * implementacion que T-004 prohibe usar en produccion, pero sirve de
- * oraculo para verificar que los punteros monotonicos de `avanzarVentana`
+ * oraculo para verificar que los punteros monotonicos de `avanzarVentanaEnSitio`
  * visitan exactamente las mismas notas.
  *
  * Devuelve un conjunto de indices en vez de un `{ inicio, fin }` porque,
  * con la ventana vacia, mas de una representacion de "no hay nada" es
  * valida (por ejemplo `{0,0}` o `{10,10}` sobre un array de 10 elementos):
- * lo que importa para quien consume `avanzarVentana` es el rango de indices
+ * lo que importa para quien consume `avanzarVentanaEnSitio` es el rango de indices
  * que se recorre, no los numeros exactos cuando ese rango esta vacio.
  */
 function indicesVisiblesPorFiltroCompleto(
@@ -170,12 +170,24 @@ function indicesVisiblesDeVentana(ventana: VentanaNotas): Set<number> {
   return indices;
 }
 
-describe('avanzarVentana', () => {
+/** Los casos de abajo miran el resultado como valor: se avanza una copia en sitio y se la devuelve. */
+function avanzar(
+  notas: readonly Note[],
+  anterior: VentanaNotas,
+  tiempoActual: number,
+  scrollDuration: number,
+): VentanaNotas {
+  const ventana = { inicio: anterior.inicio, fin: anterior.fin };
+  avanzarVentanaEnSitio(notas, ventana, tiempoActual, scrollDuration);
+  return ventana;
+}
+
+describe('avanzarVentanaEnSitio', () => {
   const notas: Note[] = Array.from({ length: 10 }, (_, i) => nota(i * 1000));
   const scrollDuration = 2000;
 
   it('en t = 0 incluye las notas dentro de [-0.1, 1.1] * scrollDuration', () => {
-    const ventana = avanzarVentana(notas, ventanaVacia(), 0, scrollDuration);
+    const ventana = avanzar(notas, ventanaVacia(), 0, scrollDuration);
     // limiteSuperior = 0 + 1.1*2000 = 2200: entran 0, 1000, 2000. No 3000.
     expect(ventana).toEqual({ inicio: 0, fin: 3 });
   });
@@ -183,7 +195,7 @@ describe('avanzarVentana', () => {
   it('visita exactamente las mismas notas que el filtro completo en una serie de pasos hacia adelante', () => {
     let ventana = ventanaVacia();
     for (const t of [0, 1500, 3200, 5000, 7400, 9500]) {
-      ventana = avanzarVentana(notas, ventana, t, scrollDuration);
+      ventana = avanzar(notas, ventana, t, scrollDuration);
       const esperado = indicesVisiblesPorFiltroCompleto(notas, t, scrollDuration);
       expect(indicesVisiblesDeVentana(ventana)).toEqual(esperado);
     }
@@ -193,7 +205,7 @@ describe('avanzarVentana', () => {
     let ventana = ventanaVacia();
     let anterior = { inicio: 0, fin: 0 };
     for (const t of [0, 800, 1600, 2400, 4000, 6000, 8000, 10_000]) {
-      ventana = avanzarVentana(notas, ventana, t, scrollDuration);
+      ventana = avanzar(notas, ventana, t, scrollDuration);
       expect(ventana.inicio).toBeGreaterThanOrEqual(anterior.inicio);
       expect(ventana.fin).toBeGreaterThanOrEqual(anterior.fin);
       anterior = ventana;
@@ -204,14 +216,14 @@ describe('avanzarVentana', () => {
     const notasConLn: Note[] = [notaLarga(0, 5000)];
     // t = 4000: la cabeza (time=0) quedo muy atras, pero endTime=5000
     // todavia esta dentro del limite inferior visible (4000 - 200 = 3800).
-    const ventana = avanzarVentana(notasConLn, ventanaVacia(), 4000, scrollDuration);
+    const ventana = avanzar(notasConLn, ventanaVacia(), 4000, scrollDuration);
     expect(ventana).toEqual({ inicio: 0, fin: 1 });
   });
 
   it('una nota larga sale de la ventana recien cuando su cola tambien quedo atras', () => {
     const notasConLn: Note[] = [notaLarga(0, 5000)];
     // t = 6000: limite inferior = 6000 - 200 = 5800 > endTime (5000).
-    const ventana = avanzarVentana(notasConLn, { inicio: 0, fin: 1 }, 6000, scrollDuration);
+    const ventana = avanzar(notasConLn, { inicio: 0, fin: 1 }, 6000, scrollDuration);
     expect(ventana.inicio).toBe(1);
   });
 });

@@ -31,9 +31,10 @@ export type { GeometriaPista, PosicionNota, VentanaNotas } from './position.js';
 export {
   PROGRESO_MAX_VISIBLE,
   PROGRESO_MIN_VISIBLE,
-  avanzarVentana,
+  avanzarVentanaEnSitio,
   calcularPosicionNota,
   calcularProgreso,
+  maximoVisibleEnColumna,
   progresoAY,
   progresoEsVisible,
   receptorY,

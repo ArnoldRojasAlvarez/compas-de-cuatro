@@ -1130,7 +1130,7 @@ export function mostrarAjustes(
         crearInterruptor(
           'tetra-fps-casilla',
           'Mostrar FPS',
-          'Muestra los cuadros por segundo y los ms por cuadro durante la partida.',
+          'Muestra los cuadros por segundo (promedio de medio segundo) y el cuadro más lento de ese tramo durante la partida.',
           leerMostrarFps(),
           guardarMostrarFps,
         ),

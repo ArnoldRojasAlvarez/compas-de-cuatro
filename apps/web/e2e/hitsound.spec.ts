@@ -79,9 +79,12 @@ async function pulsar(
           const k = Math.floor(t / 500);
           if (t > 700 && t - k * 500 >= faseDeseada && t - k * 500 < faseDeseada + 25) {
             const ctxAntes = window.__tetraDebug!.ctx.currentTime;
-            window.dispatchEvent(
-              new KeyboardEvent('keydown', { code: codigos[(k + columnaDesplazada) % 4]! }),
-            );
+            const codigo = codigos[(k + columnaDesplazada) % 4]!;
+            window.dispatchEvent(new KeyboardEvent('keydown', { code: codigo }));
+            // Se suelta enseguida: sin keyup la tecla queda apretada y, si la
+            // pulsacion siguiente cae en la misma columna (pasa bajo carga, cuando
+            // se corre dos tiempos), el input la ignora con razon y el test falla.
+            window.dispatchEvent(new KeyboardEvent('keyup', { code: codigo }));
             // Bloqueo sincronico: en el test, no en el juego, medir con performance.now es lo que se busca.
             const hasta = performance.now() + bloqueoMs;
             while (performance.now() < hasta) {

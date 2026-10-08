@@ -91,7 +91,8 @@ export function ventanaVacia(): VentanaNotas {
 }
 
 /**
- * Recalcula la ventana visible a partir de la anterior, avanzando los
+ * Recalcula la ventana visible, en sitio (escribe `ventana.inicio` y
+ * `ventana.fin`, no devuelve nada), avanzando los
  * punteros de forma monotonica: nunca retroceden. Asume reproduccion hacia
  * adelante (tiempoActual no decrece entre llamadas), que es el caso del
  * bucle de juego normal.
@@ -103,16 +104,16 @@ export function ventanaVacia(): VentanaNotas {
  * `fin` avanza mientras la siguiente nota todavia entra en la ventana
  * (su `time` no supera el limite superior).
  */
-export function avanzarVentana(
+export function avanzarVentanaEnSitio(
   notas: readonly Note[],
-  anterior: VentanaNotas,
+  ventana: VentanaNotas,
   tiempoActual: Ms,
   scrollDuration: Ms,
-): VentanaNotas {
+): void {
   const limiteInferior = tiempoActual + PROGRESO_MIN_VISIBLE * scrollDuration;
   const limiteSuperior = tiempoActual + PROGRESO_MAX_VISIBLE * scrollDuration;
 
-  let inicio = anterior.inicio;
+  let inicio = ventana.inicio;
   while (inicio < notas.length) {
     const nota = notas[inicio]!;
     const finVisibilidad = isHold(nota) ? nota.endTime : nota.time;
@@ -122,10 +123,44 @@ export function avanzarVentana(
     inicio++;
   }
 
-  let fin = Math.max(anterior.fin, inicio);
+  let fin = Math.max(ventana.fin, inicio);
   while (fin < notas.length && notas[fin]!.time <= limiteSuperior) {
     fin++;
   }
 
-  return { inicio, fin };
+  // T-039: se escribe en el objeto que llega (uno por columna, creado una vez al
+  // armar la pista): ni este ni render() crean objetos por frame.
+  ventana.inicio = inicio;
+  ventana.fin = fin;
+}
+
+/**
+ * T-039: la mayor cantidad de notas de una columna que pueden estar visibles a
+ * la vez con ese `scrollDuration` (las que caen dentro de
+ * [-0.1, 1.1] * scrollDuration de un mismo instante). Sirve para dimensionar
+ * el pool de sprites al armar la pista, segun la densidad real del mapa, para
+ * que render() nunca tenga que crear uno.
+ *
+ * `notas` son las de una sola columna, por tiempo ascendente y sin que dos
+ * se pisen (una nota larga termina antes de que empiece la siguiente de su
+ * columna): por eso los finales tambien van en orden y alcanza con dos
+ * punteros, igual que en `avanzarVentanaEnSitio`.
+ */
+export function maximoVisibleEnColumna(notas: readonly Note[], scrollDuration: Ms): number {
+  const ancho = (PROGRESO_MAX_VISIBLE - PROGRESO_MIN_VISIBLE) * scrollDuration;
+  let maximo = 0;
+  let inicio = 0;
+  for (let i = 0; i < notas.length; i++) {
+    // Ventana que termina justo en la nota `i` (la mas tardia que contiene): [time_i - ancho, time_i].
+    const limiteInferior = notas[i]!.time - ancho;
+    while (inicio < i) {
+      const nota = notas[inicio]!;
+      const finVisibilidad = isHold(nota) ? nota.endTime : nota.time;
+      if (finVisibilidad >= limiteInferior) break;
+      inicio++;
+    }
+    const cantidad = i - inicio + 1;
+    if (cantidad > maximo) maximo = cantidad;
+  }
+  return maximo;
 }

@@ -12,9 +12,11 @@
 //   indices visible dentro de `chart.notes` filtrado por columna. Los
 //   punteros son monotonicos: nunca se vuelve a recorrer desde el principio.
 // - Pooling: los sprites de marcador y de cuerpo de LN se reciclan por
-//   columna. Cada pool nace precalentado (ver `Pool.precalentar`), asi que en
-//   la practica `render()` no hace `new` nunca; solo si una columna llega a
-//   mostrar mas notas a la vez que el precalentado, el pool crece una vez.
+//   columna. Desde T-039 cada pool nace dimensionado por el maximo de notas
+//   visibles a la vez de SU columna (`maximoVisibleEnColumna`, segun el
+//   scrollDuration y la densidad real del mapa) y precalentado (ver
+//   `Pool.precalentar`): `render()` no crea sprites ni objetos nunca. Los
+//   punteros de la ventana son un objeto por columna que se reescribe en sitio.
 //
 // T-020: pasada grafica con la paleta propia (docs/DISENO.md). Todo lo que
 // se genera (texturas de gradiente, textos de juicio, sprites de flash) se
@@ -34,7 +36,8 @@ import type { Application } from 'pixi.js';
 import type { Chart, Column, Judgement, Ms, Note } from '@tetra/core';
 import { COLUMN_COUNT, isHold } from '@tetra/core';
 import {
-  avanzarVentana,
+  avanzarVentanaEnSitio,
+  maximoVisibleEnColumna,
   calcularProgreso,
   progresoAY,
   progresoEsVisible,
@@ -66,6 +69,13 @@ export interface PlayfieldOptions {
   columnWidth: number;
   /** Distancia del receptor al borde inferior, en pixeles. */
   receptorOffset: number;
+  /**
+   * T-039: el `scrollDuration` MAS LENTO que puede tener la pista durante la
+   * partida (con la velocidad cambiando en caliente, F3/F4). Con el se
+   * dimensionan los pools de sprites: cuanto mas lento, mas notas a la vez.
+   * Sin esto se usa `scrollDuration` tal como llega al crear la pista.
+   */
+  scrollDurationMaximo?: Ms;
 }
 
 /** Ajustes visuales opcionales de la pista (T-050). */
@@ -101,9 +111,6 @@ const DURACION_POPUP_JUICIO: Ms = 450;
 const ALTO_RECEPTOR = 6;
 const ALTO_LINEA_JUICIO = 2;
 
-/** Cuantos sprites nacen ya creados por pool y por columna (ver Pool.precalentar). */
-const PRECALENTADO_MARCADORES = 32;
-const PRECALENTADO_CUERPOS = 8;
 
 // Paleta (docs/DISENO.md, apps/web/src/tokens.css). Pixi no lee CSS, por eso
 // van como constantes hex.
@@ -435,6 +442,8 @@ export function createPlayfield(
   // columna. Con un .osk o sin skin esto es `undefined` y todo queda como antes.
   const propia = infoDeSkinPropia(skin);
   const opacidadPista = normalizarOpacidadPista(visual?.opacidadPista);
+  // T-039: con el scrollDuration mas lento que puede tener la partida caben mas notas a la vez.
+  const scrollDurationDePool = Math.max(options.scrollDuration, options.scrollDurationMaximo ?? 0);
 
   // -------------------------------------------------------------------------
   // Texturas generadas (una vez; se destruyen en destroy())
@@ -573,12 +582,17 @@ export function createPlayfield(
     colorDestelloPendiente.push(COLOR_JUICIO.max);
     tiempoDestello.push(Number.NEGATIVE_INFINITY);
 
+    // T-039: los pools se dimensionan por lo que esta columna puede mostrar a la
+    // vez, no por una constante. Una nota larga usa un cuerpo y hasta dos
+    // marcadores (cabeza y cola), una simple un marcador.
+    const visiblesMaximo = maximoVisibleEnColumna(notasPorColumna[columna]!, scrollDurationDePool);
+
     const poolMarcador = new Pool(capaMarcadores, () => {
       const sprite = new Sprite(Texture.WHITE);
       sprite.anchor.set(0.5, 0.5);
       return sprite;
     });
-    poolMarcador.precalentar(PRECALENTADO_MARCADORES);
+    poolMarcador.precalentar(visiblesMaximo * 2);
     poolMarcadores.push(poolMarcador);
 
     const poolCuerpo = new Pool(capaCuerpos, () => {
@@ -587,7 +601,7 @@ export function createPlayfield(
       sprite.anchor.set(0.5, 0);
       return sprite;
     });
-    poolCuerpo.precalentar(PRECALENTADO_CUERPOS);
+    poolCuerpo.precalentar(visiblesMaximo);
     poolCuerpos.push(poolCuerpo);
 
     const receptor = new Sprite(Texture.WHITE);
@@ -789,13 +803,10 @@ export function createPlayfield(
     const yReceptorActual = receptorY(geo);
     for (let columna = 0; columna < COLUMN_COUNT; columna++) {
       const notas = notasPorColumna[columna]!;
-      ventanasPorColumna[columna] = avanzarVentana(
-        notas,
-        ventanasPorColumna[columna]!,
-        time,
-        options.scrollDuration,
-      );
-      const { inicio, fin } = ventanasPorColumna[columna]!;
+      // En sitio (T-039): el objeto de la columna se reescribe, no se crea uno por frame.
+      const ventana = ventanasPorColumna[columna]!;
+      avanzarVentanaEnSitio(notas, ventana, time, options.scrollDuration);
+      const { inicio, fin } = ventana;
 
       const poolMarcador = poolMarcadores[columna]!;
       const poolCuerpo = poolCuerpos[columna]!;

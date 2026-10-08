@@ -158,19 +158,30 @@
   background: var(--j-50);
 }
 
-/* Flechita bajo la barra: la media movil de los ultimos golpes. */
+/* Flechita bajo la barra: la media movil de los ultimos golpes. T-059: el
+   contenedor mide lo mismo que la barra y se desplaza con `transform` (un
+   porcentaje de SU ancho, o sea del ancho de la barra); antes la flecha
+   animaba `left` y cada frame de la transicion (180 ms despues de cada golpe,
+   casi siempre) recalculaba el layout. La flecha en si es el ::after. */
 .tetra-error-media {
   position: absolute;
-  left: 50%;
+  left: 0;
   top: 100%;
-  width: 0;
+  width: 100%;
   height: 0;
+  opacity: 0;
+  transition: transform 0.18s ease-out;
+}
+
+.tetra-error-media::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 0;
   margin-left: -4px;
   border-left: 4px solid transparent;
   border-right: 4px solid transparent;
   border-bottom: 5px solid var(--tinta);
-  opacity: 0;
-  transition: left 0.18s ease-out;
 }
 
 @media (prefers-reduced-motion: reduce) {

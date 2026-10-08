@@ -26,7 +26,12 @@
 import { describe, expect, it } from 'vitest';
 import type { Chart, Column, Judgement, Ms, Note, ScoreState } from '@tetra/core';
 import { COLUMN_COUNT, createJudgeEngine } from '@tetra/core';
-import { avanzarVentana, calcularPosicionNota, ventanaVacia, type VentanaNotas } from './position.js';
+import {
+  avanzarVentanaEnSitio,
+  calcularPosicionNota,
+  ventanaVacia,
+  type VentanaNotas,
+} from './position.js';
 
 function crearChartDePrueba(): Chart {
   const notes: Note[] = [
@@ -131,12 +136,7 @@ function simularPartida(
     // run, en paralelo al motor de juicio de arriba, pero sin que nada de
     // esto vuelva a tocarlo.
     for (let columna = 0; columna < COLUMN_COUNT; columna++) {
-      ventanas[columna] = avanzarVentana(
-        notasPorColumna[columna]!,
-        ventanas[columna]!,
-        t,
-        scrollDuration,
-      );
+      avanzarVentanaEnSitio(notasPorColumna[columna]!, ventanas[columna]!, t, scrollDuration);
       const { inicio, fin } = ventanas[columna]!;
       for (let i = inicio; i < fin; i++) {
         calcularPosicionNota(notasPorColumna[columna]![i]!.time, t, scrollDuration, GEOMETRIA_DE_PRUEBA);

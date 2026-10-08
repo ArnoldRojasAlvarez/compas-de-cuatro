@@ -16,3 +16,4 @@ apps/web/playwright-report/
 .claude/settings.local.json
 .claude/*.local.json
 .claude/worktrees/
+dist-*
