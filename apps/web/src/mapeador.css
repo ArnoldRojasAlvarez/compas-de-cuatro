@@ -286,3 +286,48 @@
 #app .tetra-mp-nuevo {
   margin-left: auto;
 }
+
+/* -- Minimapa (T-046) ----------------------------------------------------
+   Una franja bajo la barra de posicion con toda la cancion. Dos lienzos
+   apilados: el de fondo (onda, notas, huecos) y el del cabezal, que recibe el mouse. */
+
+.tetra-mp-minimapa {
+  position: relative;
+  flex: 0 0 56px;
+  min-height: 56px;
+  overflow: hidden;
+  background: var(--fondo);
+  border: 1px solid var(--linea);
+  border-radius: var(--radio-control);
+}
+
+.tetra-mp-minimapa canvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: block;
+}
+
+.tetra-mp-minimapa-cabezal {
+  cursor: pointer;
+  touch-action: none;
+}
+
+/* -- Seleccion (T-034) -------------------------------------------------- */
+
+.tetra-mp-seleccion-grupo {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: var(--espacio-1);
+}
+
+.tetra-mp-elegidas {
+  font-family: var(--fuente-datos);
+  font-size: var(--tipo-xs);
+  color: var(--acento);
+}
+
+/* Reserva la linea aunque no haya nada elegido (un espacio de ancho cero le da la misma altura): si no, la barra crece y el lienzo salta al elegir. */
+.tetra-mp-elegidas::before {
+  content: '\200b';
+}

@@ -4,7 +4,7 @@
 // y por eso se puede probar casi todo en vitest sin navegador.
 
 import type { Chart, Column, Grilla, HoldNote, Ms, Note, SpeedPoint, TimingPoint } from '@tetra/core';
-import { slotMasCercano, tiempoDeSlot } from '@tetra/core';
+import { duracionPulso, slotMasCercano, tiempoDeSlot } from '@tetra/core';
 
 // ---------------------------------------------------------------------------
 // Notas
@@ -113,6 +113,222 @@ export function resumirNotas(notas: readonly Note[]): ResumenNotas {
     nps: duracion > 0 ? notas.length / duracion : 0,
     finMs,
   };
+}
+
+// ---------------------------------------------------------------------------
+// Seleccion, copiar, pegar y mover (T-034)
+// ---------------------------------------------------------------------------
+//
+// Todo es puro e inmutable: recibe el arreglo de notas y devuelve otro. Cada
+// operacion devuelve el resultado completo, asi la pantalla la registra con un
+// solo `historial.registrar` y un Ctrl+Z la deshace entera.
+//
+// Las notas elegidas se identifican por VALOR (`claveNota`), no por identidad
+// de objeto: una copia, o la nota de antes de un deshacer, sigue siendo "la
+// misma". Dos notas no pueden coincidir en tipo, columna y tiempos, asi que la
+// clave es unica dentro de un mapa valido.
+
+/** Rectangulo de seleccion: un rango de tiempo (ambos extremos incluidos) por un conjunto de columnas. */
+export interface Seleccion {
+  readonly desde: Ms;
+  readonly hasta: Ms;
+  readonly columnas: readonly Column[];
+}
+
+/** Tolerancia al comparar tiempos con los bordes de la seleccion (los tiempos son ms enteros). */
+const TOLERANCIA_SELECCION_MS = 0.5;
+
+/** Identidad por valor de una nota. */
+export function claveNota(nota: Note): string {
+  return nota.kind === 'hold'
+    ? `h${nota.column}:${nota.time}:${nota.endTime}`
+    : `t${nota.column}:${nota.time}`;
+}
+
+/**
+ * Notas dentro del rectangulo. Un tap entra si su instante esta en el rango;
+ * una larga entra ENTERA si cualquier parte suya toca el rango (una larga que
+ * cruza el borde se elige completa: si no, moverla la partiria en dos).
+ */
+export function notasEnSeleccion(notas: readonly Note[], s: Seleccion): Note[] {
+  const desde = Math.min(s.desde, s.hasta) - TOLERANCIA_SELECCION_MS;
+  const hasta = Math.max(s.desde, s.hasta) + TOLERANCIA_SELECCION_MS;
+  return ordenar(notas.filter((n) => s.columnas.includes(n.column) && n.time <= hasta && finDe(n) >= desde));
+}
+
+/** Las notas de `elegidas` que todavia existen en `notas` (tras deshacer, borrar o pegar encima). */
+export function elegidasVigentes(notas: readonly Note[], elegidas: readonly Note[]): Note[] {
+  const claves = new Set(elegidas.map(claveNota));
+  return notas.filter((n) => claves.has(claveNota(n)));
+}
+
+/** Quita las notas elegidas. */
+export function quitarNotas(notas: readonly Note[], elegidas: readonly Note[]): Note[] {
+  const claves = new Set(elegidas.map(claveNota));
+  return notas.filter((n) => !claves.has(claveNota(n)));
+}
+
+/**
+ * Corre `notas` `deltaMs` en el tiempo y `deltaColumnas` de carril. Una larga
+ * mueve su inicio y su fin juntos. `null` si alguna nota quedaria fuera de las
+ * columnas 0 a 3 o antes del instante 0: se rechaza el movimiento ENTERO (no
+ * se recorta) porque recortar apilaria notas en una columna y deformaria el
+ * patron sin avisar.
+ */
+export function desplazarNotas(notas: readonly Note[], deltaMs: Ms, deltaColumnas = 0): Note[] | null {
+  const dt = redondear(deltaMs);
+  const dc = Math.round(deltaColumnas);
+  const salida: Note[] = [];
+  for (const n of notas) {
+    const columna = n.column + dc;
+    const time = n.time + dt;
+    if (columna < 0 || columna > 3 || time < 0) return null;
+    const column = columna as Column;
+    salida.push(n.kind === 'hold' ? { ...n, column, time, endTime: n.endTime + dt } : { ...n, column, time });
+  }
+  return salida;
+}
+
+function pieza(column: Column, inicio: Ms, fin: Ms): Note {
+  return fin > inicio ? { kind: 'hold', time: inicio, endTime: fin, column } : { kind: 'tap', time: inicio, column };
+}
+
+/**
+ * Pone `nuevas` encima de `base`. Donde una nueva ocupa tiempo en una columna,
+ * lo que habia ahi se reemplaza SOLO en ese intervalo: un tap desaparece, una
+ * larga se recorta (o queda partida en dos si la nueva cae en el medio). Las
+ * notas de otras columnas o de otros instantes no se tocan, y nunca queda un
+ * solapamiento. Entre las propias `nuevas` gana la primera en el tiempo.
+ */
+function colocarEncima(base: readonly Note[], nuevas: readonly Note[]): Note[] {
+  const porColumna: Note[][] = [[], [], [], []];
+  const aceptadas: Note[] = [];
+  for (const n of ordenar(nuevas)) {
+    const lista = porColumna[n.column]!;
+    const ultima = lista[lista.length - 1];
+    if (ultima && finDe(ultima) >= n.time) continue;
+    lista.push(n);
+    aceptadas.push(n);
+  }
+  const salida: Note[] = [...aceptadas];
+  for (const n of base) {
+    const lista = porColumna[n.column]!;
+    const fin = finDe(n);
+    // Primera nueva cuyo fin llega al inicio de `n`: sin solapes entre las
+    // nuevas, ordenadas por inicio tambien lo estan por fin (busqueda binaria).
+    let a = 0;
+    let b = lista.length;
+    while (a < b) {
+      const medio = (a + b) >> 1;
+      if (finDe(lista[medio]!) >= n.time) b = medio;
+      else a = medio + 1;
+    }
+    if (a >= lista.length || lista[a]!.time > fin) {
+      salida.push(n);
+      continue;
+    }
+    let cursor = n.time;
+    for (let j = a; j < lista.length && lista[j]!.time <= fin; j++) {
+      const m = lista[j]!;
+      if (m.time - 1 >= cursor) salida.push(pieza(n.column, cursor, m.time - 1));
+      cursor = Math.max(cursor, finDe(m) + 1);
+    }
+    if (cursor <= fin) salida.push(pieza(n.column, cursor, fin));
+  }
+  return ordenar(salida);
+}
+
+/**
+ * Mueve las notas elegidas `deltaMs` en el tiempo y `deltaColumnas` de carril.
+ * Si caen sobre notas que no estaban elegidas, las reemplazan en el intervalo
+ * que ocupan. Si algo quedaria fuera de las pistas o antes del instante 0 no
+ * se mueve nada y se devuelve una copia igual (ver `desplazarNotas`).
+ */
+export function moverNotas(
+  notas: readonly Note[],
+  elegidas: readonly Note[],
+  deltaMs: Ms,
+  deltaColumnas = 0,
+): Note[] {
+  const vigentes = elegidasVigentes(notas, elegidas);
+  const movidas = desplazarNotas(vigentes, deltaMs, deltaColumnas);
+  if (!movidas || movidas.length === 0) return [...notas];
+  return colocarEncima(quitarNotas(notas, vigentes), movidas);
+}
+
+export interface Portapapeles {
+  /** Notas con el tiempo relativo al origen de la copia (0 = el origen). */
+  readonly notas: readonly Note[];
+  /** Largo de lo copiado: hasta donde llega la ultima nota o la seleccion. */
+  readonly duracion: Ms;
+}
+
+/**
+ * Copia con tiempos relativos. El origen es `opciones.origen` (el borde
+ * izquierdo de la seleccion, para que un compas copiado con silencio al
+ * principio se pegue alineado) o, si no se da, la primera nota. `duracion` es
+ * `opciones.duracion` o, si no se da, hasta el fin de la ultima nota.
+ */
+export function copiarNotas(
+  elegidas: readonly Note[],
+  opciones: { readonly origen?: Ms; readonly duracion?: Ms } = {},
+): Portapapeles {
+  if (elegidas.length === 0) return { notas: [], duracion: opciones.duracion ?? 0 };
+  let primero = Infinity;
+  for (const n of elegidas) primero = Math.min(primero, n.time);
+  const origen = opciones.origen ?? primero;
+  const notas = ordenar(
+    elegidas.map((n) =>
+      n.kind === 'hold' ? { ...n, time: n.time - origen, endTime: n.endTime - origen } : { ...n, time: n.time - origen },
+    ),
+  );
+  let fin = 0;
+  for (const n of notas) fin = Math.max(fin, finDe(n));
+  return { notas, duracion: opciones.duracion ?? fin };
+}
+
+/**
+ * Pega el portapapeles con su origen en `enMs`. Reemplaza lo que haya en la
+ * misma columna solo en el intervalo ocupado. Si alguna nota caeria antes del
+ * instante 0 no pega nada y devuelve una copia igual.
+ */
+export function pegarNotas(
+  notas: readonly Note[],
+  portapapeles: { readonly notas: readonly Note[] },
+  enMs: Ms,
+): Note[] {
+  const colocadas = desplazarNotas(portapapeles.notas, enMs);
+  if (!colocadas || colocadas.length === 0) return [...notas];
+  return colocarEncima(notas, colocadas);
+}
+
+/**
+ * Las notas elegidas ajustadas al slot mas cercano de la grilla. El inicio y
+ * el fin de una larga se ajustan por separado; si la larga se queda sin largo
+ * pasa a ser un tap.
+ */
+export function cuantizadas(elegidas: readonly Note[], g: Grilla): Note[] {
+  return elegidas.map((n): Note => {
+    const time = tiempoDeSlotEntero(g, slotMasCercano(g, n.time));
+    if (n.kind === 'tap') return { ...n, time };
+    const endTime = tiempoDeSlotEntero(g, slotMasCercano(g, n.endTime));
+    return endTime > time ? { ...n, time, endTime } : { kind: 'tap', time, column: n.column };
+  });
+}
+
+/**
+ * Ajusta las notas elegidas a la grilla actual. Si dos quedan en el mismo
+ * lugar de una columna, se queda la primera en el tiempo.
+ */
+export function cuantizarNotas(notas: readonly Note[], elegidas: readonly Note[], g: Grilla): Note[] {
+  const vigentes = elegidasVigentes(notas, elegidas);
+  if (vigentes.length === 0) return [...notas];
+  return colocarEncima(quitarNotas(notas, vigentes), cuantizadas(vigentes, g));
+}
+
+/** True si alguna nota termina despues de `maxMs` (el final de la cancion). */
+export function pasaDelFinal(notas: readonly Note[], maxMs: Ms): boolean {
+  return notas.some((n) => finDe(n) > maxMs);
 }
 
 // ---------------------------------------------------------------------------
@@ -243,6 +459,129 @@ export function mezclarMono(canales: readonly Float32Array[]): Float32Array {
     for (let i = 0; i < mono.length; i++) mono[i]! += canal[i]! / canales.length;
   }
   return mono;
+}
+
+// ---------------------------------------------------------------------------
+// Minimapa (T-046)
+// ---------------------------------------------------------------------------
+
+/** Una cubeta de la franja del minimapa: un tramo de la cancion de `duracion / ancho` ms. */
+export interface CubetaVista {
+  /** Notas que EMPIEZAN dentro de la cubeta (cuenta cruda; la pantalla la normaliza al dibujar). */
+  densidadNotas: number;
+  /** Energia del audio en la cubeta, de 0 a 1 respecto de la cubeta mas fuerte de la cancion. */
+  energia: number;
+  hayNotas: boolean;
+}
+
+/**
+ * Resume la cancion en `ancho` cubetas iguales. Las notas se asignan a su
+ * cubeta POR TIEMPO (no por posicion en la lista). La energia es el promedio
+ * de los picos de audio que caen en la cubeta (el promedio sigue los pasajes
+ * fuertes y suaves; el maximo dejaria toda la franja al tope), normalizado por
+ * la cubeta mas fuerte. Si no hay audio, o `ancho` es mayor que la cantidad de
+ * picos, las cubetas de energia que no tengan dato valen 0, nunca NaN.
+ * Sin duracion (o con `ancho` 0) no hay nada que repartir: `ancho` cubetas
+ * vacias, o `[]` si `ancho` no es positivo.
+ */
+export function resumirParaMinimapa(
+  notas: readonly Note[],
+  picos: Float32Array,
+  msPorCubetaPicos: Ms,
+  duracionMs: Ms,
+  ancho: number,
+): CubetaVista[] {
+  const n = Math.floor(ancho);
+  if (!(n > 0)) return [];
+  const cubetas: CubetaVista[] = Array.from({ length: n }, () => ({
+    densidadNotas: 0,
+    energia: 0,
+    hayNotas: false,
+  }));
+  if (!(duracionMs > 0)) return cubetas;
+  const msPorCubeta = duracionMs / n;
+
+  for (const nota of notas) {
+    if (!Number.isFinite(nota.time)) continue;
+    const i = Math.min(n - 1, Math.max(0, Math.floor(nota.time / msPorCubeta)));
+    const c = cubetas[i]!;
+    c.densidadNotas++;
+    c.hayNotas = true;
+  }
+
+  if (picos.length > 0 && msPorCubetaPicos > 0) {
+    let maximo = 0;
+    for (let i = 0; i < n; i++) {
+      const primero = Math.floor((i * msPorCubeta) / msPorCubetaPicos);
+      if (primero >= picos.length) continue;
+      const ultimo = Math.min(
+        picos.length - 1,
+        Math.max(primero, Math.ceil(((i + 1) * msPorCubeta) / msPorCubetaPicos) - 1),
+      );
+      let suma = 0;
+      for (let k = primero; k <= ultimo; k++) suma += picos[k]!;
+      const promedio = suma / (ultimo - primero + 1);
+      cubetas[i]!.energia = promedio;
+      if (promedio > maximo) maximo = promedio;
+    }
+    if (maximo > 0) for (const c of cubetas) c.energia /= maximo;
+    else for (const c of cubetas) c.energia = 0;
+  }
+  return cubetas;
+}
+
+/**
+ * Tramos de la cancion sin ninguna nota (ni larga sostenida) que duran MAS de
+ * `minimoMs`, incluidos el principio y el final. Sin notas no se marca nada:
+ * un mapa vacio no tiene "huecos", tiene todo por mapear.
+ */
+export function huecosSinNotas(
+  notas: readonly Note[],
+  duracionMs: Ms,
+  minimoMs: Ms,
+): { desde: Ms; hasta: Ms }[] {
+  if (notas.length === 0 || !(duracionMs > 0)) return [];
+  const huecos: { desde: Ms; hasta: Ms }[] = [];
+  let cursor = 0;
+  for (const n of ordenar(notas)) {
+    if (n.time - cursor > minimoMs) huecos.push({ desde: cursor, hasta: n.time });
+    cursor = Math.max(cursor, finDe(n));
+  }
+  if (duracionMs - cursor > minimoMs) huecos.push({ desde: cursor, hasta: duracionMs });
+  return huecos;
+}
+
+/**
+ * Marcas de compas del minimapa: una cada `cadaCompases` compases a partir del
+ * offset de la grilla (el compas 1), con su numero de compas. Vacio si el BPM no es valido.
+ */
+export function marcasDeCompas(
+  grilla: Grilla,
+  duracionMs: Ms,
+  cadaCompases = 8,
+  pulsosPorCompas = 4,
+): { time: Ms; compas: number }[] {
+  const paso = cadaCompases * pulsosPorCompas * duracionPulso(grilla.bpm);
+  if (!(paso > 0) || !Number.isFinite(paso) || !Number.isFinite(grilla.offsetMs) || !(duracionMs > 0)) return [];
+  const marcas: { time: Ms; compas: number }[] = [];
+  for (let k = Math.ceil(-grilla.offsetMs / paso); ; k++) {
+    const time = grilla.offsetMs + k * paso;
+    if (time > duracionMs) break;
+    marcas.push({ time, compas: k * cadaCompases + 1 });
+  }
+  return marcas;
+}
+
+/** Instante al que apunta la posicion `x` (px) de una franja de `ancho` px que muestra toda la cancion. */
+export function tiempoDeXMinimapa(x: number, ancho: number, duracionMs: Ms): Ms {
+  if (!(ancho > 0) || !(duracionMs > 0)) return 0;
+  return Math.min(1, Math.max(0, x / ancho)) * duracionMs;
+}
+
+/** Posicion (px) de un instante en la franja; se recorta a los bordes. */
+export function xDeTiempoMinimapa(time: Ms, ancho: number, duracionMs: Ms): number {
+  if (!(ancho > 0) || !(duracionMs > 0)) return 0;
+  return Math.min(1, Math.max(0, time / duracionMs)) * ancho;
 }
 
 // ---------------------------------------------------------------------------

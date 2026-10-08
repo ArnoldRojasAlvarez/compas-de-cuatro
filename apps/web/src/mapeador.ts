@@ -42,24 +42,42 @@ import {
   borrarBorrador,
   calcularPicos,
   colocarLarga,
+  claveNota,
   columnaDeX,
   construirChart,
+  copiarNotas,
   crearHistorial,
+  cuantizadas,
+  cuantizarNotas,
+  desplazarNotas,
+  elegidasVigentes,
   espejar,
   guardarBorrador,
+  huecosSinNotas,
   leerBorrador,
   leerNumero,
   limitarZoom,
+  marcasDeCompas,
   mezclarMono,
+  moverNotas,
+  notasEnSeleccion,
+  pasaDelFinal,
+  pegarNotas,
   quitarNota,
+  quitarNotas,
   resumirNotas,
+  resumirParaMinimapa,
   slotDeY,
   tiempoDeSlotEntero,
+  tiempoDeXMinimapa,
   tiempoDeY,
+  xDeTiempoMinimapa,
   yDeTiempo,
   type AjustesMapa,
   type Historial,
   type MetadatosMapa,
+  type Portapapeles,
+  type Seleccion,
   type Vista,
 } from './mapeador-logica.js';
 
@@ -97,6 +115,26 @@ interface Sesion {
 }
 
 let sesionGuardada: Sesion | null = null;
+
+/**
+ * Portapapeles del editor (T-034). Vive en memoria mientras la pestana este
+ * abierta, no en la sesion: sobrevive a probar el mapa, a salir al menu y a
+ * abrir otra dificultad, asi se puede copiar un patron de un mapa a otro. No
+ * usa el portapapeles del sistema.
+ */
+let portapapeles: Portapapeles | null = null;
+
+/**
+ * Notas elegidas. `origen` y `duracion` salen del rectangulo con que se
+ * eligieron (su borde de arriba en el tiempo y su largo en slots): al copiar,
+ * el compas se pega alineado aunque su primera nota no caiga en el borde. Con
+ * Ctrl+A no hay rectangulo y valen `null` (se usa la primera nota).
+ */
+interface Eleccion {
+  notas: readonly Note[];
+  origen: number | null;
+  duracion: number | null;
+}
 
 /** Las mismas opciones sin `abrir`: reabrir de la biblioteca pisaria una sesion en curso. */
 function sinAbrir(o: OpcionesMapeador): OpcionesMapeador {
@@ -254,6 +292,15 @@ export function mostrarMapeador(contenedor: HTMLElement, opciones: OpcionesMapea
   let mostrarOnsets = true;
   let compensar = true;
   let taps: number[] = [];
+  let eleccion: Eleccion | null = null;
+  /**
+   * Que seleccion tenia cada estado del historial al salir de el: deshacer o
+   * rehacer devuelve tambien la seleccion de ese momento (deshacer un movimiento
+   * deja elegidas las notas donde estaban, listas para probar de nuevo).
+   */
+  const eleccionPorEstado = new WeakMap<Note[], Eleccion | null>();
+  /** Rectangulo de seleccion en curso (Mayus + arrastrar). Posiciones en px del canvas. */
+  let caja: { slot0: number; col0: number; x0: number; y0: number; x: number; y: number } | null = null;
 
   const vista: Vista = { tiempo: sesion.tiempo, pxPorMs: sesion.pxPorMs, yCabezal: 400 };
   const notas = (): Note[] => sesion.historial.actual;
@@ -400,6 +447,23 @@ export function mostrarMapeador(contenedor: HTMLElement, opciones: OpcionesMapea
   );
   const bDeshacer = boton('Deshacer');
   const bRehacer = boton('Rehacer');
+  // T-034: seleccion. Todo tiene atajo; los botones son para quien prefiere el mouse.
+  const grupoSeleccion = el('div', 'tetra-mp-seleccion-grupo');
+  grupoSeleccion.setAttribute('role', 'group');
+  grupoSeleccion.setAttribute('aria-label', 'Seleccion');
+  grupoSeleccion.title =
+    'Seleccion: Mayus + arrastrar sobre las pistas elige notas, Ctrl+A elige todo, Esc suelta. Alt + flechas mueve lo elegido un slot o una columna.';
+  const bCopiar = boton('Copiar');
+  bCopiar.title = 'Copiar lo elegido (Ctrl+C)';
+  const bCortar = boton('Cortar');
+  bCortar.title = 'Cortar lo elegido (Ctrl+X)';
+  const bPegar = boton('Pegar');
+  bPegar.title = 'Pegar en el cabezal, ajustado a la rejilla (Ctrl+V)';
+  const bEliminar = boton('Eliminar');
+  bEliminar.title = 'Eliminar lo elegido (Supr)';
+  const bCuantizar = boton('Cuantizar');
+  bCuantizar.title = 'Ajustar lo elegido a la rejilla actual (Q)';
+  grupoSeleccion.append(bCopiar, bCortar, bPegar, bEliminar, bCuantizar);
   const cSonido = el('input');
   cSonido.type = 'checkbox';
   cSonido.checked = true;
@@ -431,8 +495,9 @@ export function mostrarMapeador(contenedor: HTMLElement, opciones: OpcionesMapea
   const lectura = el('div', 'tetra-mp-lectura');
   const lecturaTiempo = el('span', 'tetra-mp-tiempo', '0:00.000');
   const lecturaNotas = el('span', 'tetra-mp-notas', '0 notas');
-  lectura.append(lecturaTiempo, lecturaNotas);
-  barra.append(bPlay, sVelocidad, bDeshacer, bRehacer, lSonido, lMetro, lCompensar, lOnsets, iZoom, lectura);
+  const lecturaElegidas = el('span', 'tetra-mp-elegidas');
+  lectura.append(lecturaTiempo, lecturaNotas, lecturaElegidas);
+  barra.append(bPlay, sVelocidad, bDeshacer, bRehacer, grupoSeleccion, lSonido, lMetro, lCompensar, lOnsets, iZoom, lectura);
 
   const lienzoContenedor = el('div', 'tetra-mp-lienzo');
   const canvas = el('canvas', 'tetra-mp-canvas');
@@ -450,7 +515,18 @@ export function mostrarMapeador(contenedor: HTMLElement, opciones: OpcionesMapea
     'tetra-mp-ayuda',
     'Clic: poner o quitar nota. Arrastrar: nota larga. Clic derecho: quitar. Rueda: mover. Ctrl + rueda: zoom. Espacio: reproducir. D F J K: poner nota en el cabezal o grabar en vivo. Ctrl+Z / Ctrl+Y: deshacer y rehacer.',
   );
-  escena.append(barra, lienzoContenedor, iPosicion, ayuda);
+  // T-046: vista general. Dos lienzos apilados: el de fondo (onda, densidad de
+  // notas, huecos, marcas) solo se redibuja cuando cambian las notas, el audio,
+  // la grilla o el ancho; el de arriba (cabezal y zona visible) se dibuja por
+  // frame y recibe el mouse.
+  const minimapa = el('div', 'tetra-mp-minimapa');
+  const lienzoMinFondo = el('canvas', 'tetra-mp-minimapa-fondo');
+  const lienzoMinCabezal = el('canvas', 'tetra-mp-minimapa-cabezal');
+  lienzoMinCabezal.setAttribute('aria-label', 'Minimapa de la cancion');
+  lienzoMinCabezal.title =
+    'Minimapa: clic o arrastre para saltar a ese instante. Barras blancas: notas. Onda: energia del audio. Ambar: mas de 8 compases sin notas.';
+  minimapa.append(lienzoMinFondo, lienzoMinCabezal);
+  escena.append(barra, lienzoContenedor, iPosicion, minimapa, ayuda);
   contenedor.appendChild(pantalla);
 
   // -- Estado derivado -----------------------------------------------------
@@ -471,6 +547,13 @@ export function mostrarMapeador(contenedor: HTMLElement, opciones: OpcionesMapea
     bGenerar.disabled = sinAudio;
     bAzar.disabled = sinAudio;
     bPlay.textContent = reproduciendo ? 'Pausar' : 'Reproducir';
+    const hayElegidas = elegidas().notas.length > 0;
+    bCopiar.disabled = !hayElegidas;
+    bCortar.disabled = !hayElegidas;
+    bEliminar.disabled = !hayElegidas;
+    bCuantizar.disabled = !hayElegidas;
+    bPegar.disabled = portapapeles === null || portapapeles.notas.length === 0;
+    lecturaElegidas.textContent = hayElegidas ? `${elegidas().notas.length} elegidas` : '';
     const r = resumirNotas(notas());
     lecturaNotas.textContent =
       r.total === 0
@@ -493,8 +576,36 @@ export function mostrarMapeador(contenedor: HTMLElement, opciones: OpcionesMapea
     });
   }
 
-  function confirmarNotas(nuevas: Note[]): void {
+  /**
+   * Las notas elegidas que siguen existiendo en el mapa (deshacer, borrar o
+   * pegar encima pueden haber quitado algunas) y sus claves, para dibujar.
+   * Se recalcula solo cuando cambia el arreglo de notas o la seleccion.
+   */
+  let cacheElegidas: { notas: Note[]; eleccion: Eleccion | null; lista: Note[]; claves: Set<string> } | null = null;
+  function elegidas(): { notas: Note[]; claves: Set<string> } {
+    if (!cacheElegidas || cacheElegidas.notas !== notas() || cacheElegidas.eleccion !== eleccion) {
+      const lista = eleccion ? elegidasVigentes(notas(), eleccion.notas) : [];
+      cacheElegidas = { notas: notas(), eleccion, lista, claves: new Set(lista.map(claveNota)) };
+    }
+    return { notas: cacheElegidas.lista, claves: cacheElegidas.claves };
+  }
+
+  function elegir(nueva: Eleccion | null): void {
+    eleccion = nueva !== null && nueva.notas.length > 0 ? nueva : null;
+    sincronizarBotones();
+  }
+
+  /**
+   * Registra un estado nuevo del mapa: UN paso de historial, sea cual sea la
+   * operacion, asi un Ctrl+Z la deshace entera. `nuevaEleccion` es la seleccion
+   * que queda despues (por defecto la misma; las notas que ya no existan se
+   * descartan solas).
+   */
+  function confirmarNotas(nuevas: Note[], nuevaEleccion: Eleccion | null = eleccion): void {
+    eleccionPorEstado.set(notas(), eleccion);
     sesion.historial.registrar(nuevas);
+    eleccion = nuevaEleccion;
+    eleccionPorEstado.set(notas(), eleccion);
     guardarSesion();
     sincronizarBotones();
   }
@@ -930,15 +1041,139 @@ export function mostrarMapeador(contenedor: HTMLElement, opciones: OpcionesMapea
   bRehacer.addEventListener('click', () => rehacer());
 
   function deshacer(): void {
+    eleccionPorEstado.set(notas(), eleccion);
     sesion.historial.deshacer();
+    eleccion = eleccionPorEstado.get(notas()) ?? null;
     guardarSesion();
     sincronizarBotones();
   }
   function rehacer(): void {
+    eleccionPorEstado.set(notas(), eleccion);
     sesion.historial.rehacer();
+    eleccion = eleccionPorEstado.get(notas()) ?? null;
     guardarSesion();
     sincronizarBotones();
   }
+
+  // -- Seleccion, copiar, pegar y mover (T-034) -----------------------------
+
+  /** Opciones de copiarNotas segun como se eligio (ver Eleccion). */
+  function opcionesDeCopia(): { origen?: number; duracion?: number } {
+    return {
+      ...(eleccion !== null && eleccion.origen !== null && { origen: eleccion.origen }),
+      ...(eleccion !== null && eleccion.duracion !== null && { duracion: eleccion.duracion }),
+    };
+  }
+
+  function copiarSeleccion(): boolean {
+    const lista = elegidas().notas;
+    if (lista.length === 0) {
+      aviso('No hay notas elegidas. Mayus + arrastrar sobre las pistas las elige, Ctrl+A elige todo.', 'info');
+      return false;
+    }
+    portapapeles = copiarNotas(lista, opcionesDeCopia());
+    sincronizarBotones();
+    aviso(`${lista.length} notas copiadas. Ctrl+V las pega en el cabezal.`, 'ok');
+    return true;
+  }
+
+  function cortarSeleccion(): void {
+    const lista = elegidas().notas;
+    if (!copiarSeleccion()) return;
+    confirmarNotas(quitarNotas(notas(), lista), null);
+    aviso(`${lista.length} notas cortadas. Ctrl+V las pega, Ctrl+Z las devuelve.`, 'ok');
+  }
+
+  function eliminarSeleccion(): void {
+    const lista = elegidas().notas;
+    if (lista.length === 0) return;
+    confirmarNotas(quitarNotas(notas(), lista), null);
+    aviso(`${lista.length} notas eliminadas. Se puede deshacer con Ctrl+Z.`, 'info');
+  }
+
+  function pegarEnCabezal(): void {
+    if (!portapapeles || portapapeles.notas.length === 0) {
+      aviso('No hay nada copiado.', 'info');
+      return;
+    }
+    // El cabezal se ajusta al slot mas cercano: el origen de lo copiado cae en la rejilla.
+    const enMs = tiempoDeSlotEntero(sesion.grilla, slotMasCercano(sesion.grilla, tiempoActual()));
+    const colocadas = desplazarNotas(portapapeles.notas, enMs);
+    if (!colocadas) {
+      aviso('No se pega: alguna nota quedaria antes del inicio de la cancion.', 'error');
+      return;
+    }
+    if (duracionMs() > 0 && pasaDelFinal(colocadas, duracionMs())) {
+      aviso('No se pega: alguna nota quedaria despues del final de la cancion. Mueve el cabezal antes.', 'error');
+      return;
+    }
+    confirmarNotas(pegarNotas(notas(), portapapeles, enMs), {
+      notas: colocadas,
+      origen: enMs,
+      duracion: portapapeles.duracion,
+    });
+    aviso(`${colocadas.length} notas pegadas en ${formatoTiempo(enMs)}. Alt + flechas las mueve, Ctrl+Z las quita.`, 'ok');
+  }
+
+  /** Mueve lo elegido `slots` slots en el tiempo (positivo = mas tarde) y `columnas` carriles. */
+  function moverSeleccion(slots: number, columnas: number): void {
+    const lista = elegidas().notas;
+    const primera = lista[0];
+    if (!primera || !eleccion) return;
+    // Un solo desplazamiento para todas (la frase no se deforma), calculado
+    // desde la primera nota para que esta caiga exacta en un slot.
+    const g = sesion.grilla;
+    const slot = slotMasCercano(g, primera.time);
+    const dMs = tiempoDeSlotEntero(g, slot + slots) - tiempoDeSlotEntero(g, slot);
+    const movidas = desplazarNotas(lista, dMs, columnas);
+    if (!movidas) {
+      aviso(
+        columnas !== 0 ? 'No se mueve: una nota saldria de las cuatro pistas.' : 'No se mueve: una nota quedaria antes del inicio.',
+        'info',
+      );
+      return;
+    }
+    if (duracionMs() > 0 && pasaDelFinal(movidas, duracionMs())) {
+      aviso('No se mueve: una nota quedaria despues del final de la cancion.', 'info');
+      return;
+    }
+    confirmarNotas(moverNotas(notas(), lista, dMs, columnas), {
+      notas: movidas,
+      origen: eleccion.origen === null ? null : eleccion.origen + dMs,
+      duracion: eleccion.duracion,
+    });
+  }
+
+  function cuantizarSeleccion(): void {
+    const lista = elegidas().notas;
+    if (lista.length === 0) {
+      aviso('No hay notas elegidas para cuantizar.', 'info');
+      return;
+    }
+    const ajustadas = cuantizadas(lista, sesion.grilla);
+    if (ajustadas.every((n, i) => claveNota(n) === claveNota(lista[i]!))) {
+      aviso('Las notas elegidas ya estaban en la rejilla.', 'info');
+      return;
+    }
+    confirmarNotas(cuantizarNotas(notas(), lista, sesion.grilla), {
+      notas: ajustadas,
+      origen: eleccion?.origen ?? null,
+      duracion: eleccion?.duracion ?? null,
+    });
+    aviso(`${lista.length} notas ajustadas a la rejilla 1/${sesion.grilla.divisor}.`, 'ok');
+  }
+
+  function elegirTodo(): void {
+    if (notas().length === 0) return;
+    elegir({ notas: [...notas()], origen: null, duracion: null });
+    aviso(`${notas().length} notas elegidas.`, 'info');
+  }
+
+  bCopiar.addEventListener('click', () => void copiarSeleccion());
+  bCortar.addEventListener('click', cortarSeleccion);
+  bPegar.addEventListener('click', pegarEnCabezal);
+  bEliminar.addEventListener('click', eliminarSeleccion);
+  bCuantizar.addEventListener('click', cuantizarSeleccion);
 
   // -- Salida --------------------------------------------------------------
 
@@ -1168,8 +1403,13 @@ export function mostrarMapeador(contenedor: HTMLElement, opciones: OpcionesMapea
       }
     }
 
-    // Notas.
+    // Notas. Las elegidas (o las que caen dentro del rectangulo que se esta
+    // arrastrando) van en ambar con un borde claro.
     const altoNota = 16;
+    const cajaVista = caja ? rectanguloDeCaja(caja) : null;
+    const marcadas = cajaVista
+      ? new Set(notasEnSeleccion(notas(), cajaVista.seleccion).map(claveNota))
+      : elegidas().claves;
     for (const n of notas()) {
       const fin = n.kind === 'hold' ? n.endTime : n.time;
       if (fin < tMin - 100 || n.time > tMax + 100) continue;
@@ -1177,7 +1417,8 @@ export function mostrarMapeador(contenedor: HTMLElement, opciones: OpcionesMapea
       const w = anchoCol - 10;
       const yInicio = yDeTiempo(vista, n.time);
       const pasada = fin < t;
-      const color = n.column === 0 || n.column === 3 ? COLOR_ACENTO : COLOR_TINTA;
+      const elegida = marcadas.size > 0 && marcadas.has(claveNota(n));
+      const color = elegida ? COLOR_AMBAR : n.column === 0 || n.column === 3 ? COLOR_ACENTO : COLOR_TINTA;
       g.globalAlpha = pasada ? 0.35 : 1;
       if (n.kind === 'hold') {
         const yFin = yDeTiempo(vista, n.endTime);
@@ -1191,7 +1432,26 @@ export function mostrarMapeador(contenedor: HTMLElement, opciones: OpcionesMapea
       g.beginPath();
       g.roundRect(x, yInicio - altoNota / 2, w, altoNota, 4);
       g.fill();
+      if (elegida) {
+        g.strokeStyle = '#ffffff';
+        g.lineWidth = 2;
+        g.stroke();
+      }
       g.globalAlpha = 1;
+    }
+
+    // Rectangulo de seleccion en curso, alineado a los slots.
+    if (cajaVista) {
+      const x0 = izquierda + cajaVista.colA * anchoCol;
+      const y0 = yDeTiempo(vista, tiempoDeSlotEntero(sesion.grilla, cajaVista.slotB)) - 8;
+      const y1 = yDeTiempo(vista, tiempoDeSlotEntero(sesion.grilla, cajaVista.slotA)) + 8;
+      g.fillStyle = 'rgba(232,184,74,0.12)';
+      g.fillRect(x0, y0, (cajaVista.colB - cajaVista.colA + 1) * anchoCol, y1 - y0);
+      g.strokeStyle = COLOR_AMBAR;
+      g.lineWidth = 1;
+      g.setLineDash([5, 4]);
+      g.strokeRect(x0 + 0.5, y0 + 0.5, (cajaVista.colB - cajaVista.colA + 1) * anchoCol - 1, y1 - y0 - 1);
+      g.setLineDash([]);
     }
 
     // Fantasma bajo el mouse y arrastre en curso.
@@ -1233,6 +1493,184 @@ export function mostrarMapeador(contenedor: HTMLElement, opciones: OpcionesMapea
     // Lecturas.
     lecturaTiempo.textContent = `${formatoTiempo(t)} / ${formatoTiempo(duracionMs())}`;
     if (!arrastrandoBarra) iPosicion.value = String(Math.round(Math.min(t, duracionMs())));
+    actualizarMinimapa(t, tMin, tMax);
+  }
+
+  // -- Minimapa (T-046) -----------------------------------------------------
+
+  const ctxMinFondo = lienzoMinFondo.getContext('2d');
+  const ctxMinCabezal = lienzoMinCabezal.getContext('2d');
+  let minAncho = 0;
+  let minAlto = 0;
+  /** De que depende el lienzo de fondo: si nada cambio, no se redibuja. */
+  let firmaMin: {
+    notas: Note[];
+    picos: Float32Array | null;
+    ancho: number;
+    alto: number;
+    duracion: number;
+    bpm: number;
+    offset: number;
+  } | null = null;
+  /** Lo ultimo que se dibujo en el lienzo del cabezal (px), para no repintar igual. */
+  let ultimoCabezalMin = { x: -1, a: -1, b: -1, ancho: -1, alto: -1 };
+
+  const observadorMin = new ResizeObserver(() => {
+    // clientWidth/clientHeight: el area de adentro del borde, donde caben los lienzos.
+    const dpr = window.devicePixelRatio || 1;
+    minAncho = Math.max(0, minimapa.clientWidth);
+    minAlto = Math.max(0, minimapa.clientHeight);
+    for (const [lienzo, c2d] of [
+      [lienzoMinFondo, ctxMinFondo],
+      [lienzoMinCabezal, ctxMinCabezal],
+    ] as const) {
+      lienzo.width = Math.floor(minAncho * dpr);
+      lienzo.height = Math.floor(minAlto * dpr);
+      lienzo.style.width = `${minAncho}px`;
+      lienzo.style.height = `${minAlto}px`;
+      c2d?.setTransform(dpr, 0, 0, dpr, 0, 0);
+    }
+    // Cambiar el tamano de un lienzo lo borra: hay que dibujar los dos de nuevo.
+    firmaMin = null;
+    ultimoCabezalMin = { x: -1, a: -1, b: -1, ancho: -1, alto: -1 };
+  });
+  observadorMin.observe(minimapa);
+
+  /** Una cubeta por pixel de ancho: onda al fondo, notas encima, huecos en ambar y marcas cada 8 compases. */
+  function dibujarFondoMinimapa(): void {
+    const g = ctxMinFondo;
+    if (!g || minAncho <= 0 || minAlto <= 0) return;
+    const w = minAncho;
+    const h = minAlto;
+    const dur = duracionMs();
+    g.clearRect(0, 0, w, h);
+    g.fillStyle = '#0b0e11';
+    g.fillRect(0, 0, w, h);
+    if (!(dur > 0)) return;
+
+    const cubetas = resumirParaMinimapa(notas(), sesion.picos ?? new Float32Array(0), MS_POR_CUBETA, dur, w);
+    let maxDensidad = 1;
+    for (const c of cubetas) maxDensidad = Math.max(maxDensidad, c.densidadNotas);
+
+    // Huecos grandes sin notas (mas de 8 compases): un velo y una linea arriba.
+    const ocho = 8 * 4 * duracionPulso(sesion.grilla.bpm);
+    for (const hueco of huecosSinNotas(notas(), dur, ocho)) {
+      const x0 = Math.floor(xDeTiempoMinimapa(hueco.desde, w, dur));
+      const x1 = Math.ceil(xDeTiempoMinimapa(hueco.hasta, w, dur));
+      g.fillStyle = 'rgba(232,184,74,0.16)';
+      g.fillRect(x0, 0, x1 - x0, h);
+      g.fillStyle = 'rgba(232,184,74,0.95)';
+      g.fillRect(x0, 0, x1 - x0, 3);
+    }
+
+    // Onda de energia, simetrica; la raiz hace visibles los pasajes suaves.
+    g.fillStyle = 'rgba(63,216,194,0.38)';
+    const medio = h / 2;
+    for (let i = 0; i < cubetas.length; i++) {
+      const mitad = Math.sqrt(cubetas[i]!.energia) * (medio - 2);
+      if (mitad > 0) g.fillRect(i, medio - mitad, 1, mitad * 2);
+    }
+
+    // Densidad de notas desde abajo.
+    g.fillStyle = 'rgba(231,238,240,0.9)';
+    for (let i = 0; i < cubetas.length; i++) {
+      const c = cubetas[i]!;
+      if (!c.hayNotas) continue;
+      const alturaBarra = Math.max(2, (c.densidadNotas / maxDensidad) * (h - 8));
+      // 2 px de ancho: una nota suelta sigue viendose en una cancion larga.
+      g.fillRect(i, h - alturaBarra, 2, alturaBarra);
+    }
+
+    // Marcas de compas cada 8 compases, con el numero si hay lugar.
+    const separacion = xDeTiempoMinimapa(ocho, w, dur);
+    g.font = '10px "JetBrains Mono", monospace';
+    g.textBaseline = 'top';
+    g.textAlign = 'left';
+    for (const m of marcasDeCompas(sesion.grilla, dur)) {
+      const x = Math.round(xDeTiempoMinimapa(m.time, w, dur)) + 0.5;
+      g.strokeStyle = 'rgba(231,238,240,0.28)';
+      g.lineWidth = 1;
+      g.beginPath();
+      g.moveTo(x, 0);
+      g.lineTo(x, h);
+      g.stroke();
+      if (separacion >= 34) {
+        g.fillStyle = 'rgba(157,170,178,0.95)';
+        g.fillText(String(m.compas), x + 3, 5);
+      }
+    }
+  }
+
+  /** Zona visible del editor y cabezal sobre la franja, en su propio lienzo para repintar poco. */
+  function dibujarCabezalMinimapa(t: number, tMin: number, tMax: number): void {
+    const g = ctxMinCabezal;
+    if (!g || minAncho <= 0 || minAlto <= 0) return;
+    const dur = duracionMs();
+    const x = Math.round(xDeTiempoMinimapa(t, minAncho, dur));
+    const a = Math.round(xDeTiempoMinimapa(tMin, minAncho, dur));
+    const b = Math.round(xDeTiempoMinimapa(tMax, minAncho, dur));
+    const u = ultimoCabezalMin;
+    if (u.x === x && u.a === a && u.b === b && u.ancho === minAncho && u.alto === minAlto) return;
+    ultimoCabezalMin = { x, a, b, ancho: minAncho, alto: minAlto };
+    g.clearRect(0, 0, minAncho, minAlto);
+    if (!(dur > 0)) return;
+    g.fillStyle = 'rgba(231,238,240,0.13)';
+    g.fillRect(a, 0, Math.max(2, b - a), minAlto);
+    g.strokeStyle = 'rgba(231,238,240,0.55)';
+    g.lineWidth = 1;
+    g.strokeRect(a + 0.5, 0.5, Math.max(2, b - a) - 1, minAlto - 1);
+    g.fillStyle = COLOR_ACENTO;
+    g.fillRect(Math.min(minAncho - 2, x), 0, 2, minAlto);
+  }
+
+  function actualizarMinimapa(t: number, tMin: number, tMax: number): void {
+    const dur = duracionMs();
+    const f = firmaMin;
+    if (
+      !f ||
+      f.notas !== notas() ||
+      f.picos !== sesion.picos ||
+      f.ancho !== minAncho ||
+      f.alto !== minAlto ||
+      f.duracion !== dur ||
+      f.bpm !== sesion.grilla.bpm ||
+      f.offset !== sesion.grilla.offsetMs
+    ) {
+      firmaMin = {
+        notas: notas(),
+        picos: sesion.picos,
+        ancho: minAncho,
+        alto: minAlto,
+        duracion: dur,
+        bpm: sesion.grilla.bpm,
+        offset: sesion.grilla.offsetMs,
+      };
+      dibujarFondoMinimapa();
+    }
+    dibujarCabezalMinimapa(t, tMin, tMax);
+  }
+
+  // Clic o arrastre en la franja salta a ese instante (la misma buscar() de la barra de posicion).
+  let arrastrandoMinimapa = false;
+  function saltarDesdeMinimapa(e: PointerEvent): void {
+    if (!sesion.buffer) return;
+    const caja = lienzoMinCabezal.getBoundingClientRect();
+    buscar(tiempoDeXMinimapa(e.clientX - caja.left, caja.width, duracionMs()));
+  }
+  lienzoMinCabezal.addEventListener('pointerdown', (e) => {
+    if (e.button !== 0 || !sesion.buffer) return;
+    e.preventDefault();
+    arrastrandoMinimapa = true;
+    lienzoMinCabezal.setPointerCapture(e.pointerId);
+    saltarDesdeMinimapa(e);
+  });
+  lienzoMinCabezal.addEventListener('pointermove', (e) => {
+    if (arrastrandoMinimapa) saltarDesdeMinimapa(e);
+  });
+  for (const tipo of ['pointerup', 'pointercancel'] as const) {
+    lienzoMinCabezal.addEventListener(tipo, () => {
+      arrastrandoMinimapa = false;
+    });
   }
 
   function bucle(): void {
@@ -1265,23 +1703,105 @@ export function mostrarMapeador(contenedor: HTMLElement, opciones: OpcionesMapea
   canvas.addEventListener('mouseleave', () => {
     hover = null;
   });
+  /** Columna mas cercana a `x`, aunque el mouse este fuera de las pistas (el rectangulo no se corta al salir). */
+  function columnaCercana(x: number): number {
+    const { izquierda, anchoCol } = geometria();
+    return Math.min(3, Math.max(0, Math.floor((x - izquierda) / anchoCol)));
+  }
+
+  /** El rectangulo de seleccion de `c` en slots y columnas, y como Seleccion para notasEnSeleccion. */
+  function rectanguloDeCaja(c: NonNullable<typeof caja>): {
+    slotA: number;
+    slotB: number;
+    colA: number;
+    colB: number;
+    seleccion: Seleccion;
+  } {
+    const slot1 = slotDeY(vista, sesion.grilla, c.y);
+    const col1 = columnaCercana(c.x);
+    const slotA = Math.min(c.slot0, slot1);
+    const slotB = Math.max(c.slot0, slot1);
+    const colA = Math.min(c.col0, col1);
+    const colB = Math.max(c.col0, col1);
+    const columnas: Column[] = [];
+    for (let k = colA; k <= colB; k++) columnas.push(k as Column);
+    return {
+      slotA,
+      slotB,
+      colA,
+      colB,
+      seleccion: {
+        desde: tiempoDeSlotEntero(sesion.grilla, slotA),
+        hasta: tiempoDeSlotEntero(sesion.grilla, slotB),
+        columnas,
+      },
+    };
+  }
+
+  /** Suelta el rectangulo: elige lo que quedo adentro. Un clic sin arrastrar suelta la seleccion. */
+  function terminarCaja(): void {
+    const c = caja;
+    caja = null;
+    if (!c) return;
+    if (Math.abs(c.x - c.x0) < 4 && Math.abs(c.y - c.y0) < 4) {
+      elegir(null);
+      return;
+    }
+    const r = rectanguloDeCaja(c);
+    const dentro = notasEnSeleccion(notas(), r.seleccion);
+    if (dentro.length === 0) {
+      elegir(null);
+      aviso('No hay notas en esa zona.', 'info');
+      return;
+    }
+    elegir({
+      notas: dentro,
+      origen: r.seleccion.desde,
+      // El largo cuenta los slots que cubre el rectangulo (el ultimo incluido),
+      // asi pegar varias veces seguidas encadena sin huecos ni solapes.
+      duracion: tiempoDeSlotEntero(sesion.grilla, r.slotB + 1) - r.seleccion.desde,
+    });
+    aviso(`${dentro.length} notas elegidas. Ctrl+C copia, Supr borra, Alt + flechas mueve.`, 'info');
+  }
+
   canvas.addEventListener('mousedown', (e) => {
     if (e.button !== 0) return;
     const { x, y } = posicionEnCanvas(e);
+    if (e.shiftKey) {
+      // Mayus + arrastrar: rectangulo de seleccion (no pone ni quita notas).
+      e.preventDefault();
+      caja = { slot0: slotDeY(vista, sesion.grilla, y), col0: columnaCercana(x), x0: x, y0: y, x, y };
+      return;
+    }
     const { izquierda, anchoCol } = geometria();
     const col = columnaDeX(x, izquierda, anchoCol);
     if (col === null) return;
+    // Un clic normal suelta la seleccion: editar a mano y seguir con una
+    // seleccion vieja en pantalla confunde (Supr borraria lo que no se ve).
+    if (eleccion) elegir(null);
     const slot = slotDeY(vista, sesion.grilla, y);
     arrastre = { col, slotInicio: slot, slotActual: slot };
   });
-  window.addEventListener('mouseup', () => {
+  function alMoverLaCaja(e: MouseEvent): void {
+    if (!caja) return;
+    const p = posicionEnCanvas(e);
+    caja.x = p.x;
+    caja.y = p.y;
+  }
+  window.addEventListener('mousemove', alMoverLaCaja);
+  function alSoltar(): void {
+    if (caja) {
+      terminarCaja();
+      return;
+    }
     if (!arrastre) return;
     const { col, slotInicio, slotActual } = arrastre;
     arrastre = null;
     const t1 = tiempoDeSlotEntero(sesion.grilla, slotInicio);
     const t2 = tiempoDeSlotEntero(sesion.grilla, slotActual);
     confirmarNotas(slotInicio === slotActual ? alternarTap(notas(), col, t1) : colocarLarga(notas(), col, t1, t2));
-  });
+  }
+  window.addEventListener('mouseup', alSoltar);
   canvas.addEventListener('contextmenu', (e) => {
     e.preventDefault();
     const { x, y } = posicionEnCanvas(e);
@@ -1319,7 +1839,40 @@ export function mostrarMapeador(contenedor: HTMLElement, opciones: OpcionesMapea
       } else if (e.code === 'KeyY') {
         e.preventDefault();
         rehacer();
+      } else if (e.code === 'KeyC') {
+        e.preventDefault();
+        copiarSeleccion();
+      } else if (e.code === 'KeyX') {
+        e.preventDefault();
+        cortarSeleccion();
+      } else if (e.code === 'KeyV') {
+        e.preventDefault();
+        pegarEnCabezal();
+      } else if (e.code === 'KeyA') {
+        e.preventDefault();
+        elegirTodo();
       }
+      return;
+    }
+    // Alt + flechas: mueve lo elegido. Arriba = mas tarde (el futuro esta
+    // arriba), como ArrowUp mueve el cabezal. preventDefault tambien sin
+    // seleccion: Alt + izquierda/derecha seria "atras/adelante" del navegador.
+    if (e.altKey && e.code.startsWith('Arrow')) {
+      e.preventDefault();
+      if (e.code === 'ArrowUp') moverSeleccion(1, 0);
+      else if (e.code === 'ArrowDown') moverSeleccion(-1, 0);
+      else if (e.code === 'ArrowLeft') moverSeleccion(0, -1);
+      else moverSeleccion(0, 1);
+      return;
+    }
+    if (e.code === 'Delete' || e.code === 'Backspace') {
+      e.preventDefault();
+      eliminarSeleccion();
+      return;
+    }
+    if (e.code === 'Escape' && eleccion) {
+      e.preventDefault();
+      elegir(null);
       return;
     }
     const carril = codigosDeCarril.indexOf(e.code);
@@ -1372,6 +1925,9 @@ export function mostrarMapeador(contenedor: HTMLElement, opciones: OpcionesMapea
       case 'BracketRight':
         cambiarDivisor(1);
         break;
+      case 'KeyQ':
+        cuantizarSeleccion();
+        break;
       default:
         break;
     }
@@ -1383,7 +1939,10 @@ export function mostrarMapeador(contenedor: HTMLElement, opciones: OpcionesMapea
   function limpiarEscena(): void {
     activo = false;
     observador.disconnect();
+    observadorMin.disconnect();
     window.removeEventListener('keydown', alTeclear);
+    window.removeEventListener('mouseup', alSoltar);
+    window.removeEventListener('mousemove', alMoverLaCaja);
     detenerFuente();
     reproduciendo = false;
     if (ctx) {

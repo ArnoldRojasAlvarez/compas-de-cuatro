@@ -68,5 +68,5 @@ biblioteca", descargar `.osz` o `.osu`.
   mapearlas por tramos o aceptar la deriva.
 - La grabacion en vivo no compensa la latencia de salida de audio.
 - "Probar" siempre arranca del principio de la cancion.
-- Sin seleccion multiple ni copiar y pegar; sin cambios de velocidad (SV).
+- (Resuelto en T-034) Seleccion, copiar, pegar, mover y cuantizar. Sin cambios de velocidad (SV).
 - (Resuelto en T-032) Una cancion guardada se reabre desde el song select.
