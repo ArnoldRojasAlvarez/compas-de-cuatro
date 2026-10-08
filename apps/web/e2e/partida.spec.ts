@@ -77,8 +77,10 @@ test('ajustes entra en 1280x800 sin parrafos, y la skin elegida se recuerda', as
   await expect(page.locator('.tetra-ajustes p:visible')).toHaveCount(0);
   // Cinco tarjetas (la quinta es Biblioteca, T-042), y todo entra sin bajar.
   await expect(page.locator('.tetra-ajustes-seccion')).toHaveCount(5);
-  const alto = await page.evaluate(() => document.documentElement.scrollHeight);
-  expect(alto).toBeLessThanOrEqual(800);
+  // Se espera a que asiente: justo despues de cargar, la pagina mide unos px de mas un instante.
+  await expect
+    .poll(() => page.evaluate(() => document.documentElement.scrollHeight))
+    .toBeLessThanOrEqual(800);
 
   // Las cuatro skins propias mas la tarjeta "+"; la de Tetra viene activa.
   await expect(page.locator('.tetra-skin:not(.tetra-skin-importar)')).toHaveCount(4);

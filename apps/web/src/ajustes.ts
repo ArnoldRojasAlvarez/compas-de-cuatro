@@ -30,6 +30,7 @@ import {
   restaurarRespaldo,
   type SkinGuardada,
 } from '@tetra/storage';
+import { TIPOS_HITSOUND, crearHitsound, reproducirHitsound, type TipoHitsound } from '@tetra/audio';
 import {
   CODIGOS_TECLAS_POR_DEFECTO,
   SKINS_PROPIAS,
@@ -57,7 +58,19 @@ import {
   leerVelocidad,
   velocidadAScrollDuration,
 } from './velocidad.js';
-import { guardarVolumen, leerVolumen } from './volumen.js';
+import {
+  gananciaDeVolumen,
+  guardarVolumen,
+  guardarVolumenEfectos,
+  leerVolumen,
+  leerVolumenEfectos,
+} from './volumen.js';
+import {
+  NOMBRES_DE_HITSOUND,
+  esTipoHitsound,
+  guardarTipoHitsound,
+  leerTipoHitsound,
+} from './hitsound-logica.js';
 import {
   formatearPorcentaje,
   guardarAtenuacion,
@@ -175,6 +188,15 @@ function agruparEnFila(...filas: HTMLElement[]): HTMLElement {
   grupo.className = 'tetra-ajustes-controles-fila';
   for (const fila of filas) grupo.appendChild(fila);
   return grupo;
+}
+
+/** Dos filas de ajuste en una sola linea de la tarjeta (en angosto la segunda baja). */
+function agruparEnPar(a: HTMLElement, b: HTMLElement): HTMLElement {
+  const par = document.createElement('div');
+  par.className = 'tetra-ajustes-par';
+  par.appendChild(a);
+  par.appendChild(b);
+  return par;
 }
 
 /** Dato vivo en mono, junto a un control ("1200 ms", "80%"). */
@@ -348,6 +370,63 @@ function crearControlDeVolumen(): HTMLElement {
     idControl: entrada.id,
     ayuda: 'Volumen de la musica en la partida, el menu y la previa de las canciones.',
     controles: [entrada, dato],
+  });
+}
+
+/** Volumen de los efectos (T-027): el mismo deslizador que el de la musica, con su clave propia. */
+function crearControlDeEfectos(): HTMLElement {
+  const { entrada, dato } = crearDeslizador('tetra-efectos-valor', leerVolumenEfectos(), (fraccion) => {
+    guardarVolumenEfectos(fraccion);
+  });
+  return crearFila({
+    nombre: 'Efectos',
+    idControl: entrada.id,
+    ayuda: 'Volumen del sonido de cada golpe en la partida.',
+    controles: [entrada, dato],
+  });
+}
+
+/**
+ * Suena el hitsound una vez, con el volumen de efectos guardado. Usa un
+ * contexto propio que se cierra apenas termina el sonido (no deja un
+ * AudioContext abierto en una pantalla de ajustes). Pasa por
+ * `connect(ctx.destination)` como todo el audio de la app, asi el silenciador
+ * de desarrollo (`tetra:mudo`) lo alcanza igual.
+ */
+function probarHitsound(tipo: TipoHitsound): void {
+  const ctx = new AudioContext();
+  const ganancia = ctx.createGain();
+  ganancia.gain.value = gananciaDeVolumen(leerVolumenEfectos());
+  ganancia.connect(ctx.destination);
+  const source = reproducirHitsound(ctx, crearHitsound(ctx, tipo), ctx.currentTime, ganancia);
+  source.onended = () => {
+    void ctx.close().catch(() => {
+      // best-effort: si el navegador ya lo cerro no hay nada que hacer.
+    });
+  };
+}
+
+/** Tipo de hitsound (T-027): al cambiarlo suena una vez, para elegir de oido. */
+function crearControlDeSonidoDeGolpe(): HTMLElement {
+  const selector = document.createElement('select');
+  selector.id = 'tetra-hitsound-tipo';
+  for (const tipo of TIPOS_HITSOUND) {
+    const opcion = document.createElement('option');
+    opcion.value = tipo;
+    opcion.textContent = NOMBRES_DE_HITSOUND[tipo];
+    selector.appendChild(opcion);
+  }
+  selector.value = leerTipoHitsound();
+  selector.addEventListener('change', () => {
+    if (!esTipoHitsound(selector.value)) return;
+    guardarTipoHitsound(selector.value);
+    probarHitsound(selector.value);
+  });
+  return crearFila({
+    nombre: 'Golpe',
+    idControl: selector.id,
+    ayuda: 'Sonido de cada golpe. Al cambiarlo suena una vez.',
+    controles: [selector],
   });
 }
 
@@ -939,7 +1018,7 @@ export interface OpcionesAjustes {
 /**
  * Muestra la pantalla de ajustes dentro de `contenedor`, reemplazando lo
  * que hubiera. Cinco tarjetas numeradas en una rejilla (T-023, T-053, T-042):
- * Juego (offset, velocidad, volumen), Teclas, Apariencia (skin, atenuacion,
+ * Juego (offset, velocidad, volumen, efectos, golpe), Teclas, Apariencia (skin, atenuacion,
  * video, FPS), Presentacion y Biblioteca (copia de seguridad).
  */
 export function mostrarAjustes(
@@ -987,9 +1066,11 @@ export function mostrarAjustes(
       1,
       'Juego',
       'juego',
-      crearControlDeOffset(),
+      // T-027: tres filas como antes; los controles nuevos comparten fila para que
+      // la pantalla siga entrando en 1280x800 sin scroll.
+      agruparEnPar(crearControlDeOffset(), crearControlDeSonidoDeGolpe()),
       crearControlDeVelocidad(),
-      crearControlDeVolumen(),
+      agruparEnPar(crearControlDeVolumen(), crearControlDeEfectos()),
     ),
   );
   rejilla.appendChild(crearSeccion(2, 'Teclas', 'teclas', crearControlDeTeclas(mostrarError)));

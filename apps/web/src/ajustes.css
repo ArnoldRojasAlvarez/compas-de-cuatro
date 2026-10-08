@@ -436,6 +436,43 @@
   gap: var(--espacio-3);
 }
 
+/* Dos ajustes en una linea (T-027): Offset con Golpe, Volumen con Efectos. Cada
+   uno conserva su etiqueta y su control; en angosto el segundo baja. */
+.tetra-ajustes-par {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--espacio-3) var(--espacio-4);
+}
+
+.tetra-ajustes-par > .tetra-ajustes-fila {
+  flex: 0 0 auto;
+  flex-wrap: nowrap;
+  gap: var(--espacio-3);
+}
+
+.tetra-ajustes-par > .tetra-ajustes-fila + .tetra-ajustes-fila {
+  padding-top: 0;
+  border-top: 0;
+}
+
+.tetra-ajustes-par .tetra-ajustes-rango {
+  width: 80px;
+}
+
+.tetra-ajustes-par .tetra-ajustes-dato {
+  min-width: 4ch;
+}
+
+/* La linea de arriba separa los pares de las filas sueltas, igual que entre filas. */
+.tetra-ajustes-par + .tetra-ajustes-fila,
+.tetra-ajustes-fila + .tetra-ajustes-par,
+.tetra-ajustes-par + .tetra-ajustes-par {
+  padding-top: var(--espacio-4);
+  border-top: 1px solid var(--linea);
+}
+
 /* Los controles de debajo de las skins, en una rejilla de tres columnas
    (T-056: dos filas, con los interruptores de los contadores en la segunda). */
 .tetra-ajustes-controles-fila {

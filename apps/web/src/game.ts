@@ -8,7 +8,7 @@
 import { Application } from 'pixi.js';
 import type { Chart, HitResult, Ms, ScoreState } from '@tetra/core';
 import { createJudgeEngine, windowsForOD } from '@tetra/core';
-import { createAudioClock } from '@tetra/audio';
+import { createAudioClock, crearHitsound, reproducirHitsound } from '@tetra/audio';
 import {
   createKeyboardInput,
   createPlayfield,
@@ -35,7 +35,8 @@ import {
   leerVideoDeFondo,
   opacidadDePistaSegunAtenuacion,
 } from './apariencia.js';
-import { gananciaDeVolumen, leerVolumen } from './volumen.js';
+import { gananciaDeVolumen, leerVolumen, leerVolumenEfectos } from './volumen.js';
+import { instanteDeContextoDelGolpe, leerTipoHitsound, suenaElGolpe } from './hitsound-logica.js';
 import { liberarTexturasDeSkin, resolverSkinDePartida } from './skin-activa.js';
 import { crearFondoDePartida, crearIntroDePartida } from './escena.js';
 import { medidasDePista, type EscenaPartida } from './escena-logica.js';
@@ -107,6 +108,8 @@ interface GanchoDeDepuracion {
   ctx: AudioContext;
   /** T-053: la ganancia de volumen por la que pasa la musica (el e2e comprueba que ajustes la afecta). */
   volumen: GainNode;
+  /** T-027: la ganancia de efectos por la que pasan los hitsounds. */
+  efectos: GainNode;
 }
 
 declare global {
@@ -474,6 +477,13 @@ export function runGame(
     const volumen = ctx.createGain();
     volumen.gain.value = gananciaDeVolumen(leerVolumen());
     volumen.connect(ctx.destination);
+    // T-027: los hitsounds pasan por su propia ganancia al mismo destino. El
+    // buffer del sonido se sintetiza una sola vez por partida; cada golpe solo
+    // crea un AudioBufferSourceNode.
+    const efectos = ctx.createGain();
+    efectos.gain.value = gananciaDeVolumen(leerVolumenEfectos());
+    efectos.connect(ctx.destination);
+    const bufferDeGolpe = crearHitsound(ctx, leerTipoHitsound());
     // T-057: el offset local de la cancion se suma al global.
     const offsetGlobal = leerOffset();
     const offsetLocal = opciones.offsetLocal;
@@ -496,7 +506,7 @@ export function runGame(
             local: false,
           };
     const engine = createJudgeEngine(chart);
-    window.__tetraDebug = { clock, ctx, volumen };
+    window.__tetraDebug = { clock, ctx, volumen, efectos };
 
     // T-056: el remapeo se lee una vez, igual que el offset y la velocidad; lo
     // usan la entrada, las cajitas de teclas y los atajos (que no pisan una
@@ -604,6 +614,7 @@ export function runGame(
       window.removeEventListener('blur', cancelarReintento);
       window.removeEventListener('resize', ajustarAlVentana);
       volumen.disconnect();
+      efectos.disconnect();
       delete window.__tetraDebug;
       void ctx.close().catch(() => {
         // cerrar el contexto es best-effort: si el navegador ya lo cerro
@@ -951,6 +962,17 @@ export function runGame(
               playfield.setPressed(evento.column, true);
               const resultado = engine.press(evento.time, evento.column);
               if (resultado) playfield.showJudgement(evento.column, resultado.judgement);
+              // T-027: el hitsound se programa en el instante de la pulsacion,
+              // convertido de tiempo de juego a tiempo del contexto. Si ya paso,
+              // start() lo hace sonar en el acto. El miss no suena.
+              if (suenaElGolpe(resultado?.judgement)) {
+                reproducirHitsound(
+                  ctx,
+                  bufferDeGolpe,
+                  instanteDeContextoDelGolpe(ctx.currentTime, clock.now(), evento.time),
+                  efectos,
+                );
+              }
               registrar(resultado, t);
             } else {
               contadores.teclaArriba(evento.column);
