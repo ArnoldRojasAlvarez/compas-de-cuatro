@@ -3,7 +3,7 @@
 // RecordDeMapa bien formado o en `undefined`; nunca lanza. Un record
 // corrupto se ignora al leer: el song select sigue andando sin el.
 
-import { JUDGEMENTS } from '@tetra/core';
+import { JUDGEMENTS, leerReplay } from '@tetra/core';
 import type { Judgement, PartidaJugada, RecordDeMapa, Rango } from '@tetra/core';
 
 const RANGOS_VALIDOS: readonly string[] = ['SS', 'S', 'A', 'B', 'C', 'D'];
@@ -68,4 +68,29 @@ export function normalizarRecord(valor: unknown): RecordDeMapa | undefined {
     ultima,
     intentos: esNumeroFinito(intentos) && intentos >= 1 ? Math.floor(intentos) : 1,
   };
+}
+
+/**
+ * T-044: lo que se guarda en la tienda 'replays'. `texto` es el replay
+ * serializado (`serializarReplay`), asi lo que viaja al disco y al respaldo es
+ * exactamente lo que se grabo. `fecha` es la de la partida del `mejor` a la
+ * que pertenece: es lo que ata un replay a su record (si no coinciden, el replay
+ * es de otra partida y no vale).
+ */
+export interface ReplayGuardado {
+  /** Clave: el hash del mapa (el mismo de 'records'). */
+  hash: string;
+  texto: string;
+  fecha: string;
+}
+
+/** Un replay guardado bien formado (el texto se lee y su hash coincide con la clave), o `undefined`. Nunca lanza. */
+export function normalizarReplayGuardado(valor: unknown): ReplayGuardado | undefined {
+  if (!esObjeto(valor)) return undefined;
+  const { hash, texto, fecha } = valor;
+  if (typeof hash !== 'string' || hash === '') return undefined;
+  if (typeof texto !== 'string' || typeof fecha !== 'string') return undefined;
+  const replay = leerReplay(texto);
+  if (replay === null || replay.hashMapa !== hash) return undefined;
+  return { hash, texto, fecha };
 }

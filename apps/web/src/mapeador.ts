@@ -27,14 +27,15 @@ import {
   estimarTempo,
   generarNotas,
   lineasDeGrilla,
+  replayPerfecto,
   slotMasCercano,
 } from '@tetra/core';
 import { construirOsz, guardarCancionCreada, guardarDificultad, leerCancion } from '@tetra/storage';
-import { runGame } from './game.js';
+import { runGame, type OpcionesPartida } from './game.js';
 import { analizarAudio } from './mapeador-worker-cliente.js';
 import { leerKeyMap } from './keymap.js';
 import { leerOffset } from './offset.js';
-import { compensarLatencia } from './partida-logica.js';
+import { compensarLatencia, filtrarNotasDesde } from './partida-logica.js';
 import {
   agregarTap,
   alternarTap,
@@ -338,6 +339,13 @@ export function mostrarMapeador(contenedor: HTMLElement, opciones: OpcionesMapea
   // Salida.
   const bProbar = boton('Probar el mapa', 'tetra-boton-primario');
   const bProbarAqui = boton('Probar desde el cabezal');
+  // T-044: el bot perfecto juega el mapa en edicion (mismo camino que Probar). Si
+  // no saca todo MAX, el problema esta en el mapa o en el motor.
+  const bAuto = boton('Auto');
+  bAuto.title = 'Un bot perfecto juega el mapa desde el inicio';
+  const bAutoAqui = boton('Auto desde el cabezal');
+  const filaAutoJuego = el('div', 'tetra-mp-fila');
+  filaAutoJuego.append(bAuto, bAutoAqui);
   const bGuardar = boton('Guardar en la biblioteca');
   const bOsz = boton('Descargar .osz');
   const bOsu = boton('Descargar .osu');
@@ -375,7 +383,7 @@ export function mostrarMapeador(contenedor: HTMLElement, opciones: OpcionesMapea
       filaAuto,
     ),
     tarjeta('Dificultad del mapa', campo('OD', iOd), campo('HP', iHp)),
-    tarjeta('Salida', bProbar, bProbarAqui, bGuardar, filaDescargas),
+    tarjeta('Salida', bProbar, bProbarAqui, filaAutoJuego, bGuardar, filaDescargas),
     estado,
   );
 
@@ -454,6 +462,8 @@ export function mostrarMapeador(contenedor: HTMLElement, opciones: OpcionesMapea
     bPlay.disabled = sinAudio;
     bProbar.disabled = sinAudio || notas().length === 0;
     bProbarAqui.disabled = sinAudio || notas().length === 0;
+    bAuto.disabled = sinAudio || notas().length === 0;
+    bAutoAqui.disabled = sinAudio || notas().length === 0;
     bGuardar.disabled = sinAudio || notas().length === 0;
     bOsz.disabled = sinAudio || notas().length === 0;
     bOsu.disabled = notas().length === 0;
@@ -1010,8 +1020,13 @@ export function mostrarMapeador(contenedor: HTMLElement, opciones: OpcionesMapea
       sincronizarBotones();
     }
   });
-  /** Juega el mapa (entero o desde `inicioMs`) y vuelve al editor. */
-  async function probar(inicioMs: number): Promise<void> {
+  /**
+   * Juega el mapa (entero o desde `inicioMs`) y vuelve al editor. T-044: con
+   * `auto` lo juega el bot perfecto (`replayPerfecto`) en vez de la persona; el
+   * replay se genera sobre las notas que se juegan (las del cabezal en adelante),
+   * asi no hay eventos de notas que no existen en la partida.
+   */
+  async function probar(inicioMs: number, auto = false): Promise<void> {
     if (!sesion.buffer) return;
     pausar();
     const chart = chartActual();
@@ -1021,7 +1036,12 @@ export function mostrarMapeador(contenedor: HTMLElement, opciones: OpcionesMapea
     }
     guardarSesion();
     limpiarEscena();
-    const opcionesPartida = { inicioMs };
+    const opcionesPartida: OpcionesPartida = {
+      inicioMs,
+      ...(auto && {
+        reproducir: { replay: replayPerfecto(filtrarNotasDesde(chart, inicioMs)), modo: 'auto' as const },
+      }),
+    };
     let resultado = await runGame(chart, sesion.buffer, undefined, opcionesPartida);
     while (resultado.estado === 'reintentar') {
       resultado = await runGame(chart, sesion.buffer, undefined, opcionesPartida);
@@ -1038,6 +1058,8 @@ export function mostrarMapeador(contenedor: HTMLElement, opciones: OpcionesMapea
   }
   bProbar.addEventListener('click', () => void probar(0));
   bProbarAqui.addEventListener('click', () => void probar(Math.round(tiempoActual())));
+  bAuto.addEventListener('click', () => void probar(0, true));
+  bAutoAqui.addEventListener('click', () => void probar(Math.round(tiempoActual()), true));
 
   // -- Dibujo ---------------------------------------------------------------
 

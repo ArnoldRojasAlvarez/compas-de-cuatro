@@ -24,12 +24,17 @@ import type { Chart, RecordDeMapa } from '@tetra/core';
 import {
   listarCancionesDeLaBase,
   listarRecordsDeLaBase,
+  listarReplaysDeLaBase,
   listarSkinsDeLaBase,
   restaurarEnLaBase,
 } from './db.js';
 import type { CancionGuardada, SkinGuardada } from './db.js';
 import { CLAVES_IMAGENES_SKIN, type ImagenesDeSkin } from './osk.js';
-import { normalizarRecord } from './records-validacion.js';
+import {
+  normalizarRecord,
+  normalizarReplayGuardado,
+  type ReplayGuardado,
+} from './records-validacion.js';
 
 const FORMATO = 'tetra-respaldo';
 const VERSION_ACTUAL = 1;
@@ -48,6 +53,8 @@ export interface ContenidoRespaldo {
   skins: SkinGuardada[];
   /** T-055: tienda 'records' de la base version 5. */
   records: RecordDeMapa[];
+  /** T-044: tienda 'replays' (version 6): el replay de la mejor partida de cada mapa. Ausente en respaldos viejos. */
+  replays?: ReplayGuardado[];
   /** Claves 'tetra:*' de localStorage. */
   ajustes: Record<string, string>;
 }
@@ -61,6 +68,8 @@ export interface ResumenRestauracion {
   recordsNuevos: number;
   /** Records que ya existian y mejoraron con los del respaldo. */
   recordsActualizados: number;
+  /** T-044: replays que se escribieron. */
+  replaysNuevos: number;
   /** Claves de localStorage escritas (0 si no se pidio sobrescribir). */
   ajustesRestaurados: number;
 }
@@ -107,6 +116,8 @@ interface ManifestRespaldo {
   canciones: CancionManifest[];
   skins: SkinManifest[];
   records: RecordDeMapa[];
+  /** T-044: opcional al leer (los respaldos de antes no lo traen). */
+  replays?: ReplayGuardado[];
   ajustes: Record<string, string>;
 }
 
@@ -177,6 +188,7 @@ export async function exportarRespaldo(c: ContenidoRespaldo): Promise<Blob> {
     canciones,
     skins,
     records: c.records,
+    replays: c.replays ?? [],
     ajustes: c.ajustes,
   };
   archivos['manifest.json'] = strToU8(JSON.stringify(manifest, null, 2));
@@ -350,6 +362,16 @@ export async function leerRespaldo(zip: Blob): Promise<ContenidoRespaldo> {
     const record = normalizarRecord(crudo);
     if (record !== undefined) recordsValidos.push(record);
   }
+  // T-044: los replays son opcionales; uno que no se lee (o que no es de su
+  // hash) se descarta, igual que un record roto.
+  const replaysValidos: ReplayGuardado[] = [];
+  const replaysCrudos = manifest['replays'];
+  if (Array.isArray(replaysCrudos)) {
+    for (const crudo of replaysCrudos as unknown[]) {
+      const fila = normalizarReplayGuardado(crudo);
+      if (fila !== undefined) replaysValidos.push(fila);
+    }
+  }
   const ajustesValidos: Record<string, string> = {};
   for (const [clave, valor] of Object.entries(ajustes)) {
     if (esAjusteRestaurable(clave, valor)) ajustesValidos[clave] = valor;
@@ -360,6 +382,7 @@ export async function leerRespaldo(zip: Blob): Promise<ContenidoRespaldo> {
     canciones: (canciones as unknown[]).map((c, i) => leerCancion(archivos, c, i)),
     skins: (skins as unknown[]).map((s, i) => leerSkin(archivos, s, i)),
     records: recordsValidos,
+    replays: replaysValidos,
     ajustes: ajustesValidos,
   };
 }
@@ -450,6 +473,7 @@ export async function reunirContenidoActual(): Promise<ContenidoRespaldo> {
     canciones: await listarCancionesDeLaBase(),
     skins: await listarSkinsDeLaBase(),
     records: await listarRecordsDeLaBase(),
+    replays: await listarReplaysDeLaBase(),
     ajustes: leerAjustesLocales(),
   };
 }

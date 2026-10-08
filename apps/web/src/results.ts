@@ -463,6 +463,10 @@ function crearBloquePrincipal(estado: ScoreState): HTMLElement {
  * atenuado) y arriba van el titulo y la dificultad en una linea chica. La
  * capa de fondo cuelga de `contenedor`: se va cuando la siguiente pantalla lo
  * vacia, y su URL temporal se suelta apenas carga la imagen.
+ *
+ * T-044: con `etiquetaDeReproduccion` ("AUTO" o "REPLAY · 7 oct") la partida
+ * fue una reproduccion: la etiqueta va junto al titulo y no se ofrece corregir
+ * el offset (un bot perfecto o una partida vieja no dicen nada del offset de hoy).
  */
 export function mostrarResultados(
   contenedor: HTMLElement,
@@ -471,6 +475,7 @@ export function mostrarResultados(
   correccion: CorreccionDeOffset,
   escena?: EscenaPartida,
   pulsaciones?: readonly number[],
+  etiquetaDeReproduccion?: string,
 ): void {
   contenedor.innerHTML = '';
 
@@ -492,6 +497,12 @@ export function mostrarResultados(
   titulo.className = 'tetra-resultados-titulo';
   titulo.textContent = escena?.titulo?.trim() || 'Resultados';
   cabecera.appendChild(titulo);
+  if (etiquetaDeReproduccion !== undefined) {
+    const etiqueta = document.createElement('span');
+    etiqueta.className = 'tetra-reproduccion-etiqueta';
+    etiqueta.textContent = etiquetaDeReproduccion;
+    cabecera.appendChild(etiqueta);
+  }
   const autoria = escena === undefined ? '' : lineaDeAutoria(escena);
   if (autoria !== '') {
     const lineaEl = document.createElement('span');
@@ -532,7 +543,10 @@ export function mostrarResultados(
   seccionGrafico.appendChild(cajaGrafico);
   panel.appendChild(seccionGrafico);
 
-  const botonCorregir = crearBotonCorregirOffset(desviaciones, correccion);
+  const botonCorregir =
+    etiquetaDeReproduccion === undefined
+      ? crearBotonCorregirOffset(desviaciones, correccion)
+      : null;
   if (botonCorregir) {
     panel.appendChild(botonCorregir);
   }

@@ -41,3 +41,19 @@ export { PRESETS_AUTO, generarNotas } from './mapeador/automapa.js';
 
 export type { Rango, PartidaJugada, RecordDeMapa } from './records.js';
 export { rangoDePrecision, mejorRango, combinarRecord } from './records.js';
+
+export type { EventoReplay, GrabadorDeReplay, Replay, ReproductorDeReplay } from './replay.js';
+export {
+  MS_SOSTENER_NOTA_SIMPLE,
+  hashDeReplay,
+  replayEsDeEsteMapa,
+  replayPerfecto,
+  serializarReplay,
+  leerReplay,
+  crearReproductorDeReplay,
+  crearGrabadorDeReplay,
+  entregarEvento,
+  MARGEN_DE_EXPIRACION_MS,
+  expirarConMargen,
+  expirarSinMargen,
+} from './replay.js';

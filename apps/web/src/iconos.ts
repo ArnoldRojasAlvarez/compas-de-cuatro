@@ -17,7 +17,9 @@ export type NombreIcono =
   | 'exportar'
   | 'borrar'
   | 'confirmar'
-  | 'cerrar';
+  | 'cerrar'
+  | 'auto'
+  | 'replay';
 
 interface DefinicionIcono {
   /** Trazos (path d). */
@@ -59,6 +61,10 @@ const ICONOS: Record<NombreIcono, DefinicionIcono> = {
   },
   confirmar: { trazos: ['M5 12.5l4.5 4.5L19 7.5'] },
   cerrar: { trazos: ['M6 6l12 12', 'M18 6L6 18'] },
+  // T-044: una pantalla con el triangulo de reproducir (ver el mapa jugado solo).
+  auto: { trazos: ['M4 5h16v11H4z', 'M9 20h6', 'M12 16v4', 'M10.5 8v5l4-2.5z'] },
+  // T-044: flecha que gira hacia atras con la aguja de un reloj (volver a ver una partida).
+  replay: { trazos: ['M4.5 12a7.5 7.5 0 1 0 2.4-5.5', 'M4 4.5v4h4', 'M12 8v4l2.5 1.5'] },
 }
 
 const NS = 'http://www.w3.org/2000/svg';

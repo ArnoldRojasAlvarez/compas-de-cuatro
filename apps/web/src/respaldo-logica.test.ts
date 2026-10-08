@@ -16,6 +16,7 @@ const RESUMEN_VACIO = {
   skinsExistentes: 0,
   recordsNuevos: 0,
   recordsActualizados: 0,
+  replaysNuevos: 0,
   ajustesRestaurados: 0,
 };
 
@@ -59,6 +60,15 @@ describe('lineaDeRestauracion', () => {
         ajustesRestaurados: 6,
       }),
     ).toBe('3 canciones nuevas, 1 ya existente, 2 skins, 5 records, ajustes');
+  });
+
+  it('T-044: cuenta los replays restaurados, entre los records y los ajustes', () => {
+    expect(lineaDeRestauracion({ ...RESUMEN_VACIO, replaysNuevos: 1 })).toBe(
+      '0 canciones nuevas, 1 replay',
+    );
+    expect(
+      lineaDeRestauracion({ ...RESUMEN_VACIO, recordsNuevos: 2, replaysNuevos: 2, ajustesRestaurados: 1 }),
+    ).toBe('0 canciones nuevas, 2 records, 2 replays, ajustes');
   });
 
   it('cuando no entra nada nuevo lo dice con ceros y muestra lo que ya estaba', () => {

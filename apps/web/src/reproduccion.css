@@ -1,0 +1,29 @@
+/* T-044: etiqueta de reproduccion (AUTO o REPLAY · fecha).
+   Chica, en mono y en el segundo acento: arriba a la izquierda de la partida
+   (dentro de `.tetra-hud`, hud.css) y junto al titulo en los resultados. */
+
+.tetra-reproduccion-etiqueta {
+  font-family: var(--fuente-datos);
+  font-size: var(--tipo-xs);
+  font-weight: 500;
+  letter-spacing: 0.1em;
+  white-space: nowrap;
+  color: var(--acento-2);
+}
+
+.tetra-hud > .tetra-reproduccion-etiqueta {
+  position: absolute;
+  top: var(--espacio-4);
+  left: var(--espacio-5);
+  text-shadow: 0 1px 2px rgb(0 0 0 / 0.55);
+}
+
+/* El aro del reintento mantenido (atajos.css) vive en la misma esquina: se corre debajo de la etiqueta. */
+.tetra-partida--reproduccion .tetra-reintento {
+  top: calc(var(--espacio-4) + 1.75rem);
+}
+
+/* Modo presentacion (F), para grabar el video: la etiqueta se queda, pero tenue. */
+body.tetra-presentacion .tetra-hud > .tetra-reproduccion-etiqueta {
+  opacity: 0.45;
+}

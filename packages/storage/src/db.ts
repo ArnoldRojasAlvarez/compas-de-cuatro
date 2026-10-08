@@ -5,9 +5,17 @@
 // usuario real va a tener en desarrollo (T-011, "Rendimiento": no hace
 // falta virtualizar para esa escala).
 
-import { combinarRecord, hashMapa } from '@tetra/core';
-import type { Chart, DifficultyResult, Ms, PartidaJugada, RecordDeMapa } from '@tetra/core';
-import { normalizarRecord } from './records-validacion.js';
+import { combinarRecord, hashMapa, leerReplay, serializarReplay } from '@tetra/core';
+import type {
+  Chart,
+  DifficultyResult,
+  Ms,
+  PartidaJugada,
+  RecordDeMapa,
+  Replay,
+} from '@tetra/core';
+import { normalizarRecord, normalizarReplayGuardado } from './records-validacion.js';
+import type { ReplayGuardado } from './records-validacion.js';
 import type { ImagenesDeSkin } from './osk.js';
 
 const NOMBRE_BASE = 'tetra-mapas';
@@ -39,12 +47,17 @@ const NOMBRE_BASE = 'tetra-mapas';
 // viene de 1 a 4 conserva todo lo que tenia y solo gana la tienda nueva. La
 // clave es el hash del mapa como texto (el mismo `hashMapa` de la cache de
 // dificultad), asi que una dificultad editada en el mapeador empieza de cero.
-const VERSION_BASE = 5;
+//
+// T-044 agrega 'replays' (el replay de la mejor partida de cada mapa, ver
+// ReplayGuardado): version 6, mismo guard con `contains`. Quien viene de 1 a 5
+// conserva todo y solo gana la tienda nueva. Misma clave que 'records'.
+const VERSION_BASE = 6;
 const NOMBRE_TIENDA_MAPAS_LEGADO = 'mapas';
 const NOMBRE_TIENDA_SKINS = 'skins';
 const NOMBRE_TIENDA_CANCIONES = 'canciones';
 const NOMBRE_TIENDA_DIFICULTADES = 'dificultades';
 const NOMBRE_TIENDA_RECORDS = 'records';
+const NOMBRE_TIENDA_REPLAYS = 'replays';
 
 export type SongId = string;
 
@@ -120,6 +133,9 @@ function abrirBaseDeDatos(): Promise<IDBDatabase> {
       }
       if (!db.objectStoreNames.contains(NOMBRE_TIENDA_RECORDS)) {
         db.createObjectStore(NOMBRE_TIENDA_RECORDS, { keyPath: 'hash' });
+      }
+      if (!db.objectStoreNames.contains(NOMBRE_TIENDA_REPLAYS)) {
+        db.createObjectStore(NOMBRE_TIENDA_REPLAYS, { keyPath: 'hash' });
       }
     };
 
@@ -199,8 +215,8 @@ function clavesDeRecordsDe(cancion: CancionGuardada | undefined): Set<string> {
 }
 
 /**
- * Borra una cancion entera y, en la misma transaccion, los records de sus
- * dificultades (T-055). Un record solo se conserva si OTRA cancion de la
+ * Borra una cancion entera y, en la misma transaccion, los records y los
+ * replays de sus dificultades (T-055, T-044). Un record solo se conserva si OTRA cancion de la
  * biblioteca tiene una dificultad con el mismo hash (el mismo .osz importado
  * dos veces): ese record sigue valiendo para la que queda. No hace nada si el
  * id no existe.
@@ -209,9 +225,13 @@ export async function borrarCancionDeLaBase(id: SongId): Promise<void> {
   const db = await abrirBaseDeDatos();
   try {
     await new Promise<void>((resolve, reject) => {
-      const tx = db.transaction([NOMBRE_TIENDA_CANCIONES, NOMBRE_TIENDA_RECORDS], 'readwrite');
+      const tx = db.transaction(
+        [NOMBRE_TIENDA_CANCIONES, NOMBRE_TIENDA_RECORDS, NOMBRE_TIENDA_REPLAYS],
+        'readwrite',
+      );
       const canciones = tx.objectStore(NOMBRE_TIENDA_CANCIONES);
       const records = tx.objectStore(NOMBRE_TIENDA_RECORDS);
+      const replays = tx.objectStore(NOMBRE_TIENDA_REPLAYS);
       tx.oncomplete = () => resolve();
       tx.onerror = () => reject(tx.error ?? new Error('No se pudo borrar la cancion.'));
       tx.onabort = () => reject(tx.error ?? new Error('Se aborto el borrado de la cancion.'));
@@ -234,7 +254,10 @@ export async function borrarCancionDeLaBase(id: SongId): Promise<void> {
             cursor.continue();
             return;
           }
-          for (const clave of aBorrar) records.delete(clave);
+          for (const clave of aBorrar) {
+            records.delete(clave);
+            replays.delete(clave);
+          }
         };
       };
     });
@@ -249,16 +272,23 @@ export async function borrarCancionDeLaBase(id: SongId): Promise<void> {
  * y lo escribe, todo en una transaccion. `esMejor` es true si la partida
  * nueva quedo como `mejor`; `anterior` es el mejor que habia (ausente si era
  * la primera partida del mapa).
+ *
+ * T-044: con `replay`, si la partida es la nueva mejor su replay reemplaza al
+ * que habia, en la misma transaccion (record y replay nunca quedan de partidas
+ * distintas). Si es la nueva mejor y no trae replay, el viejo se borra: ya no
+ * corresponde a la mejor partida. Si no mejoro, el replay guardado no se toca.
  */
 export async function guardarPartidaEnLaBase(
   hash: string,
   partida: PartidaJugada,
+  replay?: Replay,
 ): Promise<{ record: RecordDeMapa; esMejor: boolean; anterior?: PartidaJugada }> {
   const db = await abrirBaseDeDatos();
   try {
     return await new Promise((resolve, reject) => {
-      const tx = db.transaction(NOMBRE_TIENDA_RECORDS, 'readwrite');
+      const tx = db.transaction([NOMBRE_TIENDA_RECORDS, NOMBRE_TIENDA_REPLAYS], 'readwrite');
       const tienda = tx.objectStore(NOMBRE_TIENDA_RECORDS);
+      const replays = tx.objectStore(NOMBRE_TIENDA_REPLAYS);
       let resultado:
         | { record: RecordDeMapa; esMejor: boolean; anterior?: PartidaJugada }
         | undefined;
@@ -274,12 +304,63 @@ export async function guardarPartidaEnLaBase(
         const previo = normalizarRecord(lectura.result);
         const record = combinarRecord(previo, hash, partida);
         tienda.put(record);
+        const esMejor = record.mejor === partida;
+        if (esMejor) {
+          if (replay !== undefined) {
+            const fila: ReplayGuardado = { hash, texto: serializarReplay(replay), fecha: partida.fecha };
+            replays.put(fila);
+          } else {
+            replays.delete(hash);
+          }
+        }
         resultado = {
           record,
-          esMejor: record.mejor === partida,
+          esMejor,
           ...(previo !== undefined && { anterior: previo.mejor }),
         };
       };
+    });
+  } finally {
+    db.close();
+  }
+}
+
+/**
+ * El replay de la mejor partida de un mapa, o `undefined` si no hay o esta
+ * corrupto (texto que no se lee, hash que no coincide con la clave). `fecha` es
+ * la de la partida. Nunca lanza por el contenido.
+ */
+export async function leerReplayDeLaBase(
+  hash: string,
+): Promise<{ replay: Replay; fecha: string } | undefined> {
+  const db = await abrirBaseDeDatos();
+  try {
+    return await new Promise<{ replay: Replay; fecha: string } | undefined>((resolve, reject) => {
+      const tx = db.transaction(NOMBRE_TIENDA_REPLAYS, 'readonly');
+      const peticion = tx.objectStore(NOMBRE_TIENDA_REPLAYS).get(hash);
+      peticion.onsuccess = () => {
+        const fila = normalizarReplayGuardado(peticion.result);
+        const replay = fila === undefined || fila.hash !== hash ? null : leerReplay(fila.texto);
+        resolve(fila === undefined || replay === null ? undefined : { replay, fecha: fila.fecha });
+      };
+      peticion.onerror = () => reject(peticion.error ?? new Error('No se pudo leer el replay.'));
+    });
+  } finally {
+    db.close();
+  }
+}
+
+/** Los hashes de los mapas que tienen un replay guardado (solo las claves: no lee ningun replay). */
+export async function listarHashesConReplayDeLaBase(): Promise<Set<string>> {
+  const db = await abrirBaseDeDatos();
+  try {
+    return await new Promise<Set<string>>((resolve, reject) => {
+      const tx = db.transaction(NOMBRE_TIENDA_REPLAYS, 'readonly');
+      const peticion = tx.objectStore(NOMBRE_TIENDA_REPLAYS).getAllKeys();
+      peticion.onsuccess = () =>
+        resolve(new Set((peticion.result as IDBValidKey[]).filter((k) => typeof k === 'string')) as Set<string>);
+      peticion.onerror = () =>
+        reject(peticion.error ?? new Error('No se pudieron listar los replays.'));
     });
   } finally {
     db.close();
@@ -410,6 +491,29 @@ export async function listarRecordsDeLaBase(): Promise<RecordDeMapa[]> {
   }
 }
 
+/** Todos los replays bien formados de la base (T-044, para el respaldo). Los registros corruptos se ignoran. */
+export async function listarReplaysDeLaBase(): Promise<ReplayGuardado[]> {
+  const db = await abrirBaseDeDatos();
+  try {
+    return await new Promise<ReplayGuardado[]>((resolve, reject) => {
+      const tx = db.transaction(NOMBRE_TIENDA_REPLAYS, 'readonly');
+      const peticion = tx.objectStore(NOMBRE_TIENDA_REPLAYS).getAll();
+      peticion.onsuccess = () => {
+        const replays: ReplayGuardado[] = [];
+        for (const crudo of peticion.result as unknown[]) {
+          const fila = normalizarReplayGuardado(crudo);
+          if (fila !== undefined) replays.push(fila);
+        }
+        resolve(replays);
+      };
+      peticion.onerror = () =>
+        reject(peticion.error ?? new Error('No se pudieron listar los replays.'));
+    });
+  } finally {
+    db.close();
+  }
+}
+
 /** Lo que se escribio (y lo que ya estaba) al restaurar un respaldo en la base. */
 export interface ResultadoEscrituraRespaldo {
   cancionesNuevas: number;
@@ -418,11 +522,13 @@ export interface ResultadoEscrituraRespaldo {
   skinsExistentes: number;
   recordsNuevos: number;
   recordsActualizados: number;
+  /** T-044: replays que se escribieron (nuevos o en lugar de uno que ya no era de la mejor partida). */
+  replaysNuevos: number;
 }
 
 /**
  * Escribe un respaldo en la base (T-042), todo en UNA transaccion sobre las
- * tres tiendas: si algo falla a medias (cuota llena, por ejemplo) se aborta y
+ * cuatro tiendas (canciones, skins, records y replays): si algo falla a medias (cuota llena, por ejemplo) se aborta y
  * no queda nada escrito. Nunca pisa: una cancion o skin cuyo id ya existe se
  * deja como esta y se cuenta como existente. Los records se mezclan con
  * `mezclar(previo, entrante)`; si devuelve `undefined` no hay nada que
@@ -430,7 +536,12 @@ export interface ResultadoEscrituraRespaldo {
  * cuenta como ausente (de todos modos no se podia leer).
  */
 export async function restaurarEnLaBase(
-  contenido: { canciones: CancionGuardada[]; skins: SkinGuardada[]; records: RecordDeMapa[] },
+  contenido: {
+    canciones: CancionGuardada[];
+    skins: SkinGuardada[];
+    records: RecordDeMapa[];
+    replays?: ReplayGuardado[];
+  },
   mezclar: (previo: RecordDeMapa | undefined, entrante: RecordDeMapa) => RecordDeMapa | undefined,
 ): Promise<ResultadoEscrituraRespaldo> {
   const resultado: ResultadoEscrituraRespaldo = {
@@ -440,12 +551,18 @@ export async function restaurarEnLaBase(
     skinsExistentes: 0,
     recordsNuevos: 0,
     recordsActualizados: 0,
+    replaysNuevos: 0,
   };
   const db = await abrirBaseDeDatos();
   try {
     await new Promise<void>((resolve, reject) => {
       const tx = db.transaction(
-        [NOMBRE_TIENDA_CANCIONES, NOMBRE_TIENDA_SKINS, NOMBRE_TIENDA_RECORDS],
+        [
+          NOMBRE_TIENDA_CANCIONES,
+          NOMBRE_TIENDA_SKINS,
+          NOMBRE_TIENDA_RECORDS,
+          NOMBRE_TIENDA_REPLAYS,
+        ],
         'readwrite',
       );
       tx.oncomplete = () => resolve();
@@ -500,15 +617,38 @@ export async function restaurarEnLaBase(
         entrantes.set(record.hash, ya === undefined ? record : (mezclar(ya, record) ?? ya));
       }
       const records = tx.objectStore(NOMBRE_TIENDA_RECORDS);
+      const replays = tx.objectStore(NOMBRE_TIENDA_REPLAYS);
+      // T-044: un replay solo vale si es el de la mejor partida del record
+      // que queda (misma fecha). El primero de cada hash manda.
+      const replaysEntrantes = new Map<string, ReplayGuardado>();
+      for (const fila of contenido.replays ?? []) {
+        if (!replaysEntrantes.has(fila.hash)) replaysEntrantes.set(fila.hash, fila);
+      }
       for (const entrante of entrantes.values()) {
         const lectura = records.get(entrante.hash);
         lectura.onsuccess = () => {
           const previo = normalizarRecord(lectura.result);
           const nuevo = mezclar(previo, entrante);
-          if (nuevo === undefined) return;
-          records.put(nuevo);
-          if (previo === undefined) resultado.recordsNuevos += 1;
-          else resultado.recordsActualizados += 1;
+          if (nuevo !== undefined) {
+            records.put(nuevo);
+            if (previo === undefined) resultado.recordsNuevos += 1;
+            else resultado.recordsActualizados += 1;
+          }
+          const mejorFinal = (nuevo ?? previo)?.mejor;
+          if (mejorFinal === undefined) return;
+          const delRespaldo = replaysEntrantes.get(entrante.hash);
+          const lecturaReplay = replays.get(entrante.hash);
+          lecturaReplay.onsuccess = () => {
+            const actual = normalizarReplayGuardado(lecturaReplay.result);
+            if (actual !== undefined && actual.fecha === mejorFinal.fecha) return; // ya es el de la mejor
+            if (delRespaldo !== undefined && delRespaldo.fecha === mejorFinal.fecha) {
+              replays.put(delRespaldo);
+              resultado.replaysNuevos += 1;
+            } else if (lecturaReplay.result !== undefined) {
+              // El que habia es de otra partida (o esta roto): ya no corresponde.
+              replays.delete(entrante.hash);
+            }
+          };
         };
       }
     });

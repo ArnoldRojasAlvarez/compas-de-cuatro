@@ -6,8 +6,17 @@
 // existencia del DOM salvo lo que reciben inyectado.
 
 import { Application } from 'pixi.js';
-import type { Chart, HitResult, Ms, ScoreState } from '@tetra/core';
-import { createJudgeEngine, windowsForOD } from '@tetra/core';
+import type { Chart, EventoReplay, HitResult, Ms, Replay, ScoreState } from '@tetra/core';
+import {
+  createJudgeEngine,
+  crearGrabadorDeReplay,
+  crearReproductorDeReplay,
+  entregarEvento,
+  expirarConMargen,
+  expirarSinMargen,
+  hashDeReplay,
+  windowsForOD,
+} from '@tetra/core';
 import { createAudioClock, crearHitsound, reproducirHitsound } from '@tetra/audio';
 import {
   createKeyboardInput,
@@ -45,6 +54,7 @@ import { sumarTiempoJugado } from './tiempo-jugado.js';
 import { crearMenuPausa, type MenuPausa } from './pausa.js';
 import { crearContadores } from './contadores.js';
 import { crearAvisosDeAtajos } from './atajos.js';
+import './reproduccion.css';
 import {
   destinoDelSalto,
   progresoDeReintento,
@@ -52,6 +62,11 @@ import {
   saltoDisponible,
 } from './contadores-logica.js';
 import { filtrarNotasDesde, inicioDeLaCancion } from './partida-logica.js';
+import {
+  etiquetaDeReproduccion,
+  motivoDeRechazoDelReplay,
+  type ModoReproduccion,
+} from './replay-logica.js';
 import { numeroDeCuenta, transicionPausa, type FasePausa } from './pausa-logica.js';
 import {
   escalaPulsoCombo,
@@ -90,6 +105,12 @@ export type ResultadoPartida =
       readonly pulsaciones: readonly number[];
       /** T-056: las mismas desviaciones que recibe la pantalla de resultados (tiempo, error, juicio). */
       readonly desviaciones: readonly Desviacion[];
+      /**
+       * T-044: los eventos que recibio el motor, para reproducirlos despues con
+       * el mismo resultado. En una partida que se reproduce (auto o replay) es el
+       * replay que se estaba mirando.
+       */
+      readonly replay: Replay;
     }
   | { readonly estado: 'abortado' }
   | { readonly estado: 'reintentar' };
@@ -387,6 +408,15 @@ export interface OpcionesPartida {
   offsetLocal?: Ms;
   /** T-057: id de la cancion de la biblioteca, para guardar su offset local. */
   idCancion?: string;
+  /**
+   * T-044: reproducir en vez de jugar. El motor recibe los eventos del replay (por
+   * tiempo de juego, con el `time` de cada uno) y no se lee el teclado para las
+   * columnas; Escape, la pausa, Espacio (saltar intro) y F3/F4 siguen andando.
+   * `modo` decide la etiqueta (`AUTO` o `REPLAY · fecha`), `fecha` es la de la
+   * partida grabada. Quien llama no guarda record ni historial de estas partidas.
+   * Si el replay no es de este mapa la promesa se rechaza.
+   */
+  reproducir?: { replay: Replay; modo: ModoReproduccion; fecha?: string };
 }
 
 export type { EscenaPartida };
@@ -411,6 +441,11 @@ export function runGame(
   // desde `inicioMs`; las anteriores no generan miss.
   const inicioMs = opciones.inicioMs ?? 0;
   const chart = filtrarNotasDesde(chartCompleto, inicioMs);
+  const reproducir = opciones.reproducir;
+  if (reproducir !== undefined) {
+    const rechazo = motivoDeRechazoDelReplay(reproducir.replay, chartCompleto, chart);
+    if (rechazo !== null) return Promise.reject(new Error(rechazo));
+  }
   return new Promise((resolve, reject) => {
     const elementoApp = document.getElementById('app');
     if (!elementoApp) {
@@ -450,6 +485,17 @@ export function runGame(
     lienzo.className = 'tetra-lienzo';
     partida.appendChild(lienzo);
     const hud = crearHud(partida, leerMostrarFps());
+    // T-044: la etiqueta chica arriba a la izquierda mientras se reproduce.
+    if (reproducir !== undefined) {
+      partida.classList.add('tetra-partida--reproduccion');
+      hud.raiz.appendChild(
+        crearElemento(
+          'div',
+          'tetra-reproduccion-etiqueta',
+          etiquetaDeReproduccion(reproducir.modo, reproducir.fecha),
+        ),
+      );
+    }
     // T-053: el fondo de la cancion va detras de todo (primer hijo); la intro, encima.
     const fondo = crearFondoDePartida(partida, escena, { atenuacion, usarVideo });
     const intro = crearIntroDePartida(
@@ -520,6 +566,11 @@ export function runGame(
       ventanas: windowsForOD(chart.overallDifficulty),
     });
     const avisos = crearAvisosDeAtajos(hud.raiz);
+    // T-044: jugando se graba lo que recibe el motor; reproduciendo, el replay
+    // se entrega por tiempo de juego (`reproductor.avanzar(t)` en cada frame).
+    const grabador = reproducir === undefined ? crearGrabadorDeReplay() : null;
+    const reproductor =
+      reproducir === undefined ? null : crearReproductorDeReplay(reproducir.replay);
     // Pulsaciones reales (keydown, sin repeticion) por columna, para los resultados.
     const pulsaciones: number[] = [0, 0, 0, 0];
     // Primera nota que se juega: de ella salen el aviso y el destino del salto de intro.
@@ -593,9 +644,12 @@ export function runGame(
       // almacenamiento falla no debe impedir cerrar la partida.
       try {
         // Desde un inicio a mitad de mapa solo cuenta lo que corrio desde ahi.
-        const desdeMs = inicioMs > 0 ? inicioDeLaCancion(inicioMs, LEAD_IN_MS) : 0;
-        sumarTiempoJugado(Math.min(clock.now(), clock.duration) - desdeMs);
-        window.dispatchEvent(new Event(EVENTO_TIEMPO_JUGADO));
+        // T-044: mirar un replay o el auto no es tiempo jugado (ni historial).
+        if (reproducir === undefined) {
+          const desdeMs = inicioMs > 0 ? inicioDeLaCancion(inicioMs, LEAD_IN_MS) : 0;
+          sumarTiempoJugado(Math.min(clock.now(), clock.duration) - desdeMs);
+          window.dispatchEvent(new Event(EVENTO_TIEMPO_JUGADO));
+        }
       } catch {
         // el header simplemente no se actualiza.
       }
@@ -637,12 +691,18 @@ export function runGame(
         correccionDeOffset,
         escena,
         pulsaciones,
+        reproducir === undefined
+          ? undefined
+          : etiquetaDeReproduccion(reproducir.modo, reproducir.fecha),
       );
       resolve({
         estado: 'completado',
         score: estadoFinal,
         pulsaciones: pulsaciones.slice(),
         desviaciones,
+        replay:
+          reproducir?.replay ??
+          grabador!.replay(hashDeReplay(chart), offsetGlobal + (offsetLocal ?? 0)),
       });
     }
 
@@ -827,7 +887,10 @@ export function runGame(
       if (introSaltada || primeraNota === undefined) return;
       if (!saltoDisponible(clock.now(), primeraNota)) return;
       introSaltada = true;
-      clock.seek(destinoDelSalto(primeraNota));
+      const destino = destinoDelSalto(primeraNota);
+      clock.seek(destino);
+      // T-044: lo que el replay tenia antes del destino se descarta sin juzgar.
+      reproductor?.saltarHasta(destino);
       // El frame siguiente no debe medir los segundos saltados como un frame lento.
       ultimoT = clock.now();
       avisos.mostrarSalto(false);
@@ -913,12 +976,15 @@ export function runGame(
         playfieldParaLimpieza = playfield;
         // La ventana pudo cambiar de tamano mientras cargaba.
         ajustarAlVentana();
-        input = createKeyboardInput(window, toGameTime);
-        // T-012 "Parte B": el remapeo de teclas se edita en ajustes.ts y se
-        // persiste con apps/web/src/keymap.ts; se lee y se aplica aca, una
-        // sola vez al arrancar la partida, mismo momento que el offset y la
-        // velocidad de arriba.
-        input.setKeyMap(keyMap);
+        // T-044: reproduciendo no se lee el teclado para las columnas.
+        if (reproducir === undefined) {
+          input = createKeyboardInput(window, toGameTime);
+          // T-012 "Parte B": el remapeo de teclas se edita en ajustes.ts y se
+          // persiste con apps/web/src/keymap.ts; se lee y se aplica aca, una
+          // sola vez al arrancar la partida, mismo momento que el offset y la
+          // velocidad de arriba.
+          input.setKeyMap(keyMap);
+        }
 
         if (inicioMs > 0) {
           // T-035: arranca la cancion LEAD_IN_MS antes del inicio pedido (con la
@@ -926,9 +992,46 @@ export function runGame(
           // el mismo tick: el primer source se corta antes de sonar.
           clock.start(0);
           clock.seek(inicioDeLaCancion(inicioMs, LEAD_IN_MS));
+          reproductor?.saltarHasta(inicioDeLaCancion(inicioMs, LEAD_IN_MS));
         } else {
           clock.start(LEAD_IN_MS);
         }
+
+        // Tiempo de juego del frame en curso: lo usan los contadores (la barra de
+        // error desvanece sus marcas con el) al registrar un golpe.
+        let tFrame = 0;
+        const alExpirar = (resultado: HitResult): void => {
+          playfield.showJudgement(resultado.note.column, resultado.judgement);
+          registrar(resultado, tFrame);
+        };
+        const procesarEvento = (evento: EventoReplay): void => {
+          if (evento.tipo === 'down') {
+            const total = (pulsaciones[evento.column] ?? 0) + 1;
+            pulsaciones[evento.column] = total;
+            contadores.teclaAbajo(evento.column, total);
+            playfield.setPressed(evento.column, true);
+            const resultado = entregarEvento(engine, evento, alExpirar);
+            if (resultado) playfield.showJudgement(evento.column, resultado.judgement);
+            // T-027: el hitsound se programa en el instante de la pulsacion,
+            // convertido de tiempo de juego a tiempo del contexto. Si ya paso,
+            // start() lo hace sonar en el acto. El miss no suena.
+            if (suenaElGolpe(resultado?.judgement)) {
+              reproducirHitsound(
+                ctx,
+                bufferDeGolpe,
+                instanteDeContextoDelGolpe(ctx.currentTime, clock.now(), evento.time),
+                efectos,
+              );
+            }
+            registrar(resultado, tFrame);
+          } else {
+            contadores.teclaArriba(evento.column);
+            playfield.setPressed(evento.column, false);
+            const resultado = entregarEvento(engine, evento, alExpirar);
+            if (resultado) playfield.showJudgement(evento.column, resultado.judgement);
+            registrar(resultado, tFrame);
+          }
+        };
 
         function frame(): void {
           if (detenido) return;
@@ -953,41 +1056,23 @@ export function runGame(
             if (paso === 0) avisoVelocidadDesde = null;
           }
 
-          // 2. La entrada, despachada con el tiempo de cada evento (no con t).
-          for (const evento of input!.drain()) {
-            if (evento.type === 'down') {
-              const total = (pulsaciones[evento.column] ?? 0) + 1;
-              pulsaciones[evento.column] = total;
-              contadores.teclaAbajo(evento.column, total);
-              playfield.setPressed(evento.column, true);
-              const resultado = engine.press(evento.time, evento.column);
-              if (resultado) playfield.showJudgement(evento.column, resultado.judgement);
-              // T-027: el hitsound se programa en el instante de la pulsacion,
-              // convertido de tiempo de juego a tiempo del contexto. Si ya paso,
-              // start() lo hace sonar en el acto. El miss no suena.
-              if (suenaElGolpe(resultado?.judgement)) {
-                reproducirHitsound(
-                  ctx,
-                  bufferDeGolpe,
-                  instanteDeContextoDelGolpe(ctx.currentTime, clock.now(), evento.time),
-                  efectos,
-                );
-              }
-              registrar(resultado, t);
-            } else {
-              contadores.teclaArriba(evento.column);
-              playfield.setPressed(evento.column, false);
-              const resultado = engine.release(evento.time, evento.column);
-              if (resultado) playfield.showJudgement(evento.column, resultado.judgement);
-              registrar(resultado, t);
+          // 2. La entrada (o el replay), despachada con el tiempo de cada evento
+          // (no con t). Cada evento resuelve antes lo que ya expiro hasta su
+          // tiempo (entregarEvento): asi el resultado solo depende de los
+          // eventos y no de donde caigan los frames (ver core/replay.ts).
+          tFrame = t;
+          if (reproductor !== null) {
+            reproductor.avanzar(t, procesarEvento);
+          } else {
+            for (const evento of input!.drain()) {
+              procesarEvento(grabador!.registrar(evento.time, evento.column, evento.type));
             }
           }
 
           // 3. El juicio: misses por tiempo, una vez por frame.
-          for (const resultado of engine.update(t)) {
-            playfield.showJudgement(resultado.note.column, resultado.judgement);
-            registrar(resultado, t);
-          }
+          // Con margen (core/replay.ts): una pulsacion que llega un frame tarde se
+          // juzga con su tiempo real, no corrida hasta el `t` de este frame.
+          grabador?.actualizado(expirarConMargen(engine, t, alExpirar));
 
           // 4. El dibujo.
           playfield.render(t);
@@ -1002,6 +1087,9 @@ export function runGame(
           ultimoT = t;
 
           if (engine.finished || t >= clock.duration) {
+            // Al terminar se expira sin margen: ningun miss de las ultimas notas
+            // queda fuera del estado final (en vivo y en replay por igual).
+            expirarSinMargen(engine, t, alExpirar);
             finalizar();
             return;
           }

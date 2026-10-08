@@ -85,3 +85,25 @@ Compartir replays por archivo entre usuarios, ver el replay con camara o efectos
 ## Terminado cuando
 
 Checks en verde y se grabo un video corto de pantalla del modo auto con la cancion de Arnold.
+
+## Implementacion (rama `feat/replay`)
+
+- Formato: JSON compacto, `{"version":1,"hashMapa":"123","offsetUsuario":-12,"eventos":[[time,columna,0|1],...]}`
+  (0 down, 1 up). `leerReplay` devuelve `null` ante version distinta de 1, JSON roto o
+  cualquier campo mal formado.
+- Determinismo: el motor depende del orden entre `update(t)` y las pulsaciones, asi que dos
+  reglas (en `packages/core/src/replay.ts`, usadas por la partida y por los tests):
+  `entregarEvento` llama a `motor.update(evento.time)` antes de cada evento, y
+  `crearGrabadorDeReplay` no deja que un evento quede antes que el anterior ni que el ultimo
+  `update` (ruido de `timeStamp`). Sin la primera, el mismo replay da otro score a otra
+  frecuencia de pantalla. Efecto lateral bueno: una pulsacion que llega en el mismo frame en
+  que expira la nota anterior de su columna ya no se pierde.
+- Un bot "1 ms tarde en las largas" sigue sacando MAX (ventana MAX de 16,5 ms, de 24,75 en
+  la cola): los tests fijan el borde real (17 ms en cabezas, 26 ms en colas).
+- Replay guardado: tienda `replays` (base v6), fila `{hash, texto, fecha}`; `fecha` es la de la
+  partida del `mejor` y ata el replay a su record. `guardarPartida(hash, partida, replay?)`
+  lo reemplaza solo si `esMejor` (misma transaccion). El respaldo lo lleva en el manifest
+  (`replays`, opcional al leer, version 1) y al restaurar solo entra el replay que
+  corresponde al `mejor` que queda.
+- Mapeador: "Auto" y "Auto desde el cabezal" (el replay se genera sobre las notas que se juegan).
+- Mirar un replay o el auto no suma tiempo jugado, ni intentos, ni record.

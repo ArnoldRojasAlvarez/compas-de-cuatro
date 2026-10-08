@@ -15,20 +15,28 @@
 // terminar o abortar una partida se vuelve a esta misma pantalla (no al
 // menu), reconstruida entera con `mostrarSongSelect` de nuevo.
 
-import type { Chart, DifficultyResult, Rango, RecordDeMapa, ScoreState } from '@tetra/core';
-import { MODELO_CALIBRADO, SKILLSETS } from '@tetra/core';
+import type { Chart, DifficultyResult, Rango, RecordDeMapa, Replay, ScoreState } from '@tetra/core';
+import { MODELO_CALIBRADO, SKILLSETS, replayPerfecto } from '@tetra/core';
 import {
   borrarCancion,
   exportarCancion,
   guardarPartida,
+  hashesConReplay,
   importarOsz,
   leerRecords,
+  leerReplayGuardado,
   listarCanciones,
   nombreSeguro,
   type CancionGuardada,
   type SongId,
 } from '@tetra/storage';
-import { runGame, type EscenaPartida } from './game.js';
+import { runGame, type EscenaPartida, type OpcionesPartida } from './game.js';
+import {
+  MENSAJE_MAPA_SIN_NOTAS,
+  MENSAJE_REPLAY_ILEGIBLE,
+  MENSAJE_SIN_REPLAY,
+  motivoDeRechazoDelReplay,
+} from './replay-logica.js';
 import { decodificarBlobDeAudio, mensajeDeErrorDeCarga } from './cargador-logica.js';
 import { cargarAudioDelClickTrack, cargarChartDelClickTrack } from './click-track.js';
 import { fondoEscena } from './fondo-escena.js';
@@ -119,6 +127,8 @@ interface EstadoSongSelect {
   filtroEstrellasMax: number | null;
   /** T-055: records por clave de dificultad (ver claveDeRecord). Se vuelven a leer en cada carga de la biblioteca. */
   records: ReadonlyMap<string, RecordDeMapa>;
+  /** T-044: claves de las dificultades con replay de la mejor partida guardado. */
+  conReplay: ReadonlySet<string>;
 }
 
 /**
@@ -145,6 +155,7 @@ export function mostrarSongSelect(contenedor: HTMLElement, opciones: OpcionesSon
     filtroEstrellasMin: null,
     filtroEstrellasMax: null,
     records: new Map(),
+    conReplay: new Set(),
   };
 
   /** true despues de `desmontar`: todo lo asincrono que llegue tarde (lecturas de la base, resultados del worker) se descarta. */
@@ -189,6 +200,12 @@ export function mostrarSongSelect(contenedor: HTMLElement, opciones: OpcionesSon
       estado.records = await leerRecords(claves);
     } catch {
       estado.records = new Map();
+    }
+    // T-044: que dificultades tienen un replay para "Ver mejor partida" (solo las claves).
+    try {
+      estado.conReplay = await hashesConReplay();
+    } catch {
+      estado.conReplay = new Set();
     }
   }
 
@@ -1030,6 +1047,19 @@ export function mostrarSongSelect(contenedor: HTMLElement, opciones: OpcionesSon
     botonJugar.addEventListener('click', () => void jugarDificultadEnfocada());
     acciones.appendChild(botonJugar);
 
+    // T-044: ver el mapa jugado por el bot (Ctrl+Enter) y, si hay, la mejor partida.
+    const botonAuto = crearBotonIcono('auto', 'Ver auto', 'tetra-song-select-auto');
+    botonAuto.title = 'Ver auto (Ctrl+Enter)';
+    botonAuto.dataset.foco = 'auto';
+    botonAuto.addEventListener('click', () => void verAutoDificultadEnfocada());
+    acciones.appendChild(botonAuto);
+    if (estado.conReplay.has(claveDe(chart))) {
+      const botonReplay = crearBotonIcono('replay', 'Ver mejor partida', 'tetra-song-select-replay');
+      botonReplay.dataset.foco = 'replay';
+      botonReplay.addEventListener('click', () => void verMejorPartida());
+      acciones.appendChild(botonReplay);
+    }
+
     const desviacionAlta =
       recordEnfocado?.mejor.desviacionMedia !== undefined &&
       desviacionEsAlta(recordEnfocado.mejor.desviacionMedia);
@@ -1193,10 +1223,12 @@ export function mostrarSongSelect(contenedor: HTMLElement, opciones: OpcionesSon
     chart: Chart,
     score: ScoreState,
     medido: MedidoEnLaPartida,
+    replay: Replay,
   ): Promise<void> {
     try {
       const partida = partidaDesdeScore(score, new Date().toISOString(), medido);
-      const guardada = await guardarPartida(claveDe(chart), partida);
+      // T-044: el replay de esta partida reemplaza al guardado solo si es la nueva mejor.
+      const guardada = await guardarPartida(claveDe(chart), partida, replay);
       const aviso = avisoDeRecord(guardada.esMejor, guardada.anterior, partida);
       const panel = raizApp().querySelector('.tetra-resultados');
       if (aviso === undefined || panel === null) return;
@@ -1233,11 +1265,14 @@ export function mostrarSongSelect(contenedor: HTMLElement, opciones: OpcionesSon
     audio: AudioBuffer,
     escena?: EscenaPartida,
     cancionId?: SongId,
+    reproducir?: NonNullable<OpcionesPartida['reproducir']>,
   ): Promise<void> {
     // T-057: una cancion de la biblioteca suma su offset local al global (y "Corregir offset" lo ajusta a el).
-    const opcionesPartida = {
+    // T-044: con `reproducir` la partida es el auto o un replay: no guarda record.
+    const opcionesPartida: OpcionesPartida = {
       ...(escena !== undefined && { escena }),
       ...(cancionId !== undefined && { offsetLocal: leerOffsetLocal(cancionId), idCancion: cancionId }),
+      ...(reproducir !== undefined && { reproducir }),
     };
     // Sin fondo propio la partida deja ver la escena: que no quede la portada
     // de otra cancion (por ejemplo al jugar el click track) detras de la pista.
@@ -1258,11 +1293,14 @@ export function mostrarSongSelect(contenedor: HTMLElement, opciones: OpcionesSon
     if (resultado.estado === 'completado') {
       // Solo las canciones de la biblioteca llevan record: el click track (sin
       // escena) es un diagnostico, no un mapa que se vaya a ver en la lista.
-      if (escena !== undefined) {
-        await registrarPartida(chart, resultado.score, {
-          pulsaciones: resultado.pulsaciones,
-          desviaciones: resultado.desviaciones,
-        });
+      // T-044: tampoco las reproducciones (auto o replay): no hay record ni historial.
+      if (escena !== undefined && reproducir === undefined) {
+        await registrarPartida(
+          chart,
+          resultado.score,
+          { pulsaciones: resultado.pulsaciones, desviaciones: resultado.desviaciones },
+          resultado.replay,
+        );
       }
       mostrarBotonVolverDesdeResultados();
     } else {
@@ -1273,7 +1311,14 @@ export function mostrarSongSelect(contenedor: HTMLElement, opciones: OpcionesSon
   /** Hay una partida arrancando (decodificando el audio): un segundo Enter o clic no arranca otra. */
   let iniciandoPartida = false;
 
-  async function jugarDificultadEnfocada(): Promise<void> {
+  /**
+   * Juega la dificultad enfocada. T-044: con `reproducir` la mira en vez de
+   * jugarla (el bot perfecto o la mejor partida guardada). La validacion del
+   * replay ya la hizo quien llama, antes de apagar nada de esta pantalla.
+   */
+  async function jugarDificultadEnfocada(
+    reproducir?: NonNullable<OpcionesPartida['reproducir']>,
+  ): Promise<void> {
     const cancion = cancionEnfocada();
     const chart = cancion?.dificultades[estado.dificultadEnfocadaIndice];
     if (!cancion || !chart || iniciandoPartida) return;
@@ -1287,12 +1332,50 @@ export function mostrarSongSelect(contenedor: HTMLElement, opciones: OpcionesSon
       } finally {
         await ctxDeDecodificacion.close();
       }
-      await jugar(chart, audioBuffer, escenaDeCancion(cancion, chart), cancion.id);
+      await jugar(chart, audioBuffer, escenaDeCancion(cancion, chart), cancion.id, reproducir);
     } catch (error) {
       mostrarError(mensajeDeErrorDeCarga(error));
     } finally {
       iniciandoPartida = false;
     }
+  }
+
+  /** T-044: "Ver auto" (Ctrl+Enter): el bot perfecto juega la dificultad enfocada. Sin record. */
+  async function verAutoDificultadEnfocada(): Promise<void> {
+    const chart = cancionEnfocada()?.dificultades[estado.dificultadEnfocadaIndice];
+    if (!chart || iniciandoPartida) return;
+    if (chart.notes.length === 0) {
+      mostrarError(MENSAJE_MAPA_SIN_NOTAS);
+      return;
+    }
+    ocultarError();
+    await jugarDificultadEnfocada({ replay: replayPerfecto(chart), modo: 'auto' });
+  }
+
+  /** T-044: "Ver mejor partida": reproduce el replay guardado de la dificultad enfocada. Sin record. */
+  async function verMejorPartida(): Promise<void> {
+    const chart = cancionEnfocada()?.dificultades[estado.dificultadEnfocadaIndice];
+    if (!chart || iniciandoPartida) return;
+    const clave = claveDe(chart);
+    let guardado: Awaited<ReturnType<typeof leerReplayGuardado>>;
+    try {
+      guardado = await leerReplayGuardado(clave);
+    } catch (error) {
+      mostrarError(mensajeDeErrorDeCarga(error));
+      return;
+    }
+    if (desmontado) return;
+    // Hay una fila pero no se puede leer: no es lo mismo que no tener replay.
+    const sinLeer = guardado === undefined && estado.conReplay.has(clave);
+    const motivo = sinLeer
+      ? MENSAJE_REPLAY_ILEGIBLE
+      : motivoDeRechazoDelReplay(guardado?.replay ?? undefined, chart);
+    if (motivo !== null || guardado === undefined) {
+      mostrarError(motivo ?? MENSAJE_SIN_REPLAY);
+      return;
+    }
+    ocultarError();
+    await jugarDificultadEnfocada({ replay: guardado.replay, modo: 'replay', fecha: guardado.fecha });
   }
 
   // -- Importar .osz: boton "+" o soltar en cualquier parte de la ventana --
@@ -1425,8 +1508,21 @@ export function mostrarSongSelect(contenedor: HTMLElement, opciones: OpcionesSon
   // modificadores. La barra de progreso, con el foco, se queda con izquierda y
   // derecha (saltar) y corta su propagacion: no llegan hasta aca. --
   function alTeclear(evento: KeyboardEvent): void {
-    if (evento.ctrlKey || evento.altKey || evento.metaKey) return;
     const objetivo = evento.target;
+    // T-044: Ctrl+Enter ve el auto de la dificultad enfocada (no mientras se escribe).
+    if (
+      evento.key === 'Enter' &&
+      evento.ctrlKey &&
+      !evento.altKey &&
+      !evento.metaKey &&
+      !evento.shiftKey
+    ) {
+      if (objetivo instanceof Element && objetivo.closest('input, select, textarea')) return;
+      evento.preventDefault();
+      if (!evento.repeat) void verAutoDificultadEnfocada();
+      return;
+    }
+    if (evento.ctrlKey || evento.altKey || evento.metaKey) return;
     if (objetivo instanceof Element && objetivo.closest('input, select, textarea')) return;
 
     if (evento.key === 'ArrowDown' || evento.key === 'ArrowUp') {

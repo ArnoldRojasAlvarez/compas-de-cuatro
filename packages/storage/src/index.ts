@@ -19,6 +19,7 @@ import {
   type DifficultyResult,
   type PartidaJugada,
   type RecordDeMapa,
+  type Replay,
 } from '@tetra/core';
 import { ponerDificultad, quitarDificultad } from './dificultades.js';
 import { esVideoReproducible, extraerCancionDeOsz } from './osz.js';
@@ -35,10 +36,13 @@ import {
   leerDificultadCacheada,
   guardarPartidaEnLaBase,
   leerRecordsDeLaBase,
+  leerReplayDeLaBase,
+  listarHashesConReplayDeLaBase,
 } from './db.js';
 import type { SongId, CancionGuardada, SkinId, SkinGuardada } from './db.js';
 
 export type { SongId, CancionGuardada, SkinId, SkinGuardada, DificultadCacheada } from './db.js';
+export type { ReplayGuardado } from './records-validacion.js';
 export type { MapaImportado, CancionImportada } from './osz.js';
 export {
   elegirArchivoOsu,
@@ -201,12 +205,28 @@ export function borrarCancion(id: SongId): Promise<void> {
  * cuenta un intento mas. `hash` es `String(hashMapa(chart))`. `esMejor` dice si
  * esta partida paso a ser el record; `anterior` es el mejor que habia (ausente
  * en la primera partida del mapa).
+ *
+ * T-044: con `replay`, el replay de la partida pasa a ser el de la mejor solo si
+ * la partida es la nueva mejor (misma transaccion); si no, el guardado se queda.
  */
 export function guardarPartida(
   hash: string,
   partida: PartidaJugada,
+  replay?: Replay,
 ): Promise<{ record: RecordDeMapa; esMejor: boolean; anterior?: PartidaJugada }> {
-  return guardarPartidaEnLaBase(hash, partida);
+  return guardarPartidaEnLaBase(hash, partida, replay);
+}
+
+/** T-044: el replay de la mejor partida de un mapa y la fecha de esa partida. `undefined` si no hay o esta corrupto. */
+export function leerReplayGuardado(
+  hash: string,
+): Promise<{ replay: Replay; fecha: string } | undefined> {
+  return leerReplayDeLaBase(hash);
+}
+
+/** T-044: los hashes de los mapas con replay guardado (solo claves, no lee los replays). */
+export function hashesConReplay(): Promise<Set<string>> {
+  return listarHashesConReplayDeLaBase();
 }
 
 /** Records de varios mapas de una vez, por hash. Un registro corrupto no aparece; nunca lanza por su contenido. */
