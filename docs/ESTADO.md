@@ -8,7 +8,7 @@ Estado corto y siempre al dia. **Si sos una sesion NUEVA, empeza por
 
 ## Donde esta todo
 
-- `main`: limpio, verde, 1102 tests + 22 e2e.
+- `main`: limpio, verde, 1128 tests + 27 e2e.
 - Estado demo: menu con musica de la biblioteca, song select sobre la escena, partida con fondo y video, cuatro skins propias, cancion demo sembrada.
 - En curso: nada.
 
@@ -53,6 +53,7 @@ Estado corto y siempre al dia. **Si sos una sesion NUEVA, empeza por
 | T-052 | Escena: fondo de la cancion a pantalla completa; menu con musica de la biblioteca (pausa, siguiente); song select minimalista con preview visible, exportar y borrar, importar soltando en cualquier parte |
 | T-053 | Partida a pantalla completa con fondo atenuado y video sincronizado al reloj, intro, HUD limpio, volumen; resultados con fondo; ajustes con poco texto, skins en miniatura, atenuacion y video |
 | T-055 | Records por dificultad: mejor y ultima partida, intentos, conteos de cada juicio, rango SS; se ven en el song select (detalle, chips y lista) y con aviso de nuevo record en resultados |
+| T-027 | Hitsounds sintetizados (Normal, Suave, Seco) programados en el instante del golpe, solo en golpes validos; volumen de efectos aparte del de musica; tipo de golpe en ajustes |
 | T-057 | Offset por cancion (control en el song select, teclas - y =; "Corregir offset" ajusta el de la cancion), velocidad en vivo con F3/F4, desviacion media y pulsaciones en el record con aviso si pasa de 8 ms |
 | T-042 | Respaldo de la biblioteca en zip (canciones con audio, fondo y video, skins, records, ajustes), restaurar sin pisar ni duplicar, tarjeta "05 Biblioteca" en ajustes con uso de almacenamiento |
 | T-056 | Partida: cajitas con pulsaciones por tecla, contador de juicios en vivo, barra de error con media movil, reintento manteniendo ` 0,5 s, saltar intro con Espacio; resultados con pulsaciones y UR; el record guarda pulsaciones y desviacion media |
@@ -63,7 +64,6 @@ centrados en cero. El motor esta bien sincronizado.
 
 ## En curso
 
-- **T-027 (hitsounds y volumen de efectos):** despachado el 7 de octubre.
 
 | Ticket | Que es | Estado |
 |---|---|---|
