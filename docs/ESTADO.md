@@ -1,6 +1,6 @@
 # Estado del proyecto
 
-Ultima actualizacion: 5 de octubre de 2026.
+Ultima actualizacion: 7 de octubre de 2026.
 
 Estado corto y siempre al dia. **Si sos una sesion NUEVA, empeza por
 `docs/HANDOFF.md`** (metodo de trabajo, reglas, lecciones), despues
@@ -8,7 +8,7 @@ Estado corto y siempre al dia. **Si sos una sesion NUEVA, empeza por
 
 ## Donde esta todo
 
-- `main`: limpio, verde, 998 tests + 9 e2e (sincronia, pausa x2, mapeador, partida x5).
+- `main`: limpio, verde, 1043 tests + 16 e2e (sincronia, pausa x2, mapeador, partida x5, contadores x7).
 - Estado demo: menu con musica de la biblioteca, song select sobre la escena, partida con fondo y video, cuatro skins propias, cancion demo sembrada.
 - En curso: nada.
 
@@ -53,21 +53,13 @@ Estado corto y siempre al dia. **Si sos una sesion NUEVA, empeza por
 | T-052 | Escena: fondo de la cancion a pantalla completa; menu con musica de la biblioteca (pausa, siguiente); song select minimalista con preview visible, exportar y borrar, importar soltando en cualquier parte |
 | T-053 | Partida a pantalla completa con fondo atenuado y video sincronizado al reloj, intro, HUD limpio, volumen; resultados con fondo; ajustes con poco texto, skins en miniatura, atenuacion y video |
 | T-055 | Records por dificultad: mejor y ultima partida, intentos, conteos de cada juicio, rango SS; se ven en el song select (detalle, chips y lista) y con aviso de nuevo record en resultados |
+| T-056 | Partida: cajitas con pulsaciones por tecla, contador de juicios en vivo, barra de error con media movil, reintento manteniendo ` 0,5 s, saltar intro con Espacio; resultados con pulsaciones y UR; el record guarda pulsaciones y desviacion media |
 | T-054 | Pulido: legibilidad sobre portadas, dificultades de facil a dificil, audio de cualquier dificultad, errores cerrables, fondo del menu inmediato |
 
 La prueba de feel de Arnold ya se hizo: en una cancion real sus golpes salieron
 centrados en cero. El motor esta bien sincronizado.
 
 ## En curso
-
-- **T-056 (contadores en partida, teclas y atajos):** detenido a pedido de
-  Arnold el 5 de octubre, sin revisar ni fusionar. Esta en la rama
-  `feat/contadores` (worktree `.claude/worktrees/agent-a6234eb5a5e3771dc`, cinco
-  commits). Al retomarlo: correr los cuatro checks y el e2e en esa rama,
-  revisarla, fusionar, y despues conectar: (1) `results.ts` pasa los conteos a
-  `rangoDePrecision` y `resultados.css` gana la clase del rango SS; (2)
-  `partidaDesdeScore` de `records-logica.ts` recibe `pulsaciones` y la
-  desviacion media del resultado de la partida.
 
 | Ticket | Que es | Estado |
 |---|---|---|
