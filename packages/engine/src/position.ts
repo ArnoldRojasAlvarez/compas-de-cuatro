@@ -25,6 +25,20 @@ export function progresoEsVisible(progreso: number): boolean {
   return progreso >= PROGRESO_MIN_VISIBLE && progreso <= PROGRESO_MAX_VISIBLE;
 }
 
+/**
+ * T-060: true si el tramo `[progresoInicio, progresoFin]` toca el rango que se
+ * dibuja. Sirve para el cuerpo de una LN: pregunta por el intervalo entero y no
+ * por sus extremos, porque una LN mas larga que la pista con la cabeza ya
+ * debajo del receptor y la cola todavia arriba de la pantalla tiene los dos
+ * extremos afuera y aun asi su cuerpo cruza toda la pista. Acepta los extremos
+ * en cualquier orden.
+ */
+export function tramoVisible(progresoInicio: number, progresoFin: number): boolean {
+  const menor = Math.min(progresoInicio, progresoFin);
+  const mayor = Math.max(progresoInicio, progresoFin);
+  return menor <= PROGRESO_MAX_VISIBLE && mayor >= PROGRESO_MIN_VISIBLE;
+}
+
 export interface GeometriaPista {
   /** Alto del area de juego en pixeles. */
   height: number;
