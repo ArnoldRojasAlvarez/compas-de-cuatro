@@ -390,7 +390,7 @@ function crearControlDeVelocidad(): HTMLElement {
   return crearFila({
     nombre: 'Velocidad',
     idControl: entrada.id,
-    ayuda: `Mas alto, las notas caen mas rapido y hay menos en pantalla a la vez (de ${VELOCIDAD_MIN} a ${VELOCIDAD_MAX}). El dato es lo que tarda una nota en cruzar la pista.`,
+    ayuda: `Más alto, las notas caen más rápido y hay menos en pantalla a la vez (de ${VELOCIDAD_MIN} a ${VELOCIDAD_MAX}). El dato es lo que tarda una nota en cruzar la pista.`,
     controles: [control],
   });
 }
@@ -403,7 +403,7 @@ function crearControlDeVolumen(): HTMLElement {
   return crearFila({
     nombre: 'Volumen',
     idControl: entrada.id,
-    ayuda: 'Volumen de la musica en la partida, el menu y la previa de las canciones.',
+    ayuda: 'Volumen de la música en la partida, el menú y la previa de las canciones.',
     controles: [control],
   });
 }
@@ -560,7 +560,7 @@ function crearControlDeTeclas(onError: (mensaje: string) => void): HTMLElement {
       } else {
         const indiceExistente = mapa.indexOf(e.code);
         const nombreColumnaExistente = NOMBRES_COLUMNA[indiceExistente] ?? 'otra columna';
-        onError(`Esa tecla ya esta asignada a ${nombreColumnaExistente}.`);
+        onError(`Esa tecla ya está asignada a ${nombreColumnaExistente}.`);
       }
       terminarCaptura();
       return;
@@ -832,7 +832,7 @@ function crearControlDeSkin(onError: (mensaje: string) => void): HTMLElement {
   });
 
   return crearFila({
-    ayuda: 'Skin de las notas y los receptores. Se usa desde la proxima partida.',
+    ayuda: 'Skin de las notas y los receptores. Se usa desde la próxima partida.',
     controles: [grilla, entradaArchivo],
     apilada: true,
   });
@@ -847,7 +847,7 @@ function crearControlDeAtenuacion(): HTMLElement {
     nombre: 'Atenuar fondo',
     idControl: entrada.id,
     ayuda:
-      'Cuanto se oscurece la imagen o el video de fondo de la cancion detras de la pista. Mas atenuacion, la pista se lee mejor.',
+      'Cuánto se oscurece la imagen o el video de fondo de la canción detrás de la pista. Más atenuación, la pista se lee mejor.',
     controles: [control],
   });
 }
@@ -888,7 +888,7 @@ function crearControlDePresentacion(): HTMLElement {
   }
 
   const fila = crearFila({
-    nombre: 'Presentacion',
+    nombre: 'Presentación',
     ayuda: 'Pantalla completa, sin header ni avisos, y el cursor se oculta solo. Atajo: F.',
     controles: [boton],
   });
@@ -937,7 +937,7 @@ function crearControlDeRespaldo(
   botonExportar.type = 'button';
   botonExportar.id = 'tetra-respaldo-exportar';
   botonExportar.textContent = 'Exportar respaldo';
-  botonExportar.title = 'Baja un zip con tus canciones, skins, records y ajustes.';
+  botonExportar.title = 'Baja un zip con tus canciones, skins, récords y ajustes.';
 
   const botonImportar = document.createElement('button');
   botonImportar.type = 'button';
@@ -1012,7 +1012,7 @@ function crearControlDeRespaldo(
         const respaldo = await leerRespaldo(archivo);
         const sobrescribirAjustes =
           !ajustesPisarianLocales(respaldo.ajustes, leerAjustesLocales()) ||
-          window.confirm('El respaldo trae ajustes distintos a los actuales. Reemplazarlos?');
+          window.confirm('El respaldo trae ajustes distintos a los actuales. ¿Reemplazarlos?');
         const resumen = await restaurarRespaldo(respaldo, { sobrescribirAjustes });
         window.dispatchEvent(new CustomEvent(EVENTO_BIBLIOTECA_CAMBIO));
         const texto = lineaDeRestauracion(resumen);
@@ -1035,7 +1035,7 @@ function crearControlDeRespaldo(
   });
 
   const fila = crearFila({
-    ayuda: 'Copia de seguridad de la biblioteca: canciones, skins, records y ajustes, en un zip.',
+    ayuda: 'Copia de seguridad de la biblioteca: canciones, skins, récords y ajustes, en un zip.',
     controles: [botonExportar, botonImportar, entradaArchivo],
   });
   const envoltorio = document.createElement('div');
@@ -1077,7 +1077,7 @@ export function mostrarAjustes(
   const botonVolver = document.createElement('button');
   botonVolver.type = 'button';
   botonVolver.className = 'tetra-boton-volver';
-  botonVolver.textContent = '← Menu';
+  botonVolver.textContent = '← Menú';
   botonVolver.addEventListener('click', () => opciones.aMenu());
   encabezado.appendChild(botonVolver);
 
@@ -1123,7 +1123,7 @@ export function mostrarAjustes(
         crearInterruptor(
           'tetra-video-casilla',
           'Video de fondo',
-          'Reproduce el video de fondo de la cancion, si trae uno. Apagado, se ve solo la imagen.',
+          'Reproduce el video de fondo de la canción, si trae uno. Apagado, se ve solo la imagen.',
           leerVideoDeFondo(),
           guardarVideoDeFondo,
         ),
@@ -1145,14 +1145,14 @@ export function mostrarAjustes(
         crearInterruptor(
           'tetra-juicios-casilla',
           'Juicios',
-          'Cuantas notas llevas de cada juicio, al costado de la pista.',
+          'Cuántas notas llevas de cada juicio, al costado de la pista.',
           leerMostrarJuicios(),
           guardarMostrarJuicios,
         ),
         crearInterruptor(
           'tetra-barra-error-casilla',
           'Barra de error',
-          'Una marca por golpe que muestra si pegaste temprano o tarde, bajo la linea de juicio.',
+          'Una marca por golpe que muestra si pegaste temprano o tarde, bajo la línea de juicio.',
           leerMostrarBarraDeError(),
           guardarMostrarBarraDeError,
         ),
@@ -1160,7 +1160,7 @@ export function mostrarAjustes(
     ),
   );
   rejilla.appendChild(
-    crearSeccion(4, 'Presentacion', 'presentacion', crearControlDePresentacion()),
+    crearSeccion(4, 'Presentación', 'presentacion', crearControlDePresentacion()),
   );
   rejilla.appendChild(
     crearSeccion(

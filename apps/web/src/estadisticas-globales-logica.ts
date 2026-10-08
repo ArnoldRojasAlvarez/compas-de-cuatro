@@ -19,8 +19,8 @@ export interface Periodo {
 
 /** Los tres filtros del segmentado, en el orden en que se muestran. */
 export const PERIODOS: readonly Periodo[] = [
-  { id: '7', etiqueta: '7 dias', dias: 7 },
-  { id: '30', etiqueta: '30 dias', dias: 30 },
+  { id: '7', etiqueta: '7 días', dias: 7 },
+  { id: '30', etiqueta: '30 días', dias: 30 },
   { id: 'todo', etiqueta: 'Todo', dias: null },
 ];
 

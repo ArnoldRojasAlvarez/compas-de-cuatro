@@ -36,7 +36,7 @@ export interface PresetAuto {
 
 export const PRESETS_AUTO: Readonly<Record<NivelAuto, PresetAuto>> = {
   facil: {
-    nombre: 'Facil',
+    nombre: 'Fácil',
     nps: 1.6,
     separacionMinPulsos: 1,
     fraccionDobles: 0,
@@ -58,7 +58,7 @@ export const PRESETS_AUTO: Readonly<Record<NivelAuto, PresetAuto>> = {
     hpDrain: 5,
   },
   dificil: {
-    nombre: 'Dificil',
+    nombre: 'Difícil',
     nps: 4.8,
     separacionMinPulsos: 0.25,
     fraccionDobles: 0.18,

@@ -31,7 +31,7 @@ export function etiquetaDeReproduccion(modo: ModoReproduccion, fecha?: string): 
 }
 
 export const MENSAJE_REPLAY_DE_OTRO_MAPA =
-  'Este replay es de otro mapa: la dificultad cambio desde que se grabo.';
+  'Este replay es de otro mapa: la dificultad cambió desde que se grabó.';
 export const MENSAJE_SIN_REPLAY = 'No hay un replay guardado para esta dificultad.';
 export const MENSAJE_REPLAY_ILEGIBLE = 'El replay guardado no se puede leer.';
 export const MENSAJE_MAPA_SIN_NOTAS = 'El mapa no tiene notas que reproducir.';

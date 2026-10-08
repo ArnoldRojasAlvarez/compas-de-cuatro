@@ -140,7 +140,7 @@ export async function extraerMapaDeOsz(archivo: Blob): Promise<MapaImportado> {
 
   const nombreOsu = elegirArchivoOsu(nombres);
   if (nombreOsu === null) {
-    throw new Error('El .osz no contiene ningun archivo .osu.');
+    throw new Error('El .osz no contiene ningún archivo .osu.');
   }
 
   const textoOsu = decodificadorUtf8.decode(zip[nombreOsu]);
@@ -219,7 +219,7 @@ export async function extraerCancionDeOsz(archivo: Blob): Promise<CancionImporta
 
   const nombresOsu = elegirArchivosOsu(nombres);
   if (nombresOsu.length === 0) {
-    throw new Error('El .osz no contiene ningun archivo .osu.');
+    throw new Error('El .osz no contiene ningún archivo .osu.');
   }
 
   const dificultades: Chart[] = [];
@@ -237,7 +237,7 @@ export async function extraerCancionDeOsz(archivo: Blob): Promise<CancionImporta
   }
 
   if (dificultades.length === 0) {
-    throw new Error('El .osz no contiene ninguna dificultad de mania 4K valida.');
+    throw new Error('El .osz no contiene ninguna dificultad de mania 4K válida.');
   }
 
   // T-054: el audio es el de la primera dificultad (en orden) cuyo

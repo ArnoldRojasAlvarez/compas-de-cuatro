@@ -644,9 +644,9 @@ export function construirChart(
   );
   return {
     metadata: {
-      title: meta.titulo.trim() || 'Sin titulo',
+      title: meta.titulo.trim() || 'Sin título',
       artist: meta.artista.trim() || 'Desconocido',
-      creator: meta.creador.trim() || 'Anonimo',
+      creator: meta.creador.trim() || 'Anónimo',
       difficultyName: meta.dificultad.trim() || 'Normal',
       audioFile: meta.audioArchivo,
       previewTime: redondear(previewTime),

@@ -60,6 +60,7 @@ import {
   idTrasBorrar,
   moverIndice,
   nivelDeEstrellas,
+  nombreVisibleDeDificultad,
   ordenarCanciones,
   textoDeImportacionFallida,
   type CriterioDeOrden,
@@ -104,7 +105,7 @@ function escenaDeCancion(cancion: CancionGuardada, chart: Chart): EscenaPartida 
     ...(cancion.videoOffset !== undefined && { videoOffset: cancion.videoOffset }),
     titulo: cancion.titulo,
     artista: cancion.artista,
-    dificultad: chart.metadata.difficultyName,
+    dificultad: nombreVisibleDeDificultad(chart.metadata.difficultyName),
   };
 }
 
@@ -285,7 +286,7 @@ export function mostrarSongSelect(contenedor: HTMLElement, opciones: OpcionesSon
   const barra = document.createElement('div');
   barra.className = 'tetra-ss-barra';
 
-  const botonVolver = crearBotonIcono('volver', 'Volver al menu', 'tetra-boton-volver');
+  const botonVolver = crearBotonIcono('volver', 'Volver al menú', 'tetra-boton-volver');
   botonVolver.addEventListener('click', () => {
     desmontar();
     fondoEscena().limpiar();
@@ -295,7 +296,7 @@ export function mostrarSongSelect(contenedor: HTMLElement, opciones: OpcionesSon
 
   const titulo = document.createElement('h1');
   titulo.className = 'tetra-ss-titulo';
-  titulo.textContent = 'Elegir cancion';
+  titulo.textContent = 'Elegir canción';
   barra.appendChild(titulo);
   panel.appendChild(barra);
 
@@ -317,7 +318,7 @@ export function mostrarSongSelect(contenedor: HTMLElement, opciones: OpcionesSon
   entradaBuscar.type = 'search';
   entradaBuscar.placeholder = 'Buscar';
   entradaBuscar.className = 'tetra-song-select-buscar';
-  entradaBuscar.setAttribute('aria-label', 'Buscar cancion');
+  entradaBuscar.setAttribute('aria-label', 'Buscar canción');
   filaBusqueda.appendChild(entradaBuscar);
 
   const botonFiltros = crearBotonIcono('filtros', 'Orden y filtros');
@@ -335,7 +336,7 @@ export function mostrarSongSelect(contenedor: HTMLElement, opciones: OpcionesSon
   const selectOrden = document.createElement('select');
   selectOrden.setAttribute('aria-label', 'Ordenar canciones');
   for (const [valor, texto] of [
-    ['titulo', 'Titulo'],
+    ['titulo', 'Título'],
     ['bpm', 'BPM'],
     ['estrellas', 'Estrellas'],
   ] as const) {
@@ -362,7 +363,7 @@ export function mostrarSongSelect(contenedor: HTMLElement, opciones: OpcionesSon
   entradaEstrellasMin.step = '0.1';
   entradaEstrellasMin.placeholder = 'min';
   entradaEstrellasMin.className = 'tetra-song-select-filtro-estrellas-input';
-  entradaEstrellasMin.setAttribute('aria-label', 'Estrellas minimas');
+  entradaEstrellasMin.setAttribute('aria-label', 'Estrellas mínimas');
   filtroEstrellas.appendChild(entradaEstrellasMin);
 
   const separadorFiltroEstrellas = document.createElement('span');
@@ -375,11 +376,11 @@ export function mostrarSongSelect(contenedor: HTMLElement, opciones: OpcionesSon
   entradaEstrellasMax.step = '0.1';
   entradaEstrellasMax.placeholder = 'max';
   entradaEstrellasMax.className = 'tetra-song-select-filtro-estrellas-input';
-  entradaEstrellasMax.setAttribute('aria-label', 'Estrellas maximas');
+  entradaEstrellasMax.setAttribute('aria-label', 'Estrellas máximas');
   filtroEstrellas.appendChild(entradaEstrellasMax);
   filtros.appendChild(filtroEstrellas);
 
-  const botonAleatorio = crearBotonIcono('azar', 'Cancion al azar');
+  const botonAleatorio = crearBotonIcono('azar', 'Canción al azar');
   filtros.appendChild(botonAleatorio);
   columnaLista.appendChild(filtros);
 
@@ -413,7 +414,7 @@ export function mostrarSongSelect(contenedor: HTMLElement, opciones: OpcionesSon
   for (let i = 0; i < 4; i++) iconoVacio.appendChild(document.createElement('span'));
   const lineaVacio = document.createElement('p');
   lineaVacio.className = 'tetra-song-select-vacio-titulo';
-  lineaVacio.textContent = 'Tu biblioteca esta vacia';
+  lineaVacio.textContent = 'Tu biblioteca está vacía';
   const botonImportarVacio = document.createElement('button');
   botonImportarVacio.type = 'button';
   botonImportarVacio.className = 'tetra-ss-importar-vacio';
@@ -477,7 +478,7 @@ export function mostrarSongSelect(contenedor: HTMLElement, opciones: OpcionesSon
   barraProgreso.tabIndex = 0;
   barraProgreso.dataset.foco = 'barra';
   barraProgreso.setAttribute('role', 'slider');
-  barraProgreso.setAttribute('aria-label', 'Posicion del preview');
+  barraProgreso.setAttribute('aria-label', 'Posición del preview');
   barraProgreso.setAttribute('aria-valuemin', '0');
   barraProgreso.setAttribute('aria-valuemax', '100');
   barraProgreso.setAttribute('aria-valuenow', '0');
@@ -694,7 +695,7 @@ export function mostrarSongSelect(contenedor: HTMLElement, opciones: OpcionesSon
   // @tetra/core): mientras sea false, toda estrella que se muestra lleva esta
   // marca discreta (en el `title`, sin parrafo visible).
   const TITULO_ESTRELLA_PROVISIONAL =
-    'Calibracion parcial: ajustada con 54 mapas de osu! de chordjack, jumpstream y stream. En otros estilos puede desviarse.';
+    'Calibración parcial: ajustada con 54 mapas de osu! de chordjack, jumpstream y stream. En otros estilos puede desviarse.';
 
   /** Vuelca `overall` (si ya esta calculado) o un placeholder de "calculando" en `badge`, con la clase de nivel (color) y la marca de provisional. Ancho fijo por CSS (ver .tetra-estrella): no salta el layout al pasar de un estado al otro. */
   function aplicarEstrellaABadge(badge: HTMLElement, overall: number | undefined): void {
@@ -747,7 +748,7 @@ export function mostrarSongSelect(contenedor: HTMLElement, opciones: OpcionesSon
   function crearBloqueDeRecord(record: RecordDeMapa): HTMLElement {
     const bloque = document.createElement('div');
     bloque.className = 'tetra-ss-record';
-    bloque.setAttribute('aria-label', 'Record');
+    bloque.setAttribute('aria-label', 'Récord');
 
     const resumen = document.createElement('div');
     resumen.className = 'tetra-ss-record-resumen';
@@ -867,18 +868,18 @@ export function mostrarSongSelect(contenedor: HTMLElement, opciones: OpcionesSon
   function crearControlDeOffset(songId: SongId, sugerido: boolean): HTMLElement {
     const raiz = document.createElement('div');
     raiz.className = sugerido ? 'tetra-ss-offset tetra-ss-offset--sugerido' : 'tetra-ss-offset';
-    raiz.title = 'Offset de esta cancion, se suma al global. Shift + clic: 5 ms. Teclas - y =: 1 ms';
+    raiz.title = 'Offset de esta canción, se suma al global. Shift + clic: 5 ms. Teclas - y =: 1 ms';
 
     // El reloj es el unico siempre visible: enfocarlo (o pasar el mouse) abre el ajuste.
-    const reloj = crearBotonIcono('reloj', 'Offset de esta cancion', 'tetra-ss-offset-reloj');
+    const reloj = crearBotonIcono('reloj', 'Offset de esta canción', 'tetra-ss-offset-reloj');
     reloj.dataset.foco = 'offset';
     const ajuste = document.createElement('span');
     ajuste.className = 'tetra-ss-offset-ajuste';
 
-    const menos = crearBotonIcono('menos', 'Offset de esta cancion, 1 ms antes', 'tetra-ss-offset-paso');
+    const menos = crearBotonIcono('menos', 'Offset de esta canción, 1 ms antes', 'tetra-ss-offset-paso');
     const valor = document.createElement('span');
     valor.className = 'tetra-ss-offset-valor';
-    const mas = crearBotonIcono('mas', 'Offset de esta cancion, 1 ms despues', 'tetra-ss-offset-paso');
+    const mas = crearBotonIcono('mas', 'Offset de esta canción, 1 ms después', 'tetra-ss-offset-paso');
     menos.dataset.foco = 'offset-menos';
     mas.dataset.foco = 'offset-mas';
     menos.addEventListener('click', (e) => ajustarOffsetLocal(e.shiftKey ? -5 : -1));
@@ -895,8 +896,8 @@ export function mostrarSongSelect(contenedor: HTMLElement, opciones: OpcionesSon
 
   function pintarBotonBorrar(boton: HTMLButtonElement, confirmando: boolean): void {
     boton.classList.toggle('tetra-ss-borrar-confirmando', confirmando);
-    if (confirmando) cambiarBotonIcono(boton, 'confirmar', 'Confirmar: borrar la cancion');
-    else cambiarBotonIcono(boton, 'borrar', 'Borrar la cancion');
+    if (confirmando) cambiarBotonIcono(boton, 'confirmar', 'Confirmar: borrar la canción');
+    else cambiarBotonIcono(boton, 'borrar', 'Borrar la canción');
   }
 
   function cancelarConfirmacionDeBorrado(): void {
@@ -1018,7 +1019,7 @@ export function mostrarSongSelect(contenedor: HTMLElement, opciones: OpcionesSon
       boton.setAttribute('aria-pressed', String(elegida));
       boton.dataset.foco = `dificultad-${indice}`;
       const nombre = document.createElement('span');
-      nombre.textContent = dificultad.metadata.difficultyName;
+      nombre.textContent = nombreVisibleDeDificultad(dificultad.metadata.difficultyName);
       boton.appendChild(nombre);
       boton.appendChild(crearBadgeEstrellaDeDificultad(dificultad));
       const recordDeChip = recordDe(dificultad);
@@ -1044,7 +1045,7 @@ export function mostrarSongSelect(contenedor: HTMLElement, opciones: OpcionesSon
     botonJugar.type = 'button';
     botonJugar.className = 'tetra-song-select-jugar tetra-boton-primario';
     botonJugar.textContent = 'Jugar';
-    botonJugar.title = `Jugar ${info.nombre}`;
+    botonJugar.title = `Jugar ${nombreVisibleDeDificultad(info.nombre)}`;
     botonJugar.dataset.foco = 'jugar';
     botonJugar.addEventListener('click', () => void jugarDificultadEnfocada());
     acciones.appendChild(botonJugar);
@@ -1088,7 +1089,7 @@ export function mostrarSongSelect(contenedor: HTMLElement, opciones: OpcionesSon
 
     // Borrar pide confirmar sobre el mismo boton: el primer clic cambia el
     // icono y su nombre, y vuelve solo a los 3 s si no se confirma.
-    const botonBorrar = crearBotonIcono('borrar', 'Borrar la cancion', 'tetra-ss-borrar');
+    const botonBorrar = crearBotonIcono('borrar', 'Borrar la canción', 'tetra-ss-borrar');
     botonBorrar.dataset.foco = 'borrar';
     pintarBotonBorrar(botonBorrar, confirmandoBorradoId === cancion.id);
     botonBorrar.addEventListener('click', () => {

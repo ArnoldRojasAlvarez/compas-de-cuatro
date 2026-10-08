@@ -179,8 +179,8 @@ export async function guardarCancion(cancion: CancionGuardada): Promise<void> {
       const tx = db.transaction(NOMBRE_TIENDA_CANCIONES, 'readwrite');
       tx.objectStore(NOMBRE_TIENDA_CANCIONES).put(cancion);
       tx.oncomplete = () => resolve();
-      tx.onerror = () => reject(tx.error ?? new Error('No se pudo guardar la cancion.'));
-      tx.onabort = () => reject(tx.error ?? new Error('Se aborto el guardado de la cancion.'));
+      tx.onerror = () => reject(tx.error ?? new Error('No se pudo guardar la canción.'));
+      tx.onabort = () => reject(tx.error ?? new Error('Se abortó el guardado de la canción.'));
     });
   } finally {
     db.close();
@@ -211,7 +211,7 @@ export async function leerCancionDeLaBase(id: SongId): Promise<CancionGuardada |
       const tx = db.transaction(NOMBRE_TIENDA_CANCIONES, 'readonly');
       const peticion = tx.objectStore(NOMBRE_TIENDA_CANCIONES).get(id);
       peticion.onsuccess = () => resolve(peticion.result as CancionGuardada | undefined);
-      peticion.onerror = () => reject(peticion.error ?? new Error('No se pudo leer la cancion.'));
+      peticion.onerror = () => reject(peticion.error ?? new Error('No se pudo leer la canción.'));
     });
   } finally {
     db.close();
@@ -258,8 +258,8 @@ export async function borrarCancionDeLaBase(id: SongId): Promise<void> {
       const records = tx.objectStore(NOMBRE_TIENDA_RECORDS);
       const replays = tx.objectStore(NOMBRE_TIENDA_REPLAYS);
       tx.oncomplete = () => resolve();
-      tx.onerror = () => reject(tx.error ?? new Error('No se pudo borrar la cancion.'));
-      tx.onabort = () => reject(tx.error ?? new Error('Se aborto el borrado de la cancion.'));
+      tx.onerror = () => reject(tx.error ?? new Error('No se pudo borrar la canción.'));
+      tx.onabort = () => reject(tx.error ?? new Error('Se abortó el borrado de la canción.'));
 
       const lectura = canciones.get(id);
       lectura.onsuccess = () => {
@@ -322,7 +322,7 @@ export async function guardarPartidaEnLaBase(
         else reject(new Error('No se pudo guardar la partida.'));
       };
       tx.onerror = () => reject(tx.error ?? new Error('No se pudo guardar la partida.'));
-      tx.onabort = () => reject(tx.error ?? new Error('Se aborto el guardado de la partida.'));
+      tx.onabort = () => reject(tx.error ?? new Error('Se abortó el guardado de la partida.'));
 
       const lectura = tienda.get(hash);
       lectura.onsuccess = () => {
@@ -404,8 +404,8 @@ export async function leerRecordsDeLaBase(
       const tx = db.transaction(NOMBRE_TIENDA_RECORDS, 'readonly');
       const tienda = tx.objectStore(NOMBRE_TIENDA_RECORDS);
       tx.oncomplete = () => resolve();
-      tx.onerror = () => reject(tx.error ?? new Error('No se pudieron leer los records.'));
-      tx.onabort = () => reject(tx.error ?? new Error('Se aborto la lectura de los records.'));
+      tx.onerror = () => reject(tx.error ?? new Error('No se pudieron leer los récords.'));
+      tx.onabort = () => reject(tx.error ?? new Error('Se abortó la lectura de los récords.'));
       for (const hash of new Set(hashes)) {
         const peticion = tienda.get(hash);
         peticion.onsuccess = () => {
@@ -430,7 +430,7 @@ export async function guardarSkin(skin: SkinGuardada): Promise<void> {
       tx.objectStore(NOMBRE_TIENDA_SKINS).put(skin);
       tx.oncomplete = () => resolve();
       tx.onerror = () => reject(tx.error ?? new Error('No se pudo guardar la skin.'));
-      tx.onabort = () => reject(tx.error ?? new Error('Se aborto el guardado de la skin.'));
+      tx.onabort = () => reject(tx.error ?? new Error('Se abortó el guardado de la skin.'));
     });
   } finally {
     db.close();
@@ -461,8 +461,8 @@ export async function guardarDificultadCacheada(clave: string, resultado: Diffic
       const tx = db.transaction(NOMBRE_TIENDA_DIFICULTADES, 'readwrite');
       tx.objectStore(NOMBRE_TIENDA_DIFICULTADES).put(entrada);
       tx.oncomplete = () => resolve();
-      tx.onerror = () => reject(tx.error ?? new Error('No se pudo guardar la dificultad en cache.'));
-      tx.onabort = () => reject(tx.error ?? new Error('Se aborto el guardado de la dificultad en cache.'));
+      tx.onerror = () => reject(tx.error ?? new Error('No se pudo guardar la dificultad en caché.'));
+      tx.onabort = () => reject(tx.error ?? new Error('Se abortó el guardado de la dificultad en caché.'));
     });
   } finally {
     db.close();
@@ -509,7 +509,7 @@ export async function listarRecordsDeLaBase(): Promise<RecordDeMapa[]> {
         resolve(records);
       };
       peticion.onerror = () =>
-        reject(peticion.error ?? new Error('No se pudieron listar los records.'));
+        reject(peticion.error ?? new Error('No se pudieron listar los récords.'));
     });
   } finally {
     db.close();
@@ -579,7 +579,7 @@ export async function guardarRegistroEnLaBase(
       const tienda = tx.objectStore(NOMBRE_TIENDA_HISTORIAL);
       tx.oncomplete = () => resolve();
       tx.onerror = () => reject(tx.error ?? new Error('No se pudo guardar el historial.'));
-      tx.onabort = () => reject(tx.error ?? new Error('Se aborto el guardado del historial.'));
+      tx.onabort = () => reject(tx.error ?? new Error('Se abortó el guardado del historial.'));
       tienda.put(registro, claveDeRegistroPartida(registro));
       recortarHistorial(tienda, tope);
     });
@@ -669,7 +669,7 @@ export async function restaurarEnLaBase(
       );
       tx.oncomplete = () => resolve();
       tx.onerror = () => reject(tx.error ?? new Error('No se pudo restaurar el respaldo.'));
-      tx.onabort = () => reject(tx.error ?? new Error('Se aborto la restauracion del respaldo.'));
+      tx.onabort = () => reject(tx.error ?? new Error('Se abortó la restauración del respaldo.'));
 
       // Todas las lecturas se piden antes de que corra ninguna escritura, asi
       // que un id repetido dentro del mismo respaldo se resuelve de antemano:

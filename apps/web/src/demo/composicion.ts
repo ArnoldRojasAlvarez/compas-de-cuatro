@@ -195,7 +195,7 @@ export function inicioDeSeccion(nombre: NombreSeccion): number {
     if (s.nombre === nombre) return compas;
     compas += s.acordes.length;
   }
-  throw new Error(`Seccion desconocida: ${nombre}`);
+  throw new Error(`Sección desconocida: ${nombre}`);
 }
 
 export const TOTAL_COMPASES = PLAN.reduce((suma, s) => suma + s.acordes.length, 0);

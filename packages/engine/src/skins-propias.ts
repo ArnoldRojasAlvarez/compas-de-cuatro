@@ -29,7 +29,7 @@ export interface SkinPropia {
 export const SKINS_PROPIAS: readonly SkinPropia[] = [
   { id: 'tetra', nombre: 'Tetra' },
   { id: 'barras', nombre: 'Barras' },
-  { id: 'circulos', nombre: 'Circulos' },
+  { id: 'circulos', nombre: 'Círculos' },
   { id: 'diamantes', nombre: 'Diamantes' },
 ];
 

@@ -175,7 +175,7 @@ export function leerCancion(id: SongId): Promise<CancionGuardada | undefined> {
 export async function guardarDificultad(id: SongId, chart: Chart): Promise<void> {
   const cancion = await leerCancionDeLaBase(id);
   if (!cancion) {
-    throw new Error('La cancion ya no esta en la biblioteca: no se puede guardar la dificultad.');
+    throw new Error('La canción ya no está en la biblioteca: no se puede guardar la dificultad.');
   }
   await guardarCancion({ ...cancion, dificultades: ponerDificultad(cancion.dificultades, chart) });
 }
@@ -273,11 +273,11 @@ async function bytesDe(blob: Blob): Promise<Uint8Array> {
 export async function exportarCancion(id: SongId): Promise<Blob> {
   const cancion = await leerCancionDeLaBase(id);
   if (!cancion) {
-    throw new Error('La cancion ya no esta en la biblioteca: no se puede exportar.');
+    throw new Error('La canción ya no está en la biblioteca: no se puede exportar.');
   }
   const primera = cancion.dificultades[0];
   if (primera === undefined) {
-    throw new Error('La cancion no tiene dificultades: no se puede exportar.');
+    throw new Error('La canción no tiene dificultades: no se puede exportar.');
   }
 
   const audioNombre = primera.metadata.audioFile;

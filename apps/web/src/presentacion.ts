@@ -40,7 +40,7 @@ export function guardarPresentacion(estado: EstadoPresentacion, storage: Storage
 /** Pasos de la lista "Antes de presentar". Solo recuerdan: no bloquean nada. */
 export const PASOS_PREVIOS = [
   { id: 'offset', texto: 'Calibrar el offset de audio' },
-  { id: 'cancion', texto: 'Probar la cancion completa' },
+  { id: 'cancion', texto: 'Probar la canción completa' },
   { id: 'volumen', texto: 'Comprobar el volumen' },
 ] as const;
 

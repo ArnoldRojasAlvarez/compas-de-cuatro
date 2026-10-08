@@ -450,21 +450,21 @@ describe('leerRespaldo: rechaza lo que no sirve sin tocar nada', () => {
 
   it('un manifest que no es JSON o no es de Tetra', async () => {
     const roto = new Blob([new Uint8Array(zipSync({ 'manifest.json': strToU8('{no es json') }))]);
-    expect(await mensajeDe(roto)).toContain('danado');
+    expect(await mensajeDe(roto)).toContain('dañado');
     expect(await mensajeDe(zipConManifest({ hola: 1 }))).toContain('no es un respaldo de Tetra');
     expect(await mensajeDe(zipConManifest([1, 2]))).toContain('no es un respaldo de Tetra');
   });
 
   it('una version futura o desconocida', async () => {
-    expect(await mensajeDe(zipConManifest({ ...base, version: 2 }))).toContain('mas nueva');
-    expect(await mensajeDe(zipConManifest({ ...base, version: 0 }))).toContain('version');
-    expect(await mensajeDe(zipConManifest({ ...base, version: '1' }))).toContain('version');
+    expect(await mensajeDe(zipConManifest({ ...base, version: 2 }))).toContain('más nueva');
+    expect(await mensajeDe(zipConManifest({ ...base, version: 0 }))).toContain('versión');
+    expect(await mensajeDe(zipConManifest({ ...base, version: '1' }))).toContain('versión');
   });
 
   it('un manifest al que le faltan secciones', async () => {
     // JSON.stringify descarta `records: undefined`, o sea que el manifest queda sin esa clave.
-    expect(await mensajeDe(zipConManifest({ ...base, records: undefined }))).toContain('danado');
-    expect(await mensajeDe(zipConManifest({ ...base, ajustes: [] }))).toContain('danado');
+    expect(await mensajeDe(zipConManifest({ ...base, records: undefined }))).toContain('dañado');
+    expect(await mensajeDe(zipConManifest({ ...base, ajustes: [] }))).toContain('dañado');
   });
 
   it('un blob que el manifest nombra y el zip no trae', async () => {
@@ -490,7 +490,7 @@ describe('leerRespaldo: rechaza lo que no sirve sin tocar nada', () => {
 
     const invalida = structuredClone(manifest);
     invalida.canciones[0]!.dificultades = [{ metadata: {}, notes: 'no' }];
-    expect(await mensajeDe(zipConManifest(invalida, archivos))).toContain('invalida');
+    expect(await mensajeDe(zipConManifest(invalida, archivos))).toContain('inválida');
   });
 
   it('un respaldo invalido no toca lo que ya hay', async () => {

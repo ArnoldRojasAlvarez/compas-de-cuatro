@@ -119,7 +119,7 @@ export async function extraerImagenesDeOsk(archivo: Blob): Promise<ImagenesDeSki
 
   if (Object.keys(ubicaciones).length === 0) {
     throw new Error(
-      'El archivo no parece ser una skin de osu!mania: no se encontro ninguna imagen ' +
+      'El archivo no parece ser una skin de osu!mania: no se encontró ninguna imagen ' +
         'mania-note1/note2/key1/key2 (con sus variantes H, L y D) adentro del .osk.',
     );
   }

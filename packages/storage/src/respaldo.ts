@@ -259,28 +259,28 @@ function esChartValido(valor: unknown): valor is Chart {
 /** Los bytes de un archivo del zip como Blob, o un ErrorDeRespaldo si el manifest apunta a algo que no esta. */
 function blobDeReferencia(archivos: Unzipped, ref: unknown, quien: string): Blob {
   if (!esObjeto(ref) || !esTexto(ref['archivo']) || !esTexto(ref['tipo'])) {
-    throw new ErrorDeRespaldo(`El respaldo esta danado: ${quien} no indica su archivo.`);
+    throw new ErrorDeRespaldo(`El respaldo está dañado: ${quien} no indica su archivo.`);
   }
   const bytes = Object.hasOwn(archivos, ref['archivo']) ? archivos[ref['archivo']] : undefined;
   if (bytes === undefined) {
-    throw new ErrorDeRespaldo(`El respaldo esta incompleto: falta ${ref['archivo']} (${quien}).`);
+    throw new ErrorDeRespaldo(`El respaldo está incompleto: falta ${ref['archivo']} (${quien}).`);
   }
   return new Blob([bytes as Uint8Array<ArrayBuffer>], { type: ref['tipo'] });
 }
 
 function leerCancion(archivos: Unzipped, crudo: unknown, indice: number): CancionGuardada {
-  const dado = `la cancion ${indice + 1}`;
-  if (!esObjeto(crudo)) throw new ErrorDeRespaldo(`El respaldo esta danado: ${dado} no es valida.`);
+  const dado = `la canción ${indice + 1}`;
+  if (!esObjeto(crudo)) throw new ErrorDeRespaldo(`El respaldo está dañado: ${dado} no es válida.`);
   const { id, titulo, artista, dificultades } = crudo;
   if (!esTexto(id) || id === '' || !esTexto(titulo) || !esTexto(artista)) {
-    throw new ErrorDeRespaldo(`El respaldo esta danado: ${dado} no tiene id, titulo o artista.`);
+    throw new ErrorDeRespaldo(`El respaldo está dañado: ${dado} no tiene id, título o artista.`);
   }
   const nombre = `"${titulo}"`;
   if (!Array.isArray(dificultades) || dificultades.length === 0) {
-    throw new ErrorDeRespaldo(`El respaldo esta danado: ${nombre} no tiene dificultades.`);
+    throw new ErrorDeRespaldo(`El respaldo está dañado: ${nombre} no tiene dificultades.`);
   }
   if (!(dificultades as unknown[]).every(esChartValido)) {
-    throw new ErrorDeRespaldo(`El respaldo esta danado: ${nombre} tiene una dificultad invalida.`);
+    throw new ErrorDeRespaldo(`El respaldo está dañado: ${nombre} tiene una dificultad inválida.`);
   }
   const videoOffset = crudo['videoOffset'];
   const importadaEn = crudo['importadaEn'];
@@ -303,11 +303,11 @@ function leerCancion(archivos: Unzipped, crudo: unknown, indice: number): Cancio
 
 function leerSkin(archivos: Unzipped, crudo: unknown, indice: number): SkinGuardada {
   if (!esObjeto(crudo)) {
-    throw new ErrorDeRespaldo(`El respaldo esta danado: la skin ${indice + 1} no es valida.`);
+    throw new ErrorDeRespaldo(`El respaldo está dañado: la skin ${indice + 1} no es válida.`);
   }
   const { id, nombre, imagenes } = crudo;
   if (!esTexto(id) || id === '' || !esTexto(nombre) || !esObjeto(imagenes)) {
-    throw new ErrorDeRespaldo(`El respaldo esta danado: la skin ${indice + 1} esta incompleta.`);
+    throw new ErrorDeRespaldo(`El respaldo está dañado: la skin ${indice + 1} está incompleta.`);
   }
   const resultado: ImagenesDeSkin = {};
   for (const clave of CLAVES_IMAGENES_SKIN) {
@@ -331,7 +331,7 @@ export async function leerRespaldo(zip: Blob): Promise<ContenidoRespaldo> {
   try {
     archivos = unzipSync(new Uint8Array(await zip.arrayBuffer()));
   } catch {
-    throw new ErrorDeRespaldo('El archivo no es un zip valido: no es un respaldo de Tetra.');
+    throw new ErrorDeRespaldo('El archivo no es un zip válido: no es un respaldo de Tetra.');
   }
   const bytesManifest = Object.hasOwn(archivos, 'manifest.json') ? archivos['manifest.json'] : undefined;
   if (bytesManifest === undefined) {
@@ -341,7 +341,7 @@ export async function leerRespaldo(zip: Blob): Promise<ContenidoRespaldo> {
   try {
     manifest = JSON.parse(new TextDecoder().decode(bytesManifest));
   } catch {
-    throw new ErrorDeRespaldo('El manifest.json del respaldo esta danado.');
+    throw new ErrorDeRespaldo('El manifest.json del respaldo está dañado.');
   }
   if (!esObjeto(manifest) || manifest['formato'] !== FORMATO) {
     throw new ErrorDeRespaldo('El zip no es un respaldo de Tetra.');
@@ -349,19 +349,19 @@ export async function leerRespaldo(zip: Blob): Promise<ContenidoRespaldo> {
   const version = manifest['version'];
   if (typeof version === 'number' && Number.isInteger(version) && version > VERSION_ACTUAL) {
     throw new ErrorDeRespaldo(
-      `El respaldo es de una version mas nueva de Tetra (formato ${version}); esta version lee hasta el formato ${VERSION_ACTUAL}. Actualiza Tetra para restaurarlo.`,
+      `El respaldo es de una versión más nueva de Tetra (formato ${version}); esta versión lee hasta el formato ${VERSION_ACTUAL}. Actualiza Tetra para restaurarlo.`,
     );
   }
   if (version !== VERSION_ACTUAL) {
-    throw new ErrorDeRespaldo('La version del respaldo no se reconoce.');
+    throw new ErrorDeRespaldo('La versión del respaldo no se reconoce.');
   }
 
   const { canciones, skins, records, ajustes } = manifest;
   if (!Array.isArray(canciones) || !Array.isArray(skins) || !Array.isArray(records)) {
-    throw new ErrorDeRespaldo('El respaldo esta danado: faltan canciones, skins o records.');
+    throw new ErrorDeRespaldo('El respaldo está dañado: faltan canciones, skins o récords.');
   }
   if (!esObjeto(ajustes)) {
-    throw new ErrorDeRespaldo('El respaldo esta danado: faltan los ajustes.');
+    throw new ErrorDeRespaldo('El respaldo está dañado: faltan los ajustes.');
   }
 
   // Un record que no se puede rescatar se descarta (igual que al leerlo de la

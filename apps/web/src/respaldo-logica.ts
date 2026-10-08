@@ -44,13 +44,13 @@ function plural(n: number, singular: string, pluralTexto: string): string {
  * records, replays, partidas del historial y ajustes restaurados.
  */
 export function lineaDeRestauracion(r: ResumenRestauracion): string {
-  const partes = [plural(r.cancionesNuevas, 'cancion nueva', 'canciones nuevas')];
+  const partes = [plural(r.cancionesNuevas, 'canción nueva', 'canciones nuevas')];
   if (r.cancionesExistentes > 0) {
     partes.push(plural(r.cancionesExistentes, 'ya existente', 'ya existentes'));
   }
   if (r.skinsNuevas > 0) partes.push(plural(r.skinsNuevas, 'skin', 'skins'));
   const records = r.recordsNuevos + r.recordsActualizados;
-  if (records > 0) partes.push(plural(records, 'record', 'records'));
+  if (records > 0) partes.push(plural(records, 'récord', 'récords'));
   if (r.replaysNuevos > 0) partes.push(plural(r.replaysNuevos, 'replay', 'replays'));
   if (r.historialNuevo > 0) partes.push(plural(r.historialNuevo, 'partida', 'partidas'));
   if (r.ajustesRestaurados > 0) partes.push('ajustes');

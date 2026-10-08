@@ -14,7 +14,7 @@ import { asegurarCancionDemo } from './demo/index.js';
 
 const contenedor = document.getElementById('app');
 if (!contenedor) {
-  throw new Error('No se encontro el elemento #app en el documento.');
+  throw new Error('No se encontró el elemento #app en el documento.');
 }
 
 montarHeader();

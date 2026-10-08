@@ -121,7 +121,7 @@ export function mostrarMenu(contenedor: HTMLElement, opciones: OpcionesMenu): ()
   const botonEstadisticas = document.createElement('button');
   botonEstadisticas.type = 'button';
   botonEstadisticas.className = 'tetra-menu-boton';
-  botonEstadisticas.textContent = 'Estadisticas';
+  botonEstadisticas.textContent = 'Estadísticas';
   botonEstadisticas.addEventListener('click', () => {
     apagar();
     fondoEscena().limpiar();
@@ -153,8 +153,8 @@ export function mostrarMenu(contenedor: HTMLElement, opciones: OpcionesMenu): ()
     fila.className = 'tetra-menu-sonando-fila';
     sonando.appendChild(fila);
 
-    const botonPausa = crearBotonIcono('pausa', 'Pausar la musica');
-    const botonSiguiente = crearBotonIcono('siguiente', 'Siguiente cancion');
+    const botonPausa = crearBotonIcono('pausa', 'Pausar la música');
+    const botonSiguiente = crearBotonIcono('siguiente', 'Siguiente canción');
     const texto = document.createElement('span');
     texto.className = 'tetra-menu-sonando-texto';
     fila.append(botonPausa, botonSiguiente, texto);
@@ -176,8 +176,8 @@ export function mostrarMenu(contenedor: HTMLElement, opciones: OpcionesMenu): ()
       const t = cancion ? textoDeLoQueSuena(cancion.titulo, cancion.artista) : 'Click track';
       if (texto.textContent !== t) texto.textContent = t;
       texto.title = t;
-      if (m.pausada) cambiarBotonIcono(botonPausa, 'reproducir', 'Reanudar la musica');
-      else cambiarBotonIcono(botonPausa, 'pausa', 'Pausar la musica');
+      if (m.pausada) cambiarBotonIcono(botonPausa, 'reproducir', 'Reanudar la música');
+      else cambiarBotonIcono(botonPausa, 'pausa', 'Pausar la música');
       fondoEscena().poner(cancion?.background, FONDO_DEL_MENU);
     }
     m.alCambiar(pintar);

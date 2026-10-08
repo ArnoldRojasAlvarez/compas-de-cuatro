@@ -27,7 +27,7 @@ const NOMBRES_ESPECIALES: Record<string, string> = {
   Equal: '=',
   Backquote: '`',
   Tab: 'Tab',
-  CapsLock: 'Bloq Mayus',
+  CapsLock: 'Bloq Mayús',
   Enter: 'Enter',
   Backspace: 'Backspace',
   Escape: 'Escape',

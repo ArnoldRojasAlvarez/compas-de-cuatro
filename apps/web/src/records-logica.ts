@@ -110,7 +110,7 @@ export function detalleDeUltima(
   const u = record.ultima;
   const dia = u.fecha.slice(0, 10);
   const partes = [
-    'Ultima partida',
+    'Última partida',
     `${formatearMiles(u.score)} puntos`,
     formatearPrecision(u.accuracy),
     `combo ${u.maxCombo}`,
@@ -157,7 +157,7 @@ export function tituloDeDesviacion(ms: number): string {
     entero === 0
       ? 'En promedio pegas justo a tiempo'
       : `En promedio pegas ${entero > 0 ? 'tarde' : 'temprano'} por ${Math.abs(entero)} ms`;
-  return desviacionEsAlta(ms) ? `${base}. Prueba ajustar el offset de esta cancion.` : base;
+  return desviacionEsAlta(ms) ? `${base}. Prueba ajustar el offset de esta canción.` : base;
 }
 
 /** Clase CSS del rango (el color lo pone song-select.css). */
@@ -180,8 +180,8 @@ export function avisoDeRecord(
   if (!esMejor) return undefined;
   if (anterior === undefined) return { texto: 'Primer registro' };
   const diferencia = nueva.score - anterior.score;
-  if (diferencia > 0) return { texto: 'Nuevo record', diferencia: `+${formatearMiles(diferencia)}` };
-  if (nueva.accuracy > anterior.accuracy) return { texto: 'Nuevo record' };
+  if (diferencia > 0) return { texto: 'Nuevo récord', diferencia: `+${formatearMiles(diferencia)}` };
+  if (nueva.accuracy > anterior.accuracy) return { texto: 'Nuevo récord' };
   return undefined;
 }
 

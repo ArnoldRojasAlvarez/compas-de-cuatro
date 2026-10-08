@@ -323,7 +323,7 @@ export function mostrarMapeador(contenedor: HTMLElement, opciones: OpcionesMapea
 
   // Cabecera del panel.
   const cabecera = el('div', 'tetra-mp-cabecera');
-  const volver = boton('← Menu', 'tetra-mp-volver');
+  const volver = boton('← Menú', 'tetra-mp-volver');
   const nuevo = boton('Nuevo', 'tetra-mp-nuevo');
   nuevo.title = 'Empezar un mapa desde cero';
   cabecera.append(volver, el('h1', 'tetra-mp-titulo', 'Mapeador'), nuevo);
@@ -333,10 +333,10 @@ export function mostrarMapeador(contenedor: HTMLElement, opciones: OpcionesMapea
   archivoEntrada.type = 'file';
   archivoEntrada.accept = 'audio/*,.mp3,.ogg,.wav,.flac,.m4a';
   archivoEntrada.className = 'tetra-mp-archivo';
-  const archivoNombre = el('div', 'tetra-mp-archivo-nombre', 'Ningun audio cargado');
+  const archivoNombre = el('div', 'tetra-mp-archivo-nombre', 'Ningún audio cargado');
   const zonaAudio = el('div', 'tetra-mp-zona');
   zonaAudio.append(archivoNombre, archivoEntrada);
-  const iTitulo = entradaTexto(sesion.meta.titulo, 'Titulo');
+  const iTitulo = entradaTexto(sesion.meta.titulo, 'Título');
   const iArtista = entradaTexto(sesion.meta.artista, 'Artista');
   const iCreador = entradaTexto(sesion.meta.creador, 'Quien mapea');
   const iDificultad = entradaTexto(sesion.meta.dificultad, 'Normal');
@@ -370,7 +370,7 @@ export function mostrarMapeador(contenedor: HTMLElement, opciones: OpcionesMapea
   cLargas.type = 'checkbox';
   cLargas.checked = sesion.auto.largas;
   const iSemilla = entradaNumero(sesion.auto.semilla, 1, 99999, 1);
-  const bGenerar = boton('Generar mapa automatico', 'tetra-boton-primario');
+  const bGenerar = boton('Generar mapa automático', 'tetra-boton-primario');
   const bAzar = boton('Otra variante');
   const bLimpiar = boton('Borrar todo');
   const bEspejar = boton('Espejar');
@@ -402,9 +402,9 @@ export function mostrarMapeador(contenedor: HTMLElement, opciones: OpcionesMapea
   panel.append(
     cabecera,
     tarjeta(
-      'Cancion',
+      'Canción',
       zonaAudio,
-      campo('Titulo', iTitulo),
+      campo('Título', iTitulo),
       campo('Artista', iArtista),
       campo('Mapeador', iCreador),
       campo('Dificultad', iDificultad),
@@ -417,7 +417,7 @@ export function mostrarMapeador(contenedor: HTMLElement, opciones: OpcionesMapea
       campo('Rejilla', sDivisor, 'Atajos: [ y ]'),
     ),
     tarjeta(
-      'Mapeo automatico',
+      'Mapeo automático',
       campo('Nivel', sNivel),
       campo('Densidad', filaDensidad),
       campo('Semilla', iSemilla, 'Misma semilla, mismo mapa'),
@@ -450,9 +450,9 @@ export function mostrarMapeador(contenedor: HTMLElement, opciones: OpcionesMapea
   // T-034: seleccion. Todo tiene atajo; los botones son para quien prefiere el mouse.
   const grupoSeleccion = el('div', 'tetra-mp-seleccion-grupo');
   grupoSeleccion.setAttribute('role', 'group');
-  grupoSeleccion.setAttribute('aria-label', 'Seleccion');
+  grupoSeleccion.setAttribute('aria-label', 'Selección');
   grupoSeleccion.title =
-    'Seleccion: Mayus + arrastrar sobre las pistas elige notas, Ctrl+A elige todo, Esc suelta. Alt + flechas mueve lo elegido un slot o una columna.';
+    'Selección: Mayús + arrastrar sobre las pistas elige notas, Ctrl+A elige todo, Esc suelta. Alt + flechas mueve lo elegido un slot o una columna.';
   const bCopiar = boton('Copiar');
   bCopiar.title = 'Copiar lo elegido (Ctrl+C)';
   const bCortar = boton('Cortar');
@@ -472,12 +472,12 @@ export function mostrarMapeador(contenedor: HTMLElement, opciones: OpcionesMapea
   const cMetro = el('input');
   cMetro.type = 'checkbox';
   const lMetro = el('label', 'tetra-mp-casilla');
-  lMetro.append(cMetro, el('span', undefined, 'Metronomo'));
+  lMetro.append(cMetro, el('span', undefined, 'Metrónomo'));
   const cCompensar = el('input');
   cCompensar.type = 'checkbox';
   cCompensar.checked = true;
   const lCompensar = el('label', 'tetra-mp-casilla');
-  lCompensar.title = 'Al grabar en vivo, resta el offset de calibracion y la latencia de salida del audio';
+  lCompensar.title = 'Al grabar en vivo, resta el offset de calibración y la latencia de salida del audio';
   lCompensar.append(cCompensar, el('span', undefined, 'Compensar latencia'));
   const cOnsets = el('input');
   cOnsets.type = 'checkbox';
@@ -509,7 +509,7 @@ export function mostrarMapeador(contenedor: HTMLElement, opciones: OpcionesMapea
   iPosicion.step = '1';
   iPosicion.value = '0';
   iPosicion.className = 'tetra-mp-posicion';
-  iPosicion.setAttribute('aria-label', 'Posicion en la cancion');
+  iPosicion.setAttribute('aria-label', 'Posición en la canción');
   const ayuda = el(
     'div',
     'tetra-mp-ayuda',
@@ -522,9 +522,9 @@ export function mostrarMapeador(contenedor: HTMLElement, opciones: OpcionesMapea
   const minimapa = el('div', 'tetra-mp-minimapa');
   const lienzoMinFondo = el('canvas', 'tetra-mp-minimapa-fondo');
   const lienzoMinCabezal = el('canvas', 'tetra-mp-minimapa-cabezal');
-  lienzoMinCabezal.setAttribute('aria-label', 'Minimapa de la cancion');
+  lienzoMinCabezal.setAttribute('aria-label', 'Minimapa de la canción');
   lienzoMinCabezal.title =
-    'Minimapa: clic o arrastre para saltar a ese instante. Barras blancas: notas. Onda: energia del audio. Ambar: mas de 8 compases sin notas.';
+    'Minimapa: clic o arrastre para saltar a ese instante. Barras blancas: notas. Onda: energía del audio. Ámbar: más de 8 compases sin notas.';
   minimapa.append(lienzoMinFondo, lienzoMinCabezal);
   escena.append(barra, lienzoContenedor, iPosicion, minimapa, ayuda);
   contenedor.appendChild(pantalla);
@@ -872,11 +872,11 @@ export function mostrarMapeador(contenedor: HTMLElement, opciones: OpcionesMapea
   /** Reabre una dificultad de la biblioteca: carga el audio y el mapa tal cual estan guardados. */
   async function abrirDeLaBiblioteca(songId: string, nombreDificultad: string): Promise<void> {
     try {
-      aviso('Abriendo la cancion de la biblioteca...');
+      aviso('Abriendo la canción de la biblioteca...');
       const cancion = await leerCancion(songId);
       const chart = cancion?.dificultades.find((d) => d.metadata.difficultyName === nombreDificultad);
       if (!cancion || !chart) {
-        aviso('Esa dificultad ya no esta en la biblioteca.', 'error');
+        aviso('Esa dificultad ya no está en la biblioteca.', 'error');
         return;
       }
       const primero = chart.timingPoints[0];
@@ -911,12 +911,12 @@ export function mostrarMapeador(contenedor: HTMLElement, opciones: OpcionesMapea
       await procesarAudio(await cancion.audio.arrayBuffer(), chart.metadata.audioFile, { esNuevo: false });
       if (chart.timingPoints.length > 1 || chart.speedPoints.length > 0) {
         aviso(
-          `Abierta. Esta dificultad tiene ${chart.timingPoints.length} puntos de tempo y ${chart.speedPoints.length} de velocidad: el editor usa el primer tempo y conserva los demas al guardar.`,
+          `Abierta. Esta dificultad tiene ${chart.timingPoints.length} puntos de tempo y ${chart.speedPoints.length} de velocidad: el editor usa el primer tempo y conserva los demás al guardar.`,
           'info',
         );
       }
     } catch (error) {
-      aviso(`No se pudo abrir la cancion: ${error instanceof Error ? error.message : String(error)}`, 'error');
+      aviso(`No se pudo abrir la canción: ${error instanceof Error ? error.message : String(error)}`, 'error');
     }
   }
 
@@ -935,7 +935,7 @@ export function mostrarMapeador(contenedor: HTMLElement, opciones: OpcionesMapea
     iOffset.value = String(Math.round(t.offsetMs));
     if (avisar) {
       aviso(
-        `BPM ${t.bpmSugerido}, offset ${Math.round(t.offsetMs)} ms (confianza ${Math.round(t.confianza * 100)}%). Verifica de oido con el metronomo.`,
+        `BPM ${t.bpmSugerido}, offset ${Math.round(t.offsetMs)} ms (confianza ${Math.round(t.confianza * 100)}%). Verifica de oído con el metrónomo.`,
         t.confianza > 0.5 ? 'ok' : 'info',
       );
     }
@@ -959,7 +959,7 @@ export function mostrarMapeador(contenedor: HTMLElement, opciones: OpcionesMapea
     const t = Math.round(tiempoActual());
     aplicarGrilla({ offsetMs: t });
     iOffset.value = String(t);
-    aviso(`Offset fijado en ${t} ms: el primer pulso cae donde esta el cabezal.`, 'ok');
+    aviso(`Offset fijado en ${t} ms: el primer pulso cae donde está el cabezal.`, 'ok');
   });
   bTap.addEventListener('click', (e) => {
     // event.timeStamp, no el momento en que corre el handler (CLAUDE.md, regla 1).
@@ -1068,7 +1068,7 @@ export function mostrarMapeador(contenedor: HTMLElement, opciones: OpcionesMapea
   function copiarSeleccion(): boolean {
     const lista = elegidas().notas;
     if (lista.length === 0) {
-      aviso('No hay notas elegidas. Mayus + arrastrar sobre las pistas las elige, Ctrl+A elige todo.', 'info');
+      aviso('No hay notas elegidas. Mayús + arrastrar sobre las pistas las elige, Ctrl+A elige todo.', 'info');
       return false;
     }
     portapapeles = copiarNotas(lista, opcionesDeCopia());
@@ -1100,11 +1100,11 @@ export function mostrarMapeador(contenedor: HTMLElement, opciones: OpcionesMapea
     const enMs = tiempoDeSlotEntero(sesion.grilla, slotMasCercano(sesion.grilla, tiempoActual()));
     const colocadas = desplazarNotas(portapapeles.notas, enMs);
     if (!colocadas) {
-      aviso('No se pega: alguna nota quedaria antes del inicio de la cancion.', 'error');
+      aviso('No se pega: alguna nota quedaría antes del inicio de la canción.', 'error');
       return;
     }
     if (duracionMs() > 0 && pasaDelFinal(colocadas, duracionMs())) {
-      aviso('No se pega: alguna nota quedaria despues del final de la cancion. Mueve el cabezal antes.', 'error');
+      aviso('No se pega: alguna nota quedaría después del final de la canción. Mueve el cabezal antes.', 'error');
       return;
     }
     confirmarNotas(pegarNotas(notas(), portapapeles, enMs), {
@@ -1128,13 +1128,13 @@ export function mostrarMapeador(contenedor: HTMLElement, opciones: OpcionesMapea
     const movidas = desplazarNotas(lista, dMs, columnas);
     if (!movidas) {
       aviso(
-        columnas !== 0 ? 'No se mueve: una nota saldria de las cuatro pistas.' : 'No se mueve: una nota quedaria antes del inicio.',
+        columnas !== 0 ? 'No se mueve: una nota saldría de las cuatro pistas.' : 'No se mueve: una nota quedaría antes del inicio.',
         'info',
       );
       return;
     }
     if (duracionMs() > 0 && pasaDelFinal(movidas, duracionMs())) {
-      aviso('No se mueve: una nota quedaria despues del final de la cancion.', 'info');
+      aviso('No se mueve: una nota quedaría después del final de la canción.', 'info');
       return;
     }
     confirmarNotas(moverNotas(notas(), lista, dMs, columnas), {
@@ -1229,12 +1229,12 @@ export function mostrarMapeador(contenedor: HTMLElement, opciones: OpcionesMapea
         await guardarDificultad(sesion.base.songId, chart);
         mensaje = existia
           ? `Dificultad "${nombre}" reemplazada en la biblioteca.`
-          : `Dificultad "${nombre}" agregada a la cancion en la biblioteca.`;
+          : `Dificultad "${nombre}" agregada a la canción en la biblioteca.`;
       } else {
         const id = await guardarCancionCreada(entrada);
         sesion.base = { songId: id, timingPoints: chart.timingPoints, speedPoints: chart.speedPoints };
         mensaje =
-          'Guardado en la biblioteca. Para otra dificultad de la misma cancion, cambia el nombre en "Dificultad" y vuelve a guardar.';
+          'Guardado en la biblioteca. Para otra dificultad de la misma canción, cambia el nombre en "Dificultad" y vuelve a guardar.';
       }
       borrarBorrador();
       aviso(mensaje, 'ok');
@@ -1244,10 +1244,10 @@ export function mostrarMapeador(contenedor: HTMLElement, opciones: OpcionesMapea
       estado.appendChild(ir);
     } catch (error) {
       const texto = error instanceof Error ? error.message : String(error);
-      if (sesion.base && texto.includes('ya no esta en la biblioteca')) {
+      if (sesion.base && texto.includes('ya no está en la biblioteca')) {
         // Se borro la cancion desde otro lado: la proxima vez se crea de nuevo.
         sesion.base = null;
-        aviso('La cancion se borro de la biblioteca. Pulsa "Guardar" otra vez para crearla de nuevo.', 'error');
+        aviso('La canción se borró de la biblioteca. Pulsa "Guardar" otra vez para crearla de nuevo.', 'error');
       } else {
         aviso(`No se pudo guardar: ${texto}`, 'error');
       }
@@ -1266,7 +1266,7 @@ export function mostrarMapeador(contenedor: HTMLElement, opciones: OpcionesMapea
     pausar();
     const chart = chartActual();
     if (inicioMs > 0 && !chart.notes.some((n) => n.time >= inicioMs)) {
-      aviso('No hay notas despues del cabezal: mueve el cabezal antes de la ultima nota.', 'error');
+      aviso('No hay notas después del cabezal: mueve el cabezal antes de la última nota.', 'error');
       return;
     }
     guardarSesion();
@@ -1978,7 +1978,7 @@ export function mostrarMapeador(contenedor: HTMLElement, opciones: OpcionesMapea
   } else if (sesion.buffer) {
     archivoNombre.textContent = `${sesion.nombreAudio || 'audio'} (${formatoTiempo(duracionMs())})`;
     iPosicion.max = String(Math.round(duracionMs()));
-    aviso('Sesion recuperada.', 'info');
+    aviso('Sesión recuperada.', 'info');
   } else if (notas().length > 0) {
     aviso(`Borrador recuperado (${notas().length} notas). Carga el mismo audio para seguir.`, 'info');
   }

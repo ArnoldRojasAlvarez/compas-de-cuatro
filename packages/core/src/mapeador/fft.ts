@@ -18,7 +18,7 @@ export interface PlanFft {
 /** Precalcula twiddles y la permutacion de bits para un tamano `n` (potencia de dos). */
 export function crearPlanFft(n: number): PlanFft {
   if (n < 2 || (n & (n - 1)) !== 0) {
-    throw new Error(`El tamano de la FFT debe ser una potencia de dos, llego ${n}.`);
+    throw new Error(`El tamaño de la FFT debe ser una potencia de dos, llegó ${n}.`);
   }
   const cos = new Float64Array(n / 2);
   const sin = new Float64Array(n / 2);

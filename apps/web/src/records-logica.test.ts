@@ -273,9 +273,9 @@ describe('desviacion media del record (T-057)', () => {
   it('solo si es alta el title sugiere ajustar el offset de la cancion', () => {
     expect(tituloDeDesviacion(5)).not.toContain('offset');
     expect(tituloDeDesviacion(-8)).not.toContain('offset');
-    expect(tituloDeDesviacion(12)).toContain('offset de esta cancion');
+    expect(tituloDeDesviacion(12)).toContain('offset de esta canción');
     expect(tituloDeDesviacion(-12)).toContain('temprano por 12 ms');
-    expect(tituloDeDesviacion(-12)).toContain('offset de esta cancion');
+    expect(tituloDeDesviacion(-12)).toContain('offset de esta canción');
   });
 });
 
@@ -286,7 +286,7 @@ describe('avisoDeRecord', () => {
 
   it('con anterior y mas score, es nuevo record con la diferencia', () => {
     const aviso = avisoDeRecord(true, partida(500_000), partida(512_340));
-    expect(aviso).toEqual({ texto: 'Nuevo record', diferencia: `+12${NBSP}340` });
+    expect(aviso).toEqual({ texto: 'Nuevo récord', diferencia: `+12${NBSP}340` });
   });
 
   it('si no mejoro no hay aviso (aunque haya anterior)', () => {
@@ -296,7 +296,7 @@ describe('avisoDeRecord', () => {
 
   it('mismo score con mas precision es nuevo record sin diferencia', () => {
     expect(avisoDeRecord(true, partida(500_000, 0.8), partida(500_000, 0.85))).toEqual({
-      texto: 'Nuevo record',
+      texto: 'Nuevo récord',
     });
   });
 

@@ -19,8 +19,8 @@ import {
 describe('PERIODOS', () => {
   it('son 7 dias, 30 dias y todo, en ese orden', () => {
     expect(PERIODOS.map((p) => [p.etiqueta, p.dias])).toEqual([
-      ['7 dias', 7],
-      ['30 dias', 30],
+      ['7 días', 7],
+      ['30 días', 30],
       ['Todo', null],
     ]);
   });

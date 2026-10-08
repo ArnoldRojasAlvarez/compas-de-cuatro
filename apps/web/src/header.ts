@@ -63,7 +63,7 @@ export function montarHeader(): void {
   const jugado = document.createElement('button');
   jugado.type = 'button';
   jugado.className = 'tetra-header-dato tetra-header-boton';
-  jugado.title = 'Ver estadisticas';
+  jugado.title = 'Ver estadísticas';
   jugado.disabled = !aperturaPermitida;
   jugado.addEventListener('click', () => {
     window.dispatchEvent(new CustomEvent(EVENTO_ABRIR_ESTADISTICAS));

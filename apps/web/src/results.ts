@@ -356,7 +356,7 @@ function crearFilaDeTeclasYUR(
   const ur = document.createElement('span');
   ur.className = 'tetra-resultados-ur';
   ur.title =
-    'UR (unstable rate): 10 x la desviacion estandar de tus golpes, en ms. Cuanto mas bajo, mas parejo tocas.';
+    'UR (unstable rate): 10 x la desviación estándar de tus golpes, en ms. Cuanto más bajo, más parejo tocas.';
   ur.textContent = `UR ${formatearUR(unstableRate(erroresJuzgados(desviaciones)))}`;
   fila.appendChild(ur);
   return fila;
@@ -400,7 +400,7 @@ function crearBotonCorregirOffset(
   boton.type = 'button';
   boton.className = 'tetra-resultados-corregir';
   boton.textContent = 'Corregir offset';
-  boton.title = `Ajusta el offset segun la media de esta partida (${formatearMedia(mediaError)}). Se aplica en la proxima${correccion.local ? ' de esta cancion' : ''}.`;
+  boton.title = `Ajusta el offset según la media de esta partida (${formatearMedia(mediaError)}). Se aplica en la próxima${correccion.local ? ' de esta canción' : ''}.`;
 
   boton.addEventListener('click', () => {
     const offsetNuevo = correccion.guardar(
@@ -434,7 +434,7 @@ function crearBloquePrincipal(estado: ScoreState): HTMLElement {
   precision.className = 'tetra-resultados-celda tetra-resultados-celda-precision';
   const precisionEtiqueta = document.createElement('span');
   precisionEtiqueta.className = 'tetra-resultados-etiqueta';
-  precisionEtiqueta.textContent = 'Precision';
+  precisionEtiqueta.textContent = 'Precisión';
   const precisionValor = document.createElement('span');
   precisionValor.className = 'tetra-resultados-precision';
   precisionValor.textContent = `${(estado.accuracy * 100).toFixed(2)}%`;
@@ -444,7 +444,7 @@ function crearBloquePrincipal(estado: ScoreState): HTMLElement {
   secundarios.className = 'tetra-resultados-secundarios';
   secundarios.append(
     crearCelda('Score', String(estado.score)),
-    crearCelda('Combo max', String(estado.maxCombo)),
+    crearCelda('Combo máx.', String(estado.maxCombo)),
   );
 
   datos.append(precision, secundarios);
@@ -539,8 +539,8 @@ export function mostrarResultados(
   const canvas = document.createElement('canvas');
   canvas.className = 'tetra-resultados-grafico';
   canvas.setAttribute('role', 'img');
-  canvas.setAttribute('aria-label', 'Desviacion de cada golpe en el tiempo');
-  canvas.title = 'Desviacion de cada golpe en el tiempo';
+  canvas.setAttribute('aria-label', 'Desviación de cada golpe en el tiempo');
+  canvas.title = 'Desviación de cada golpe en el tiempo';
   cajaGrafico.appendChild(canvas);
   seccionGrafico.appendChild(cajaGrafico);
   panel.appendChild(seccionGrafico);

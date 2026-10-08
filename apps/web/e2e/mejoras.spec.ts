@@ -207,14 +207,14 @@ test('offset local: se ajusta en el song select y solo cambia el reloj de esa ca
   await control.hover();
   await expect(valor).toHaveText('0 ms');
   // + de a 1 ms; Shift + clic de a 5 ms.
-  await page.getByRole('button', { name: 'Offset de esta cancion, 1 ms despues' }).click();
+  await page.getByRole('button', { name: 'Offset de esta canción, 1 ms después' }).click();
   await expect(valor).toHaveText('+1 ms');
   await page
-    .getByRole('button', { name: 'Offset de esta cancion, 1 ms despues' })
+    .getByRole('button', { name: 'Offset de esta canción, 1 ms después' })
     .click({ modifiers: ['Shift'] });
   await expect(valor).toHaveText('+6 ms');
   await page
-    .getByRole('button', { name: 'Offset de esta cancion, 1 ms antes' })
+    .getByRole('button', { name: 'Offset de esta canción, 1 ms antes' })
     .click({ modifiers: ['Shift'] });
   await expect(valor).toHaveText('+1 ms');
 
@@ -282,7 +282,7 @@ test('resultados: Corregir offset ajusta el local de la cancion y el record mues
   // Hasta el final de la partida (la ultima nota cae a los 31,5 s).
   const corregir = page.locator('.tetra-resultados-corregir');
   await expect(corregir).toBeVisible({ timeout: 90_000 });
-  await expect(corregir).toHaveAttribute('title', /de esta cancion/);
+  await expect(corregir).toHaveAttribute('title', /de esta canción/);
   await corregir.click();
   await expect(corregir).toBeDisabled();
 
@@ -300,7 +300,7 @@ test('resultados: Corregir offset ajusta el local de la cancion y el record mues
   const desviacion = page.locator('.tetra-ss-record-desviacion');
   await expect(desviacion).toHaveText(/^\+\d+ ms$/);
   await expect(desviacion).toHaveClass(/tetra-ss-record-desviacion-alta/);
-  await expect(desviacion).toHaveAttribute('title', /pegas tarde por \d+ ms.*offset de esta cancion/);
+  await expect(desviacion).toHaveAttribute('title', /pegas tarde por \d+ ms.*offset de esta canción/);
   // Pasados +-8 ms el control de offset queda a la vista, con el local ya corregido.
   await page.mouse.move(0, 0);
   await expect(page.locator('.tetra-ss-offset-ajuste')).toBeVisible();

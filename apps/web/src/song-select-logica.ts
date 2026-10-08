@@ -242,6 +242,18 @@ export function nivelDeEstrellas(estrellas: number): NivelEstrellas {
 }
 
 /**
+ * T-048: el nombre de una dificultad tal como se muestra. El dato guardado no
+ * se toca (la demo y los mapas auto-generados antes de este ticket se llaman
+ * 'Facil' y 'Dificil' y ese nombre vive en el .osu y en el hash de los
+ * records): solo se pone la tilde en pantalla. Cualquier otro nombre pasa igual.
+ */
+export function nombreVisibleDeDificultad(nombre: string): string {
+  if (nombre === 'Facil') return 'Fácil';
+  if (nombre === 'Dificil') return 'Difícil';
+  return nombre;
+}
+
+/**
  * Filtra por rango de estrellas (ver el ticket, "filtrar por rango de
  * estrellas"). `minimo`/`maximo` en `null` quiere decir "sin cota de ese
  * lado"; los dos en `null` (el estado inicial del filtro) devuelve la

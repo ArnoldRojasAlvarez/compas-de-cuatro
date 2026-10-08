@@ -382,7 +382,7 @@ test('minimapa: sin notas solo muestra la onda, y generar un mapa automatico act
   expect(vacio.ambar).toBe(0);
   expect(vacio.alto).toBeGreaterThan(20);
 
-  await page.getByRole('button', { name: 'Generar mapa automatico' }).click();
+  await page.getByRole('button', { name: 'Generar mapa automático' }).click();
   await expect(page.locator('.tetra-mp-notas')).toContainText('notas');
   // De inmediato: aparecen las barras de notas y, como hay notas a lo largo de toda la cancion, ningun hueco.
   await expect.poll(async () => (await leerMinimapa(page)).claros, { timeout: 3000 }).toBeGreaterThan(50);

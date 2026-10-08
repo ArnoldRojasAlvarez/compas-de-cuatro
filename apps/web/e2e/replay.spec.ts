@@ -230,7 +230,7 @@ test('Ver auto: el bot saca todo MAX, muestra AUTO y no guarda record ni cuenta 
 
   // No se guardo nada: la dificultad sigue sin record ni replay.
   await page.getByRole('button', { name: 'Volver al song select' }).click();
-  await expect(page.getByRole('heading', { name: 'Elegir cancion' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Elegir canción' })).toBeVisible();
   await expect(page.locator('.tetra-ss-record')).toHaveCount(0);
   await expect(page.locator('.tetra-dificultad-item-rango')).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Ver mejor partida' })).toHaveCount(0);
@@ -314,7 +314,7 @@ test('Ver mejor partida reproduce la partida guardada con exactamente el mismo r
   );
   await page.getByRole('button', { name: 'Ver mejor partida' }).click();
   await expect(page.locator('.tetra-song-select-error')).toContainText('no se puede leer');
-  await expect(page.getByRole('heading', { name: 'Elegir cancion' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Elegir canción' })).toBeVisible();
 });
 
 test('Auto con una intro larga: Espacio salta y no hay un solo miss', async ({ page }) => {
@@ -356,7 +356,7 @@ test('mapeador: "Auto" juega el mapa en edicion con la etiqueta AUTO y sin un mi
   await expect(page.locator('.tetra-mp-estado')).toContainText('golpes detectados', {
     timeout: 60_000,
   });
-  await page.getByRole('button', { name: 'Generar mapa automatico' }).click();
+  await page.getByRole('button', { name: 'Generar mapa automático' }).click();
   await expect(page.locator('.tetra-mp-notas')).toContainText('notas');
 
   await page.getByRole('button', { name: 'Auto', exact: true }).click();

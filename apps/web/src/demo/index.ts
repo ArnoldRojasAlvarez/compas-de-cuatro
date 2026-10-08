@@ -78,7 +78,7 @@ export function asegurarCancionDemo(): Promise<void> {
   // Dos llamadas seguidas comparten el mismo trabajo en vez de sembrar dos veces.
   enCurso ??= sembrar()
     .catch((error: unknown) => {
-      console.warn('No se pudo sembrar la cancion demo:', error);
+      console.warn('No se pudo sembrar la canción demo:', error);
     })
     .finally(() => {
       enCurso = null;

@@ -19,6 +19,7 @@ import {
   filtrarPorRangoDeEstrellas,
   formatearDuracion,
   nivelDeEstrellas,
+  nombreVisibleDeDificultad,
   ordenarCanciones,
   ordenarDificultades,
   textoDeImportacionFallida,
@@ -617,5 +618,18 @@ describe('textoDeImportacionFallida', () => {
 
   it('sin nombre de archivo no deja un espacio colgando', () => {
     expect(textoDeImportacionFallida('  ')).toBe('No se pudo importar');
+  });
+});
+
+describe('nombreVisibleDeDificultad (T-048)', () => {
+  it('pone la tilde a los nombres sin tilde que ya viven guardados', () => {
+    expect(nombreVisibleDeDificultad('Facil')).toBe('Fácil');
+    expect(nombreVisibleDeDificultad('Dificil')).toBe('Difícil');
+  });
+
+  it('cualquier otro nombre pasa tal cual', () => {
+    expect(nombreVisibleDeDificultad('Normal')).toBe('Normal');
+    expect(nombreVisibleDeDificultad('Fácil')).toBe('Fácil');
+    expect(nombreVisibleDeDificultad('Insane [4K]')).toBe('Insane [4K]');
   });
 });

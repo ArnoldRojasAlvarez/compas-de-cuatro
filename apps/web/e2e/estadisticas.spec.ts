@@ -218,7 +218,7 @@ async function jugarYVolverAlSongSelect(
   await expect(page.locator('.tetra-resultados')).toBeVisible({ timeout: 60_000 });
   // El boton aparece cuando el record y el historial ya se guardaron.
   await page.getByRole('button', { name: 'Volver al song select' }).click();
-  await expect(page.getByRole('heading', { name: 'Elegir cancion' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Elegir canción' })).toBeVisible();
 }
 
 const cifra = (page: Page, indice: number) =>
@@ -231,18 +231,18 @@ test('el menu tiene cuatro botones y las estadisticas sin partidas muestran el e
   await expect(page.locator('.tetra-menu-accesos button')).toHaveText([
     'Jugar',
     'Mapeador',
-    'Estadisticas',
+    'Estadísticas',
     'Ajustes',
   ]);
 
   await page
     .locator('.tetra-menu-accesos')
-    .getByRole('button', { name: 'Estadisticas' })
+    .getByRole('button', { name: 'Estadísticas' })
     .click();
   await expect(
-    page.getByRole('heading', { level: 1, name: 'Estadisticas' }),
+    page.getByRole('heading', { level: 1, name: 'Estadísticas' }),
   ).toBeVisible();
-  await expect(page.getByText('Todavia no hay partidas')).toBeVisible();
+  await expect(page.getByText('Todavía no hay partidas')).toBeVisible();
   // Sin partidas no hay nada que filtrar ni graficos que dibujar.
   await expect(page.locator('.tetra-estg-periodos')).toBeHidden();
   await expect(page.locator('.tetra-estg-canvas')).toHaveCount(0);
@@ -252,7 +252,7 @@ test('el menu tiene cuatro botones y las estadisticas sin partidas muestran el e
     .locator('.tetra-estg')
     .getByRole('button', { name: 'Jugar', exact: true })
     .click();
-  await expect(page.getByRole('heading', { name: 'Elegir cancion' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Elegir canción' })).toBeVisible();
   // Desde el song select el bloque "Jugado" del header no es un acceso (hay audio y un worker vivos).
   await expect(page.locator('.tetra-header-boton')).toBeDisabled();
 });
@@ -263,16 +263,16 @@ test('el bloque "Jugado" del header lleva a las estadisticas desde el menu y des
   await page.goto('/');
   const jugado = page.locator('.tetra-header-boton');
   await expect(jugado).toBeEnabled();
-  await expect(jugado).toHaveAttribute('title', 'Ver estadisticas');
+  await expect(jugado).toHaveAttribute('title', 'Ver estadísticas');
 
   await jugado.click();
   await expect(
-    page.getByRole('heading', { level: 1, name: 'Estadisticas' }),
+    page.getByRole('heading', { level: 1, name: 'Estadísticas' }),
   ).toBeVisible();
   // Ya estando aca no lleva a ningun lado.
   await expect(jugado).toBeDisabled();
 
-  await page.getByRole('button', { name: 'Volver al menu' }).click();
+  await page.getByRole('button', { name: 'Volver al menú' }).click();
   await expect(page.getByRole('button', { name: 'Jugar', exact: true })).toBeVisible();
   await expect(jugado).toBeEnabled();
 
@@ -281,7 +281,7 @@ test('el bloque "Jugado" del header lleva a las estadisticas desde el menu y des
   await expect(jugado).toBeEnabled();
   await jugado.click();
   await expect(
-    page.getByRole('heading', { level: 1, name: 'Estadisticas' }),
+    page.getByRole('heading', { level: 1, name: 'Estadísticas' }),
   ).toBeVisible();
 });
 
@@ -300,7 +300,7 @@ test('tres partidas: los numeros coinciden con la suma a mano, el auto no cuenta
   await esperarPartida(page);
   await expect(page.locator('.tetra-resultados')).toBeVisible({ timeout: 60_000 });
   await page.getByRole('button', { name: 'Volver al song select' }).click();
-  await expect(page.getByRole('heading', { name: 'Elegir cancion' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Elegir canción' })).toBeVisible();
 
   const filas = await leerHistorialGuardado(page);
   expect(filas).toHaveLength(2);
@@ -313,13 +313,13 @@ test('tres partidas: los numeros coinciden con la suma a mano, el auto no cuenta
   expect(filas.every((f) => f.duracionJugadaMs === DURACION_JUGADA_MS)).toBe(true);
 
   // 3. A la pantalla: Volver al menu y Estadisticas.
-  await page.getByRole('button', { name: 'Volver al menu' }).click();
+  await page.getByRole('button', { name: 'Volver al menú' }).click();
   await page
     .locator('.tetra-menu-accesos')
-    .getByRole('button', { name: 'Estadisticas' })
+    .getByRole('button', { name: 'Estadísticas' })
     .click();
   await expect(
-    page.getByRole('heading', { level: 1, name: 'Estadisticas' }),
+    page.getByRole('heading', { level: 1, name: 'Estadísticas' }),
   ).toBeVisible();
 
   // Partidas y tiempo: dos partidas de 4,4 s.
@@ -342,12 +342,12 @@ test('tres partidas: los numeros coinciden con la suma a mano, el auto no cuenta
     page.getByRole('img', { name: 'Fallos por columna: D 0, F 0, J 1, K 0' }),
   ).toBeVisible();
   await expect(
-    page.getByRole('img', { name: /^Desviacion media por dia: 1 dia, de / }),
+    page.getByRole('img', { name: /^Desviación media por día: 1 día, de / }),
   ).toBeVisible();
   await expect(page.locator('.tetra-estg')).not.toContainText('NaN');
 
   // El filtro: las dos partidas son de hoy, entran en 7 y 30 dias y en todo.
-  for (const periodo of ['7 dias', '30 dias', 'Todo']) {
+  for (const periodo of ['7 días', '30 días', 'Todo']) {
     await page.getByRole('button', { name: periodo, exact: true }).click();
     await expect(
       page.getByRole('button', { name: periodo, exact: true }),
@@ -389,12 +389,12 @@ test('tres partidas: los numeros coinciden con la suma a mano, el auto no cuenta
         };
       }),
   );
-  await page.getByRole('button', { name: 'Volver al menu' }).click();
+  await page.getByRole('button', { name: 'Volver al menú' }).click();
   await page.locator('.tetra-header-boton').click();
   await expect(cifra(page, 0)).toHaveText('3');
-  await page.getByRole('button', { name: '7 dias', exact: true }).click();
+  await page.getByRole('button', { name: '7 días', exact: true }).click();
   await expect(cifra(page, 0)).toHaveText('2');
-  await page.getByRole('button', { name: '30 dias', exact: true }).click();
+  await page.getByRole('button', { name: '30 días', exact: true }).click();
   await expect(cifra(page, 0)).toHaveText('3');
   // La partida vieja (50 % en 100 notas) pesa 100 de 130 notas: la precision media baja de verdad.
   const ponderada = (con.accuracy * 15 + perfecta.accuracy * 15 + 0.5 * 100) / 130;

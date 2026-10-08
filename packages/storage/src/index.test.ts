@@ -515,7 +515,7 @@ describe('exportarCancion', () => {
   });
 
   it('rechaza con un mensaje claro si la cancion no existe', async () => {
-    await expect(exportarCancion('no-existe')).rejects.toThrow(/no esta en la biblioteca/);
+    await expect(exportarCancion('no-existe')).rejects.toThrow(/no está en la biblioteca/);
   });
 });
 

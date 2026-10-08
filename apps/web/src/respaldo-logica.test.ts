@@ -49,7 +49,7 @@ describe('formatearBytes y lineaDeAlmacenamiento', () => {
 
 describe('lineaDeRestauracion', () => {
   it('es una sola linea, con singular y plural', () => {
-    expect(lineaDeRestauracion({ ...RESUMEN_VACIO, cancionesNuevas: 1 })).toBe('1 cancion nueva');
+    expect(lineaDeRestauracion({ ...RESUMEN_VACIO, cancionesNuevas: 1 })).toBe('1 canción nueva');
     expect(
       lineaDeRestauracion({
         ...RESUMEN_VACIO,
@@ -60,7 +60,7 @@ describe('lineaDeRestauracion', () => {
         recordsActualizados: 1,
         ajustesRestaurados: 6,
       }),
-    ).toBe('3 canciones nuevas, 1 ya existente, 2 skins, 5 records, ajustes');
+    ).toBe('3 canciones nuevas, 1 ya existente, 2 skins, 5 récords, ajustes');
   });
 
   it('T-044: cuenta los replays restaurados, entre los records y los ajustes', () => {
@@ -69,7 +69,7 @@ describe('lineaDeRestauracion', () => {
     );
     expect(
       lineaDeRestauracion({ ...RESUMEN_VACIO, recordsNuevos: 2, replaysNuevos: 2, ajustesRestaurados: 1 }),
-    ).toBe('0 canciones nuevas, 2 records, 2 replays, ajustes');
+    ).toBe('0 canciones nuevas, 2 récords, 2 replays, ajustes');
   });
 
   it('T-045: cuenta las partidas del historial restauradas, despues de los replays', () => {

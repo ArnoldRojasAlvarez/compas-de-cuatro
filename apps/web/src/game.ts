@@ -449,7 +449,7 @@ export function runGame(
   return new Promise((resolve, reject) => {
     const elementoApp = document.getElementById('app');
     if (!elementoApp) {
-      reject(new Error('No se encontro el elemento #app en el documento.'));
+      reject(new Error('No se encontró el elemento #app en el documento.'));
       return;
     }
     // Se recorta a una constante nueva, tipada sin null: el guard de arriba

@@ -307,7 +307,7 @@ function describirSerie(
   if (serie.length === 0) return `${nombre}: sin partidas`;
   const primero = serie[0]!;
   const ultimo = serie[serie.length - 1]!;
-  const dias = serie.length === 1 ? '1 dia' : `${serie.length} dias`;
+  const dias = serie.length === 1 ? '1 día' : `${serie.length} días`;
   return `${nombre}: ${dias}, de ${formato(primero.valor)} a ${formato(ultimo.valor)}`;
 }
 
@@ -343,7 +343,7 @@ function crearBarraPartida(resumen: ResumenHistorial): HTMLElement {
   if (partes === null) {
     barra.classList.add('tetra-estg-partida-vacia');
     barra.setAttribute('role', 'img');
-    barra.setAttribute('aria-label', 'Sin golpes tempranos ni tardios');
+    barra.setAttribute('aria-label', 'Sin golpes tempranos ni tardíos');
   } else {
     const temprano = document.createElement('span');
     temprano.className = 'tetra-estg-partida-temprano';
@@ -376,7 +376,7 @@ function crearVacio(aJugar: () => void): HTMLElement {
   for (let i = 0; i < 4; i++) icono.appendChild(document.createElement('span'));
   const linea = document.createElement('p');
   linea.className = 'tetra-song-select-vacio-titulo';
-  linea.textContent = 'Todavia no hay partidas';
+  linea.textContent = 'Todavía no hay partidas';
   const boton = document.createElement('button');
   boton.type = 'button';
   boton.className = 'tetra-boton-primario tetra-estg-jugar';
@@ -403,14 +403,14 @@ export function mostrarEstadisticasGlobales(
   // Barra superior: volver, el titulo (un h1 accesible, chico) y el filtro.
   const barra = document.createElement('div');
   barra.className = 'tetra-estg-barra';
-  const volver = crearBotonIcono('volver', 'Volver al menu', 'tetra-boton-volver');
+  const volver = crearBotonIcono('volver', 'Volver al menú', 'tetra-boton-volver');
   volver.addEventListener('click', () => {
     observador.disconnect();
     opciones.aMenu();
   });
   const titulo = document.createElement('h1');
   titulo.className = 'tetra-estg-titulo';
-  titulo.textContent = 'Estadisticas';
+  titulo.textContent = 'Estadísticas';
 
   const periodos = document.createElement('div');
   periodos.className = 'tetra-estg-periodos';
@@ -479,18 +479,18 @@ export function mostrarEstadisticasGlobales(
         : `${tituloDeDesviacion(resumen.desviacionMedia)}${
             resumen.desviacionTipica === null
               ? ''
-              : `. Dispersion: ${Math.round(resumen.desviacionTipica)} ms`
+              : `. Dispersión: ${Math.round(resumen.desviacionTipica)} ms`
           }`;
     cifras.append(
       crearCifra('Partidas', String(resumen.partidas), `${resumen.notas} notas`),
       crearCifra('Tiempo', formatearDuracion(resumen.tiempoJugadoMs)),
       crearCifra(
-        'Precision media',
+        'Precisión media',
         textoDePrecisionMedia(resumen.accuracyMedia),
-        'Ponderada por notas: una partida larga pesa mas que una corta',
+        'Ponderada por notas: una partida larga pesa más que una corta',
       ),
       crearCifra(
-        'Desviacion media',
+        'Desviación media',
         textoDeDesviacionMedia(resumen.desviacionMedia),
         detalleDesviacion,
       ),
@@ -509,12 +509,12 @@ export function mostrarEstadisticasGlobales(
     const graficos = document.createElement('div');
     graficos.className = 'tetra-estg-graficos';
     const desviacion = crearPanelDeCanvas(
-      'Desviacion por dia',
-      describirSerie('Desviacion media por dia', serieDesviacion, formatoMs),
+      'Desviación por día',
+      describirSerie('Desviación media por día', serieDesviacion, formatoMs),
     );
     const precision = crearPanelDeCanvas(
-      'Precision por dia',
-      describirSerie('Precision media por dia', seriePrecision, formatoPorcentaje),
+      'Precisión por día',
+      describirSerie('Precisión media por día', seriePrecision, formatoPorcentaje),
     );
     graficos.append(desviacion.panel, precision.panel);
     cuerpo.appendChild(graficos);

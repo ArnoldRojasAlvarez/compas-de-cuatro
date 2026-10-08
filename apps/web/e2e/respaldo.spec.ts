@@ -83,7 +83,7 @@ test('exportar un respaldo, restaurarlo en un perfil limpio y no duplicar al rep
 
     await limpio.locator('#tetra-respaldo-archivo').setInputFiles(ruta);
     await expect(limpio.locator('.tetra-ajustes-estado')).toContainText(
-      `${cancionesOriginales} ${cancionesOriginales === 1 ? 'cancion nueva' : 'canciones nuevas'}`,
+      `${cancionesOriginales} ${cancionesOriginales === 1 ? 'canción nueva' : 'canciones nuevas'}`,
     );
     expect(await contarCanciones(limpio)).toBe(cancionesOriginales);
     // Los ajustes del respaldo (no habia nada distinto que pisar) quedaron puestos.
@@ -109,7 +109,7 @@ test('un archivo que no es un respaldo muestra un error y no toca la biblioteca'
   writeFileSync(falso, 'esto no es un zip');
   await page.locator('#tetra-respaldo-archivo').setInputFiles(falso);
 
-  await expect(page.locator('.tetra-ajustes-error')).toContainText('no es un zip valido');
+  await expect(page.locator('.tetra-ajustes-error')).toContainText('no es un zip válido');
   expect(await contarCanciones(page)).toBe(antes);
   // Los botones vuelven a quedar disponibles.
   await expect(page.getByRole('button', { name: 'Importar respaldo' })).toBeEnabled();

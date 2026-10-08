@@ -97,7 +97,7 @@ describe('guardarDificultad y borrarDificultad (IndexedDB)', () => {
 
   it('guardar en una cancion que no existe falla con un mensaje claro', async () => {
     await expect(guardarDificultad('no-existe', chart('Normal'))).rejects.toThrow(
-      /ya no esta en la biblioteca/,
+      /ya no está en la biblioteca/,
     );
   });
 

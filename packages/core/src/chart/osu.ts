@@ -233,7 +233,7 @@ function parseTimingPoints(
     return {
       ok: false,
       error:
-        'El mapa no tiene ningun punto de tiempo rojo (cambio de BPM) en [TimingPoints]: ' +
+        'El mapa no tiene ningún punto de tiempo rojo (cambio de BPM) en [TimingPoints]: ' +
         'hace falta al menos uno para definir el offset y el tempo.',
     };
   }
@@ -282,12 +282,12 @@ export function parseOsu(text: string): ParseResult {
   const secciones = dividirSecciones(text);
 
   // --- [General] ---
-  if (!secciones.vistas.has('General')) return err('Falta la seccion [General].');
+  if (!secciones.vistas.has('General')) return err('Falta la sección [General].');
 
   const mode = secciones.general.get('Mode');
   if (mode === undefined) return err('Falta el campo Mode en [General].');
   if (mode !== '3') {
-    return err(`Mode invalido: se esperaba 3 (mania), el archivo tiene Mode:${mode}.`);
+    return err(`Mode inválido: se esperaba 3 (mania), el archivo tiene Mode:${mode}.`);
   }
 
   const audioFile = secciones.general.get('AudioFilename');
@@ -299,11 +299,11 @@ export function parseOsu(text: string): ParseResult {
   const previewTimeCrudo = secciones.general.get('PreviewTime');
   const previewTime = previewTimeCrudo === undefined ? 0 : Number(previewTimeCrudo);
   if (Number.isNaN(previewTime)) {
-    return err(`PreviewTime invalido: '${previewTimeCrudo}'.`);
+    return err(`PreviewTime inválido: '${previewTimeCrudo}'.`);
   }
 
   // --- [Metadata] ---
-  if (!secciones.vistas.has('Metadata')) return err('Falta la seccion [Metadata].');
+  if (!secciones.vistas.has('Metadata')) return err('Falta la sección [Metadata].');
 
   const title = secciones.metadata.get('Title');
   if (title === undefined) return err('Falta el campo Title en [Metadata].');
@@ -315,37 +315,37 @@ export function parseOsu(text: string): ParseResult {
   if (version === undefined) return err('Falta el campo Version en [Metadata].');
 
   // --- [Difficulty] ---
-  if (!secciones.vistas.has('Difficulty')) return err('Falta la seccion [Difficulty].');
+  if (!secciones.vistas.has('Difficulty')) return err('Falta la sección [Difficulty].');
 
   const odCrudo = secciones.difficulty.get('OverallDifficulty');
   if (odCrudo === undefined) return err('Falta el campo OverallDifficulty en [Difficulty].');
   const overallDifficulty = Number(odCrudo);
   if (Number.isNaN(overallDifficulty)) {
-    return err(`OverallDifficulty invalido: '${odCrudo}'.`);
+    return err(`OverallDifficulty inválido: '${odCrudo}'.`);
   }
 
   const hpCrudo = secciones.difficulty.get('HPDrainRate');
   if (hpCrudo === undefined) return err('Falta el campo HPDrainRate en [Difficulty].');
   const hpDrain = Number(hpCrudo);
   if (Number.isNaN(hpDrain)) {
-    return err(`HPDrainRate invalido: '${hpCrudo}'.`);
+    return err(`HPDrainRate inválido: '${hpCrudo}'.`);
   }
 
   const csCrudo = secciones.difficulty.get('CircleSize');
   if (csCrudo === undefined) return err('Falta el campo CircleSize en [Difficulty].');
   const circleSize = Number(csCrudo);
   if (Number.isNaN(circleSize)) {
-    return err(`CircleSize invalido: '${csCrudo}'.`);
+    return err(`CircleSize inválido: '${csCrudo}'.`);
   }
   if (circleSize !== 4) {
     return err(
-      `CircleSize invalido: se esperaban 4 columnas (mania 4K), el archivo tiene CircleSize:${csCrudo}.`,
+      `CircleSize inválido: se esperaban 4 columnas (mania 4K), el archivo tiene CircleSize:${csCrudo}.`,
     );
   }
 
   // --- [TimingPoints] ---
   if (!secciones.vistas.has('TimingPoints')) {
-    return err('Falta la seccion [TimingPoints].');
+    return err('Falta la sección [TimingPoints].');
   }
   const puntos = parseTimingPoints(secciones.timingLines);
   if (!puntos.ok) return puntos;

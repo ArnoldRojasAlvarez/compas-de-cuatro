@@ -71,10 +71,10 @@ export function mostrarCalibracion(
 
   const raiz = el('div', 'calibracion');
   const cabecera = el('header', 'calibracion__cabecera');
-  cabecera.appendChild(el('h1', 'calibracion__titulo', 'Calibracion de dificultad'));
+  cabecera.appendChild(el('h1', 'calibracion__titulo', 'Calibración de dificultad'));
   const acciones = el('div', 'calibracion__acciones');
   const botonExportar = el('button', undefined, 'Exportar JSON');
-  const botonVolver = el('button', undefined, 'Volver al menu');
+  const botonVolver = el('button', undefined, 'Volver al menú');
   acciones.append(botonExportar, botonVolver);
   cabecera.appendChild(acciones);
 
@@ -125,7 +125,7 @@ export function mostrarCalibracion(
   function pintarResumen(resumen: ResumenCalibracion): void {
     resumenEl.replaceChildren();
     resumenEl.appendChild(el('h2', undefined, 'Resumen'));
-    resumenEl.appendChild(filaDeResumen('Mapas con SR y calculo', String(resumen.pares)));
+    resumenEl.appendChild(filaDeResumen('Mapas con SR y cálculo', String(resumen.pares)));
     resumenEl.appendChild(
       filaDeResumen(
         'Spearman Tetra vs osu! (meta > 0.85)',
@@ -318,7 +318,7 @@ export function mostrarCalibracion(
       }
       estado.textContent =
         filas.length === 0
-          ? 'La biblioteca esta vacia: importa un .osz desde el song select.'
+          ? 'La biblioteca está vacía: importa un .osz desde el song select.'
           : `${filas.length} dificultades.`;
       actualizar();
     })

@@ -73,7 +73,7 @@ test('pausa: congela el reloj de audio y Continuar reanuda despues de la cuenta 
   // Salir vuelve al song select.
   await page.keyboard.press('Escape');
   await page.getByRole('button', { name: 'Salir al song select' }).click();
-  await expect(page.getByRole('heading', { name: 'Elegir cancion' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Elegir canción' })).toBeVisible();
 });
 
 test('pausa: Reintentar reinicia la partida sin pasar por el song select', async ({ page }) => {
@@ -117,7 +117,7 @@ test('mapeador: cargar audio, generar, editar, guardar y reabrir desde la biblio
   expect(golpes).toBeLessThan(140);
 
   // Generar el mapa automatico.
-  await page.getByRole('button', { name: 'Generar mapa automatico' }).click();
+  await page.getByRole('button', { name: 'Generar mapa automático' }).click();
   const notas = page.locator('.tetra-mp-notas');
   await expect(notas).toContainText('notas');
   const generadas = numeroDeNotas(await notas.textContent());
@@ -143,7 +143,7 @@ test('mapeador: cargar audio, generar, editar, guardar y reabrir desde la biblio
   await page.getByRole('button', { name: 'Guardar en la biblioteca' }).click();
   await expect(estado).toContainText('Guardado en la biblioteca');
   await page.getByRole('button', { name: 'Ir al song select' }).click();
-  await expect(page.getByRole('heading', { name: 'Elegir cancion' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Elegir canción' })).toBeVisible();
   await expect(page.getByText('click-120').first()).toBeVisible();
 
   // Reabrir en el editor: vuelven las mismas notas.
