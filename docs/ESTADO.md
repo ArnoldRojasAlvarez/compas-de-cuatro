@@ -67,6 +67,8 @@ centrados en cero. El motor esta bien sincronizado.
 
 ## En curso
 
+- **T-034 y T-046 (mapeador: seleccion, copiar, pegar, mover; minimapa):** despachados el 7 de octubre. Despues, T-048 (tildes).
+
 
 | Ticket | Que es | Estado |
 |---|---|---|
@@ -116,6 +118,8 @@ centrados en cero. El motor esta bien sincronizado.
   bloquea). Facil queda en 1.1 estrellas: con negras puras el modelo no llega a 1.5.
 
 ## Decisiones pendientes de Arnold
+
+- Tomadas el 7 de octubre: score sin bono por combo (T-029 cerrado); tildes y enie en la interfaz (T-048, se hace despues de T-034/T-046).
 
 - **Repositorio remoto en GitHub.** `gh` esta autenticado. No se creo porque
   publicar es su decision. La CI nunca corrio de verdad, solo localmente.

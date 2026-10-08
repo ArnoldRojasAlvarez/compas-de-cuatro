@@ -1,3 +1,5 @@
+> **Decision (7 de octubre de 2026):** Arnold eligio dejar el score como esta (proporcional a la precision, sin bono por combo). Este ticket queda cerrado sin implementar.
+
 # T-029: Bono por combo en el score
 
 Prioridad: media. Tamano: S. Modelo: Opus escribe el contrato, Sonnet implementa. Archivos: `packages/core/src/judge/engine.ts` y su test. **Cambia un contrato de `core`: por eso lleva ticket de arquitectura.**

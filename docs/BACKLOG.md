@@ -53,8 +53,8 @@ Mismo criterio que la pasada grafica: se paraleliza solo lo que no comparte arch
 
 ## Decisiones que son de Arnold
 
-1. **Formula de score (T-029):** ScoreV2 simplificado, ScoreV1 o dejarlo como esta. No se implementa sin su eleccion.
-2. **Tildes en la interfaz (T-048):** ponerlas o mantener el estilo sin tildes.
+1. **Formula de score (T-029):** decidido el 7 de octubre: queda como esta (sin bono por combo). Ticket cerrado.
+2. **Tildes en la interfaz (T-048):** decidido el 7 de octubre: se ponen tildes y enie en todo texto visible.
 3. **Repositorio remoto en GitHub:** sigue sin crearse. Sin el, la CI (T-040) nunca corre de verdad.
 4. **Que mapas reales usar para evaluar el automatico (T-036):** sus propios `.osz` del almacen de osu! lazer y un par de rankeados; y quien juzga la jugabilidad de las muestras (el, por criterio).
 5. **Orden:** si el tiempo aprieta antes del 28 de octubre, el minimo que protege la entrega es T-026, T-037, T-032, T-035 y T-040.

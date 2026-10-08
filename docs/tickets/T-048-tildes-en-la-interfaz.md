@@ -2,6 +2,16 @@
 
 Prioridad: baja. Tamano: S si se aprueba. Modelo: Haiku (reemplazos de texto, sin logica). Archivos: todos los textos visibles de `apps/web/src/*.ts` y `index.html`.
 
+## Decision tomada (7 de octubre de 2026)
+
+Arnold eligio la **opcion 1: poner tildes y enie** en todos los textos visibles.
+Se despacha a **Sonnet** (no Haiku): hay que tocar tambien los e2e que buscan
+textos ("Elegir cancion", "Estadisticas", "Jugar click track", "Salir al song
+select", "Editar en el mapeador", nombres accesibles de iconos) y revisar cada
+pantalla. Los textos que hoy existen tambien incluyen las pantallas nuevas
+(estadisticas, records, respaldo, replay, contadores, skins: "Circulos" pasa a
+"Círculos" en `SKINS_PROPIAS` de engine, que es texto visible).
+
 ## Contexto
 
 Todos los textos de la interfaz estan escritos sin tilde ni enie ("Elegir cancion", "Instrumento de precision", "Dificultad" ya sin problema pero "musica", "tamano", "sesion"). Probablemente nacio asi por prudencia con la codificacion, no por decision de diseno. El proyecto es de un curso de Apreciacion Musical, se presenta ante publico y esta en espanol: la falta de tildes se nota en pantalla.
