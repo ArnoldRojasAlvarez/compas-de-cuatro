@@ -8,7 +8,7 @@ Estado corto y siempre al dia. **Si sos una sesion NUEVA, empeza por
 
 ## Donde esta todo
 
-- `main`: limpio, verde, 1320 tests + 41 e2e.
+- `main`: limpio, verde, 1379 tests + 49 e2e.
 - Estado demo: menu con musica de la biblioteca, song select sobre la escena, partida con fondo y video, cuatro skins propias, cancion demo sembrada.
 - En curso: nada.
 
@@ -53,6 +53,8 @@ Estado corto y siempre al dia. **Si sos una sesion NUEVA, empeza por
 | T-052 | Escena: fondo de la cancion a pantalla completa; menu con musica de la biblioteca (pausa, siguiente); song select minimalista con preview visible, exportar y borrar, importar soltando en cualquier parte |
 | T-053 | Partida a pantalla completa con fondo atenuado y video sincronizado al reloj, intro, HUD limpio, volumen; resultados con fondo; ajustes con poco texto, skins en miniatura, atenuacion y video |
 | T-055 | Records por dificultad: mejor y ultima partida, intentos, conteos de cada juicio, rango SS; se ven en el song select (detalle, chips y lista) y con aviso de nuevo record en resultados |
+| T-034 | Mapeador: Mayus+arrastrar elige (rectangulo alineado a la grilla), Ctrl+A/C/X/V, Supr, Alt+flechas mueve (slot o columna), Q cuantiza; cada operacion es un paso de deshacer; el portapapeles sobrevive entre dificultades |
+| T-046 | Minimapa del mapeador: onda, densidad de notas, huecos de mas de 8 compases en ambar, marcas cada 8 compases, cabezal y zona visible; clic o arrastre salta |
 | T-045 | Estadisticas globales: historial por partida completada (tienda `historial`, base v7, tope 2000, viaja en el respaldo, no se borra con la cancion), pantalla con partidas, tiempo, precision y desviacion medias (ponderadas por notas), graficos por dia, fallos por columna y temprano/tarde; cuarto boton del menu y el bloque Jugado del header |
 | T-044 | Replay y modo auto: `replayPerfecto` (todo MAX), grabar y reproducir con resultado identico (motor determinista: cada evento resuelve antes lo expirado hasta su tiempo; expiracion por frame con margen de 50 ms para no correr pulsaciones atrasadas), mejor partida en la tienda `replays` (base v6) y en el respaldo; "Ver auto" (Ctrl+Enter), "Ver mejor partida", Auto en el mapeador |
 | T-058 | Velocidad y offset con barra en ajustes (offset con `-`/`+` de 1 ms y doble clic a 0); las cinco barras iguales |
@@ -67,7 +69,7 @@ centrados en cero. El motor esta bien sincronizado.
 
 ## En curso
 
-- **T-034 y T-046 (mapeador: seleccion, copiar, pegar, mover; minimapa):** despachados el 7 de octubre. Despues, T-048 (tildes).
+- **T-048 (tildes y enie en la interfaz):** despachado el 7 de octubre.
 
 
 | Ticket | Que es | Estado |
