@@ -19,7 +19,8 @@ export type NombreIcono =
   | 'confirmar'
   | 'cerrar'
   | 'auto'
-  | 'replay';
+  | 'replay'
+  | 'copiar';
 
 interface DefinicionIcono {
   /** Trazos (path d). */
@@ -65,6 +66,8 @@ const ICONOS: Record<NombreIcono, DefinicionIcono> = {
   auto: { trazos: ['M4 5h16v11H4z', 'M9 20h6', 'M12 16v4', 'M10.5 8v5l4-2.5z'] },
   // T-044: flecha que gira hacia atras con la aguja de un reloj (volver a ver una partida).
   replay: { trazos: ['M4.5 12a7.5 7.5 0 1 0 2.4-5.5', 'M4 4.5v4h4', 'M12 8v4l2.5 1.5'] },
+  // T-061: dos hojas encimadas (copiar al portapapeles).
+  copiar: { trazos: ['M9 9h10.5v11H9z', 'M15 9V4H5v11h4'] },
 }
 
 const NS = 'http://www.w3.org/2000/svg';

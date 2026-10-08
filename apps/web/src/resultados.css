@@ -327,6 +327,22 @@
   align-self: flex-start;
 }
 
+/* T-061: tirones de la partida, una linea chica en mono con el boton-icono que
+   copia el diagnostico. Solo existe si hubo tirones. */
+.tetra-resultados-tirones {
+  display: flex;
+  align-items: center;
+  gap: var(--espacio-2);
+  min-width: 0;
+  font-family: var(--fuente-datos);
+  font-size: var(--tipo-xs);
+  color: var(--tinta-2);
+}
+
+.tetra-resultados-tirones-texto {
+  cursor: help;
+}
+
 /* Boton de volver (lo agrega song-select.ts a #app, como hermano del panel):
    es la accion principal de la pantalla, asi que lleva el acento. Se
    alinea con la columna del panel y hereda el ancho maximo de 800px. */

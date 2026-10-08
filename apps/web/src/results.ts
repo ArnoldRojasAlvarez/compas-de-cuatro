@@ -22,6 +22,8 @@ import { formatearPulsaciones, formatearUR, unstableRate } from './contadores-lo
 import { colorConAlpha, fraccionesDeJuicio, rangoDePrecision } from './resultados-logica.js';
 import { agregarImagenDeFondo } from './escena.js';
 import { lineaDeAutoria, type EscenaPartida } from './escena-logica.js';
+import { crearLineaDeTirones } from './diagnostico-tirones.js';
+import type { ResumenDiagnostico } from './diagnostico-tirones-logica.js';
 
 export interface Desviacion {
   /** Tiempo de la nota en la pista (no el momento de la pulsacion). */
@@ -478,6 +480,7 @@ export function mostrarResultados(
   escena?: EscenaPartida,
   pulsaciones?: readonly number[],
   etiquetaDeReproduccion?: string,
+  diagnostico?: ResumenDiagnostico,
 ): void {
   contenedor.innerHTML = '';
 
@@ -544,6 +547,10 @@ export function mostrarResultados(
   cajaGrafico.appendChild(canvas);
   seccionGrafico.appendChild(cajaGrafico);
   panel.appendChild(seccionGrafico);
+
+  // T-061: solo si hubo tirones (frames de mas de 50 ms) y "Mostrar FPS" estaba prendido.
+  const lineaTirones = diagnostico === undefined ? null : crearLineaDeTirones(diagnostico);
+  if (lineaTirones) panel.appendChild(lineaTirones);
 
   const botonCorregir =
     etiquetaDeReproduccion === undefined

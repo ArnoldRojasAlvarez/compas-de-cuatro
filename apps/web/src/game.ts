@@ -74,6 +74,8 @@ import {
 } from './replay-logica.js';
 import { numeroDeCuenta, transicionPausa, type FasePausa } from './pausa-logica.js';
 import { crearMedidorDeFps, formatearLecturaFps, type MedidorDeFps } from './fps-logica.js';
+import { crearDiagnostico } from './diagnostico-tirones.js';
+import { contarNotasVisibles, type ResumenDiagnostico } from './diagnostico-tirones-logica.js';
 import {
   escalaPulsoCombo,
   formatearPrecision,
@@ -659,6 +661,25 @@ export function runGame(
     // T-059: `timestamp` del rAF del frame anterior (0 = no se conoce: al arrancar, tras una
     // pausa o un salto del reloj). Solo para el peor frame del contador de fps, nunca para gameplay.
     let tsFrameAnterior = 0;
+    // T-061: diagnostico de tirones, solo con "Mostrar FPS" prendido (sin eso no se crea ningun observer).
+    // Usa el timestamp de rAF solo para medir, nunca para gameplay. El resumen sale de limpiar().
+    const diagnostico = hud.fpsMs
+      ? crearDiagnostico({
+          ctx,
+          mapa: {
+            titulo: escena?.titulo ?? chart.metadata.title,
+            dificultad: escena?.dificultad ?? chart.metadata.difficultyName,
+            notas: chart.notes.length,
+          },
+          video: usarVideo && escena?.video !== undefined,
+          notasVisibles: (t) => contarNotasVisibles(chart.notes, t, opcionesPista.scrollDuration),
+          juzgados: () => {
+            const c = engine.state.counts;
+            return c.max + c.perfect + c.great + c.good + c.bad + c.miss;
+          },
+        })
+      : null;
+    let resumenDiagnostico: ResumenDiagnostico | undefined;
     // true desde que app.init() resuelve: distingue, dentro de abortar(), si
     // ya hay que destruir la Application de Pixi (partida en curso) o si
     // todavia esta inicializando y el callback de mas abajo se va a
@@ -690,6 +711,7 @@ export function runGame(
       menuPausa = null;
       fondo?.destruir();
       intro?.destruir();
+      resumenDiagnostico = diagnostico?.detener();
       clock.stop();
       input?.destroy();
       window.removeEventListener('keydown', manejarEscape);
@@ -725,6 +747,7 @@ export function runGame(
         reproducir === undefined
           ? undefined
           : etiquetaDeReproduccion(reproducir.modo, reproducir.fecha),
+        resumenDiagnostico,
       );
       resolve({
         estado: 'completado',
@@ -856,6 +879,7 @@ export function runGame(
         // La pausa no es un frame lento ni se promedia con el juego.
         tsFrameAnterior = 0;
         hud.medidorFps?.reiniciar();
+        diagnostico?.descartarProximo();
         reanudarBucle?.();
       });
     }
@@ -1084,6 +1108,7 @@ export function runGame(
           // Solo para el contador de fps (diagnostico del HUD): lo que duro el frame segun rAF.
           const duracionFrame = tsFrameAnterior > 0 ? tsRaf - tsFrameAnterior : 0;
           tsFrameAnterior = tsRaf;
+          diagnostico?.frame(t, tsRaf);
 
           // El reintento mantenido se mide contra el reloj, desde el keydown.
           if (reintentoDesde !== null) {
@@ -1157,6 +1182,7 @@ export function runGame(
           contadores.soltarTeclas();
         };
 
+        diagnostico?.iniciar();
         // eslint-disable-next-line no-restricted-globals -- ver comentario dentro de frame().
         rafId = requestAnimationFrame(frame);
       })
