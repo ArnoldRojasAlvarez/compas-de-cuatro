@@ -14,7 +14,7 @@ export interface ContenidoRespaldo {
   /** Canciones con audio y portada como bytes, listas para serializar a zip. */
   canciones: CancionGuardada[];
   skins: SkinGuardada[];
-  records: Record[]; // si T-028 esta hecho
+  records: RecordDeMapa[]; // T-055 (core), tienda 'records' de la base version 5
   ajustes: Record<string, string>; // claves 'tetra:*' de localStorage
 }
 
@@ -27,6 +27,9 @@ export function restaurarRespaldo(c: ContenidoRespaldo, opciones: { sobrescribir
 ```
 
 ## Comportamiento
+
+- Actualizacion del 7 de octubre: los records son `RecordDeMapa` (T-055); las canciones pueden traer `video`, `videoOffset` e `importadaEn` (T-049), que tambien viajan. Los ajustes incluyen `tetra:offset-local:*` (T-057). La tarjeta de ajustes es nueva y chica: "05 Biblioteca" con dos botones ("Exportar respaldo", "Importar respaldo") y una linea mono con el uso de almacenamiento (`estimarAlmacenamiento`, T-049). El resumen tras importar es una linea, no un parrafo.
+- No toques `song-select.ts`, `game.ts` ni `results.ts` (T-057 en paralelo).
 
 - Ajustes: "Exportar respaldo" descarga `tetra-respaldo-AAAA-MM-DD.zip`; "Importar respaldo" lo restaura mostrando un resumen (canciones nuevas, ya existentes, skins, records).
 - Usa `fflate`, que ya es dependencia de storage.
