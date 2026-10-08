@@ -386,3 +386,134 @@ export async function leerDificultadCacheada(clave: string): Promise<DifficultyR
     db.close();
   }
 }
+
+/** Todos los records bien formados de la base (T-042, para el respaldo). Los registros corruptos se ignoran. */
+export async function listarRecordsDeLaBase(): Promise<RecordDeMapa[]> {
+  const db = await abrirBaseDeDatos();
+  try {
+    return await new Promise<RecordDeMapa[]>((resolve, reject) => {
+      const tx = db.transaction(NOMBRE_TIENDA_RECORDS, 'readonly');
+      const peticion = tx.objectStore(NOMBRE_TIENDA_RECORDS).getAll();
+      peticion.onsuccess = () => {
+        const records: RecordDeMapa[] = [];
+        for (const crudo of peticion.result as unknown[]) {
+          const record = normalizarRecord(crudo);
+          if (record !== undefined) records.push(record);
+        }
+        resolve(records);
+      };
+      peticion.onerror = () =>
+        reject(peticion.error ?? new Error('No se pudieron listar los records.'));
+    });
+  } finally {
+    db.close();
+  }
+}
+
+/** Lo que se escribio (y lo que ya estaba) al restaurar un respaldo en la base. */
+export interface ResultadoEscrituraRespaldo {
+  cancionesNuevas: number;
+  cancionesExistentes: number;
+  skinsNuevas: number;
+  skinsExistentes: number;
+  recordsNuevos: number;
+  recordsActualizados: number;
+}
+
+/**
+ * Escribe un respaldo en la base (T-042), todo en UNA transaccion sobre las
+ * tres tiendas: si algo falla a medias (cuota llena, por ejemplo) se aborta y
+ * no queda nada escrito. Nunca pisa: una cancion o skin cuyo id ya existe se
+ * deja como esta y se cuenta como existente. Los records se mezclan con
+ * `mezclar(previo, entrante)`; si devuelve `undefined` no hay nada que
+ * escribir (el que estaba ya era igual o mejor). Un record previo corrupto
+ * cuenta como ausente (de todos modos no se podia leer).
+ */
+export async function restaurarEnLaBase(
+  contenido: { canciones: CancionGuardada[]; skins: SkinGuardada[]; records: RecordDeMapa[] },
+  mezclar: (previo: RecordDeMapa | undefined, entrante: RecordDeMapa) => RecordDeMapa | undefined,
+): Promise<ResultadoEscrituraRespaldo> {
+  const resultado: ResultadoEscrituraRespaldo = {
+    cancionesNuevas: 0,
+    cancionesExistentes: 0,
+    skinsNuevas: 0,
+    skinsExistentes: 0,
+    recordsNuevos: 0,
+    recordsActualizados: 0,
+  };
+  const db = await abrirBaseDeDatos();
+  try {
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction(
+        [NOMBRE_TIENDA_CANCIONES, NOMBRE_TIENDA_SKINS, NOMBRE_TIENDA_RECORDS],
+        'readwrite',
+      );
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error ?? new Error('No se pudo restaurar el respaldo.'));
+      tx.onabort = () => reject(tx.error ?? new Error('Se aborto la restauracion del respaldo.'));
+
+      // Todas las lecturas se piden antes de que corra ninguna escritura, asi
+      // que un id repetido dentro del mismo respaldo se resuelve de antemano:
+      // el primero manda y los demas cuentan como existentes.
+      const canciones = tx.objectStore(NOMBRE_TIENDA_CANCIONES);
+      const idsCanciones = new Set<string>();
+      for (const cancion of contenido.canciones) {
+        if (idsCanciones.has(cancion.id)) {
+          resultado.cancionesExistentes += 1;
+          continue;
+        }
+        idsCanciones.add(cancion.id);
+        const lectura = canciones.get(cancion.id);
+        lectura.onsuccess = () => {
+          if (lectura.result === undefined) {
+            canciones.put(cancion);
+            resultado.cancionesNuevas += 1;
+          } else {
+            resultado.cancionesExistentes += 1;
+          }
+        };
+      }
+
+      const skins = tx.objectStore(NOMBRE_TIENDA_SKINS);
+      const idsSkins = new Set<string>();
+      for (const skin of contenido.skins) {
+        if (idsSkins.has(skin.id)) {
+          resultado.skinsExistentes += 1;
+          continue;
+        }
+        idsSkins.add(skin.id);
+        const lectura = skins.get(skin.id);
+        lectura.onsuccess = () => {
+          if (lectura.result === undefined) {
+            skins.put(skin);
+            resultado.skinsNuevas += 1;
+          } else {
+            resultado.skinsExistentes += 1;
+          }
+        };
+      }
+
+      // Un hash repetido en el respaldo se mezcla de antemano en un solo record.
+      const entrantes = new Map<string, RecordDeMapa>();
+      for (const record of contenido.records) {
+        const ya = entrantes.get(record.hash);
+        entrantes.set(record.hash, ya === undefined ? record : (mezclar(ya, record) ?? ya));
+      }
+      const records = tx.objectStore(NOMBRE_TIENDA_RECORDS);
+      for (const entrante of entrantes.values()) {
+        const lectura = records.get(entrante.hash);
+        lectura.onsuccess = () => {
+          const previo = normalizarRecord(lectura.result);
+          const nuevo = mezclar(previo, entrante);
+          if (nuevo === undefined) return;
+          records.put(nuevo);
+          if (previo === undefined) resultado.recordsNuevos += 1;
+          else resultado.recordsActualizados += 1;
+        };
+      }
+    });
+  } finally {
+    db.close();
+  }
+  return resultado;
+}

@@ -15,8 +15,21 @@
 // vivo en mono (por ejemplo "1200 ms" junto a la velocidad). Cuatro tarjetas:
 // Juego (offset, velocidad, volumen), Teclas, Apariencia (skin con
 // miniaturas, atenuacion del fondo, video de fondo, FPS) y Presentacion.
+//
+// T-042 suma la quinta, "Biblioteca": exportar e importar la copia de
+// seguridad (dos botones y una linea de estado).
 
-import { importarOsk, listarSkins, type SkinGuardada } from '@tetra/storage';
+import {
+  ErrorDeRespaldo,
+  crearRespaldo,
+  estimarAlmacenamiento,
+  importarOsk,
+  leerAjustesLocales,
+  leerRespaldo,
+  listarSkins,
+  restaurarRespaldo,
+  type SkinGuardada,
+} from '@tetra/storage';
 import {
   CODIGOS_TECLAS_POR_DEFECTO,
   SKINS_PROPIAS,
@@ -24,6 +37,14 @@ import {
   type IdSkinPropia,
 } from '@tetra/engine';
 import { mensajeDeErrorDeCarga } from './cargador-logica.js';
+import { EVENTO_BIBLIOTECA_CAMBIO } from './musica-menu-logica.js';
+import {
+  ajustesPisarianLocales,
+  lineaDeAlmacenamiento,
+  lineaDeExportacion,
+  lineaDeRestauracion,
+  nombreDeArchivoDeRespaldo,
+} from './respaldo-logica.js';
 import { guardarOffset, leerOffset } from './offset.js';
 import { guardarMostrarFps, leerMostrarFps } from './graficos.js';
 import { intentarAsignarCodigo, leerKeyMap, guardarKeyMap, type KeyMap } from './keymap.js';
@@ -768,6 +789,147 @@ function crearControlDePresentacion(): HTMLElement {
   return envoltorio;
 }
 
+/** Baja `blob` como archivo `nombre`: un enlace temporal con `download`, sin tocar la pagina. */
+function descargarArchivo(blob: Blob, nombre: string): void {
+  const url = URL.createObjectURL(blob);
+  const enlace = document.createElement('a');
+  enlace.href = url;
+  enlace.download = nombre;
+  document.body.appendChild(enlace);
+  enlace.click();
+  enlace.remove();
+  // El navegador necesita un instante para empezar la descarga antes de soltar la URL.
+  // eslint-disable-next-line no-restricted-globals -- solo libera memoria tras una descarga; no mide tiempo de juego (CLAUDE.md, "El reloj es el audio").
+  setTimeout(() => URL.revokeObjectURL(url), 10_000);
+}
+
+/**
+ * Copia de seguridad (T-042): dos botones y una linea de estado en mono. La
+ * linea muestra cuanto ocupa la biblioteca y, tras exportar o importar, lo que
+ * paso en una sola frase; los errores van al aviso de arriba. Importar mezcla
+ * con lo que ya hay y nunca pisa canciones ni skins; los ajustes solo se
+ * reemplazan si el respaldo traeria valores distintos a los actuales Y la
+ * persona acepta (si no hay nada que pisar, se restauran sin preguntar).
+ *
+ * `rearmar` vuelve a dibujar la pantalla con un texto de estado (se usa cuando
+ * se restauraron ajustes, para que los controles muestren los valores nuevos).
+ */
+function crearControlDeRespaldo(
+  onError: (mensaje: string) => void,
+  rearmar: (estado: string) => void,
+  estadoInicial: string,
+): HTMLElement {
+  const botonExportar = document.createElement('button');
+  botonExportar.type = 'button';
+  botonExportar.id = 'tetra-respaldo-exportar';
+  botonExportar.textContent = 'Exportar respaldo';
+  botonExportar.title = 'Baja un zip con tus canciones, skins, records y ajustes.';
+
+  const botonImportar = document.createElement('button');
+  botonImportar.type = 'button';
+  botonImportar.id = 'tetra-respaldo-importar';
+  botonImportar.textContent = 'Importar respaldo';
+  botonImportar.title =
+    'Suma lo del respaldo a tu biblioteca. Lo que ya hay no se pisa; los ajustes solo si lo aceptas.';
+
+  const entradaArchivo = document.createElement('input');
+  entradaArchivo.type = 'file';
+  entradaArchivo.accept = '.zip,application/zip';
+  entradaArchivo.id = 'tetra-respaldo-archivo';
+  entradaArchivo.className = 'tetra-input-archivo-oculto';
+
+  const estado = document.createElement('span');
+  estado.className = 'tetra-ajustes-estado';
+  estado.setAttribute('role', 'status');
+  estado.textContent = estadoInicial;
+  estado.title = estadoInicial;
+  /** Si ya se puso un resultado, la estimacion de almacenamiento (que llega tarde) no lo pisa. */
+  let hayResultado = estadoInicial !== '';
+  function decir(texto: string): void {
+    hayResultado = true;
+    estado.textContent = texto;
+    estado.title = texto;
+  }
+  if (!hayResultado) {
+    void estimarAlmacenamiento().then((uso) => {
+      if (hayResultado) return;
+      const texto = lineaDeAlmacenamiento(uso);
+      estado.textContent = texto;
+      estado.title = texto;
+    });
+  }
+
+  function ocupado(valor: boolean): void {
+    botonExportar.disabled = valor;
+    botonImportar.disabled = valor;
+  }
+
+  botonExportar.addEventListener('click', () => {
+    onError('');
+    ocupado(true);
+    decir('Armando el respaldo...');
+    void (async () => {
+      try {
+        const zip = await crearRespaldo();
+        const nombre = nombreDeArchivoDeRespaldo(new Date());
+        descargarArchivo(zip, nombre);
+        decir(lineaDeExportacion(nombre, zip.size));
+      } catch (error) {
+        decir('');
+        onError(`No se pudo exportar el respaldo: ${mensajeDeErrorDeCarga(error)}`);
+      } finally {
+        ocupado(false);
+      }
+    })();
+  });
+
+  botonImportar.addEventListener('click', () => entradaArchivo.click());
+
+  entradaArchivo.addEventListener('change', () => {
+    const archivo = entradaArchivo.files?.[0];
+    entradaArchivo.value = '';
+    if (!archivo) return;
+    onError('');
+    ocupado(true);
+    decir('Leyendo el respaldo...');
+    void (async () => {
+      try {
+        // Primero se lee y valida todo: si algo esta mal no se toca nada.
+        const respaldo = await leerRespaldo(archivo);
+        const sobrescribirAjustes =
+          !ajustesPisarianLocales(respaldo.ajustes, leerAjustesLocales()) ||
+          window.confirm('El respaldo trae ajustes distintos a los actuales. Reemplazarlos?');
+        const resumen = await restaurarRespaldo(respaldo, { sobrescribirAjustes });
+        window.dispatchEvent(new CustomEvent(EVENTO_BIBLIOTECA_CAMBIO));
+        const texto = lineaDeRestauracion(resumen);
+        if (resumen.ajustesRestaurados > 0) {
+          rearmar(texto);
+        } else {
+          decir(texto);
+        }
+      } catch (error) {
+        decir('');
+        onError(
+          error instanceof ErrorDeRespaldo
+            ? error.message
+            : `No se pudo restaurar el respaldo: ${mensajeDeErrorDeCarga(error)}`,
+        );
+      } finally {
+        ocupado(false);
+      }
+    })();
+  });
+
+  const fila = crearFila({
+    ayuda: 'Copia de seguridad de la biblioteca: canciones, skins, records y ajustes, en un zip.',
+    controles: [botonExportar, botonImportar, entradaArchivo],
+  });
+  const envoltorio = document.createElement('div');
+  envoltorio.className = 'tetra-ajustes-grupo tetra-ajustes-respaldo';
+  envoltorio.append(fila, estado);
+  return envoltorio;
+}
+
 /** Gancho de navegacion que le pasa el router (ver router.ts). */
 export interface OpcionesAjustes {
   /** Volver al menu. Es la unica salida de esta pantalla (ver el ticket, "Cada pantalla tiene como volver"). */
@@ -776,11 +938,16 @@ export interface OpcionesAjustes {
 
 /**
  * Muestra la pantalla de ajustes dentro de `contenedor`, reemplazando lo
- * que hubiera. Cuatro tarjetas numeradas en una rejilla (T-023, T-053): Juego
- * (offset, velocidad, volumen), Teclas, Apariencia (skin, atenuacion, video,
- * FPS) y Presentacion.
+ * que hubiera. Cinco tarjetas numeradas en una rejilla (T-023, T-053, T-042):
+ * Juego (offset, velocidad, volumen), Teclas, Apariencia (skin, atenuacion,
+ * video, FPS), Presentacion y Biblioteca (copia de seguridad).
  */
-export function mostrarAjustes(contenedor: HTMLElement, opciones: OpcionesAjustes): void {
+export function mostrarAjustes(
+  contenedor: HTMLElement,
+  opciones: OpcionesAjustes,
+  /** Texto inicial de la linea de estado de Biblioteca (lo usa la propia pantalla al redibujarse tras restaurar ajustes). */
+  estadoDeBiblioteca = '',
+): void {
   contenedor.innerHTML = '';
 
   const panel = document.createElement('div');
@@ -876,6 +1043,18 @@ export function mostrarAjustes(contenedor: HTMLElement, opciones: OpcionesAjuste
   );
   rejilla.appendChild(
     crearSeccion(4, 'Presentacion', 'presentacion', crearControlDePresentacion()),
+  );
+  rejilla.appendChild(
+    crearSeccion(
+      5,
+      'Biblioteca',
+      'biblioteca',
+      crearControlDeRespaldo(
+        mostrarError,
+        (estado) => mostrarAjustes(contenedor, opciones, estado),
+        estadoDeBiblioteca,
+      ),
+    ),
   );
   panel.appendChild(rejilla);
 

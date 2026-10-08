@@ -57,11 +57,10 @@
   }
 }
 
-/* Desde 900px, Apariencia y Presentacion ocupan todo el ancho: asi entra
-   todo en 1280x800 sin bajar. */
+/* Desde 900px, Apariencia ocupa todo el ancho y Presentacion y Biblioteca van
+   lado a lado en la ultima fila: asi entra todo en 1280x800 sin bajar. */
 @media (min-width: 900px) {
-  .tetra-ajustes-seccion-apariencia,
-  .tetra-ajustes-seccion-presentacion {
+  .tetra-ajustes-seccion-apariencia {
     grid-column: 1 / -1;
   }
 }
@@ -498,4 +497,24 @@
 
 .tetra-ajustes-error:empty {
   display: none;
+}
+
+/* ---------------------------------------------------------------------- */
+/* Biblioteca (T-042): dos botones y una linea de estado en mono           */
+/* ---------------------------------------------------------------------- */
+
+.tetra-ajustes-respaldo {
+  gap: var(--espacio-2);
+}
+
+.tetra-ajustes-estado {
+  min-height: 1.4em;
+  font-family: var(--fuente-datos);
+  font-size: var(--tipo-xs);
+  line-height: 1.4;
+  /* Una sola linea: si el resumen no entra se corta con puntos (el texto completo va en el title). */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--tinta-2);
 }

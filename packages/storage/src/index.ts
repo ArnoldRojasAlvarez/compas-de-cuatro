@@ -51,6 +51,18 @@ export type { DificultadParaOsz, EntradaOsz } from './osz-escritor.js';
 export { construirOsz, nombreDeOsu, nombreSeguro } from './osz-escritor.js';
 export type { ClaveImagenSkin, ImagenesDeSkin } from './osk.js';
 export { ubicarImagenesDeSkin, extraerImagenesDeOsk } from './osk.js';
+// T-042: copia de seguridad (zip con manifest.json y los Blob como archivos).
+export type { ContenidoRespaldo, ResumenRestauracion } from './respaldo.js';
+export {
+  ErrorDeRespaldo,
+  crearRespaldo,
+  exportarRespaldo,
+  leerAjustesLocales,
+  leerRespaldo,
+  mezclarRecords,
+  reunirContenidoActual,
+  restaurarRespaldo,
+} from './respaldo.js';
 
 function crearId(): SongId {
   return crypto.randomUUID();

@@ -75,8 +75,8 @@ test('ajustes entra en 1280x800 sin parrafos, y la skin elegida se recuerda', as
 
   // Sin parrafos visibles (el de error solo aparece cuando hay un error).
   await expect(page.locator('.tetra-ajustes p:visible')).toHaveCount(0);
-  // Cuatro tarjetas, y todo entra sin bajar.
-  await expect(page.locator('.tetra-ajustes-seccion')).toHaveCount(4);
+  // Cinco tarjetas (la quinta es Biblioteca, T-042), y todo entra sin bajar.
+  await expect(page.locator('.tetra-ajustes-seccion')).toHaveCount(5);
   const alto = await page.evaluate(() => document.documentElement.scrollHeight);
   expect(alto).toBeLessThanOrEqual(800);
 

@@ -38,7 +38,7 @@ export type ClaveImagenSkin =
   | 'key1D'
   | 'key2D';
 
-const CLAVES_IMAGENES_SKIN: readonly ClaveImagenSkin[] = [
+export const CLAVES_IMAGENES_SKIN: readonly ClaveImagenSkin[] = [
   'note1',
   'note2',
   'note1H',
