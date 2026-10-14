@@ -448,7 +448,7 @@ describe('migracion no destructiva a VERSION_BASE 8 (tienda "recientes")', () =>
         peticion.onerror = () => reject(peticion.error);
       },
     );
-    expect(info.version).toBe(8);
+    expect(info.version).toBe(9); // T-066 paso 3 subio la base a la version 9
     expect(info.keyPath).toBe('id');
     expect(info.indices.sort()).toEqual(['fecha', 'hash']);
     expect(await listarPartidasRecientes('h-viejo')).toEqual([]);

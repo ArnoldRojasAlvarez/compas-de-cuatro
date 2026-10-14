@@ -3,7 +3,7 @@
 //
 // Mismo patron que velocidad.ts: localStorage inyectable.
 
-import type { Judgement, Ms } from '@tetra/core';
+import type { Chart, Judgement, Ms } from '@tetra/core';
 import type { TipoHitsound } from '@tetra/audio';
 
 const CLAVE_HITSOUND = 'tetra:hitsound';
@@ -53,4 +53,14 @@ export function instanteDeContextoDelGolpe(
 /** Cada golpe valido suena; el miss y la pulsacion sin nota a tiro (null) no. */
 export function suenaElGolpe(juicio: Judgement | undefined): boolean {
   return juicio !== undefined && juicio !== 'miss';
+}
+
+/**
+ * T-066 (D11): el hitsound sintetizado suena en un golpe valido, salvo en una
+ * dificultad con `audioVirtual`: ahi la nota ya suena en la mezcla
+ * pre-renderizada (como en osu!, un mapa con keysounds no suma el hitsound por
+ * defecto).
+ */
+export function suenaElHitsound(chart: Pick<Chart, 'audioVirtual'>, juicio: Judgement | undefined): boolean {
+  return chart.audioVirtual === undefined && suenaElGolpe(juicio);
 }

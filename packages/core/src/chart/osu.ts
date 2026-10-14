@@ -12,8 +12,17 @@
 // hacen falta para mania 4K, mas [Events] (solo para sacar el fondo y el
 // video, T-049); el resto ([Colours], [Editor], etc.) se ignora sin fallar.
 
-import type { Chart, Column, Note, SpeedPoint, TimingPoint } from '../types.js';
+import type {
+  AudioVirtual,
+  Chart,
+  Column,
+  EventoDeMuestra,
+  Note,
+  SpeedPoint,
+  TimingPoint,
+} from '../types.js';
 import { COLUMN_COUNT } from '../types.js';
+import { normalizarNombreDeMuestra } from '../audio-virtual/mezcla.js';
 
 export type ParseResult = { ok: true; chart: Chart } | { ok: false; error: string };
 
@@ -241,9 +250,46 @@ function parseTimingPoints(
   return { ok: true, timingPoints, speedPoints };
 }
 
-/** Parsea [HitObjects]. Las notas invalidas (LN con endTime <= time) se descartan, no abortan el mapa. */
-function parseHitObjects(lineas: readonly string[]): Note[] {
+/** Keysound de un hit object o sample de [Events] (T-066, D7): archivo y volumen crudo (0 si no trae). */
+interface KeysoundDeNota {
+  tiempo: number;
+  archivo: string;
+  volumen: number;
+}
+
+/**
+ * Lee el hitSample de un hit object: `normalSet:additionSet:index:volume:filename`
+ * en un tap, y con el `endTime` delante en un LN. Devuelve `undefined` si no
+ * trae nombre de archivo (la nota no aporta sonido propio).
+ */
+function leerKeysound(
+  extras: string | undefined,
+  esHold: boolean,
+  tiempo: number,
+): KeysoundDeNota | undefined {
+  if (extras === undefined) return undefined;
+  const partes = extras.split(':');
+  const desde = esHold ? 1 : 0;
+  const archivo = partes
+    .slice(desde + 4)
+    .join(':')
+    .trim();
+  if (archivo === '') return undefined;
+  const volumen = Number(partes[desde + 3]);
+  return { tiempo, archivo, volumen: Number.isFinite(volumen) ? volumen : 0 };
+}
+
+/**
+ * Parsea [HitObjects]. Las notas invalidas (LN con endTime <= time) se
+ * descartan, no abortan el mapa. Junto con las notas devuelve el keysound de
+ * cada una que lo traiga (solo se usa si el audio es virtual).
+ */
+function parseHitObjects(lineas: readonly string[]): {
+  notas: Note[];
+  keysounds: KeysoundDeNota[];
+} {
   const notas: Note[] = [];
+  const keysounds: KeysoundDeNota[] = [];
 
   for (const linea of lineas) {
     const campos = linea.split(',');
@@ -264,8 +310,12 @@ function parseHitObjects(lineas: readonly string[]): Note[] {
       const endTime = Number(extras.split(':')[0]);
       if (Number.isNaN(endTime) || endTime <= time) continue; // LN invalida: se descarta y se sigue con el resto
       notas.push({ kind: 'hold', time, endTime, column: columna });
+      const keysound = leerKeysound(extras, true, time);
+      if (keysound !== undefined) keysounds.push(keysound);
     } else if ((type & 1) !== 0) {
       notas.push({ kind: 'tap', time, column: columna });
+      const keysound = leerKeysound(campos[5], false, time);
+      if (keysound !== undefined) keysounds.push(keysound);
     }
     // Otro tipo de hit object (por ejemplo un spinner, type & 8) no aplica
     // a mania 4K: se ignora la linea sin fallar el mapa entero.
@@ -274,7 +324,126 @@ function parseHitObjects(lineas: readonly string[]): Note[] {
   // Invariante de Chart (ver types.ts): notes ordenadas por time ascendente.
   // No hay que confiar en que el archivo ya venga ordenado.
   notas.sort((a, b) => a.time - b.time);
-  return notas;
+  return { notas, keysounds };
+}
+
+/** Volumen de un punto de tiempo (campo 5 de la linea). */
+interface VolumenDePunto {
+  time: number;
+  volumen: number;
+}
+
+/**
+ * Los volumenes de todos los puntos de tiempo (rojos y verdes) que traen el
+ * campo, ordenados por tiempo; a igual tiempo, en el orden del archivo (el
+ * que aparece despues gana al buscar). No cambia `TimingPoint` ni
+ * `SpeedPoint`: solo sirve para resolver la receta del audio virtual.
+ */
+function volumenesDeTiming(lineas: readonly string[]): VolumenDePunto[] {
+  const puntos: VolumenDePunto[] = [];
+  for (const linea of lineas) {
+    const campos = linea.split(',');
+    if (campos.length < 6) continue;
+    const time = Number(campos[0]);
+    const volumen = Number(campos[5]);
+    if (Number.isNaN(time) || campos[5]!.trim() === '' || Number.isNaN(volumen)) continue;
+    puntos.push({ time, volumen });
+  }
+  // sort es estable: a igual tiempo se conserva el orden del archivo.
+  puntos.sort((a, b) => a.time - b.time);
+  return puntos;
+}
+
+/** El volumen vigente en `tiempo`: el del ultimo punto con `time <= tiempo`; antes del primero, el primero; sin puntos, 100. */
+function volumenDeTimingEn(puntos: readonly VolumenDePunto[], tiempo: number): number {
+  if (puntos.length === 0) return 100;
+  // Busqueda binaria del ultimo punto con time <= tiempo (a igual tiempo gana el ultimo).
+  let lo = 0;
+  let hi = puntos.length - 1;
+  let idx = -1;
+  while (lo <= hi) {
+    const mid = (lo + hi) >> 1;
+    if (puntos[mid]!.time <= tiempo) {
+      idx = mid;
+      lo = mid + 1;
+    } else {
+      hi = mid - 1;
+    }
+  }
+  return puntos[idx === -1 ? 0 : idx]!.volumen;
+}
+
+/** Capas de storyboard cuyos samples suenan: 0 Background, 2 Pass, 3 Foreground. La 1 (Fail) no. */
+function capaDeSampleSuena(capa: string): boolean {
+  switch (capa.trim().toLowerCase()) {
+    case '0':
+    case 'background':
+    case '2':
+    case 'pass':
+    case '3':
+    case 'foreground':
+      return true;
+    default:
+      return false;
+  }
+}
+
+/** Lineas `Sample,tiempo,capa,"archivo",volumen` de [Events] (y su alias numerico `5,`). */
+function samplesDeEventos(lineas: readonly string[]): KeysoundDeNota[] {
+  const samples: KeysoundDeNota[] = [];
+  for (const linea of lineas) {
+    const campos = separarCampos(linea);
+    if (campos.length < 4) continue;
+    const tipo = campos[0]!.trim().toLowerCase();
+    if (tipo !== 'sample' && tipo !== '5') continue;
+    if (!capaDeSampleSuena(campos[2]!)) continue;
+    const tiempo = Number(campos[1]!.trim());
+    const archivo = limpiarRuta(campos[3]!);
+    if (Number.isNaN(tiempo) || archivo === '') continue;
+    const volumenCrudo = campos[4]?.trim();
+    const volumen = volumenCrudo === undefined || volumenCrudo === '' ? 100 : Number(volumenCrudo);
+    samples.push({ tiempo, archivo, volumen: Number.isNaN(volumen) ? 100 : volumen });
+  }
+  return samples;
+}
+
+/**
+ * D7: arma la receta del audio virtual. Eventos de los keysounds de las notas
+ * (con el volumen del punto de tiempo cuando el del hitSample es 0) y de las
+ * lineas `Sample` de [Events]. Se descartan los de volumen 0 o tiempo
+ * negativo; salen ordenados por tiempo y despues por archivo.
+ */
+function construirAudioVirtual(
+  keysounds: readonly KeysoundDeNota[],
+  samples: readonly KeysoundDeNota[],
+  timingLines: readonly string[],
+): AudioVirtual {
+  const volumenes = volumenesDeTiming(timingLines);
+  const eventos: EventoDeMuestra[] = [];
+  const agregar = (tiempo: number, archivo: string, volumen: number): void => {
+    const nombre = normalizarNombreDeMuestra(archivo);
+    const acotado = Math.min(100, Math.max(0, volumen));
+    if (nombre === '' || tiempo < 0 || !(acotado > 0)) return;
+    eventos.push({ tiempo, archivo: nombre, volumen: acotado });
+  };
+  for (const k of keysounds) {
+    agregar(
+      k.tiempo,
+      k.archivo,
+      k.volumen > 0 ? k.volumen : volumenDeTimingEn(volumenes, k.tiempo),
+    );
+  }
+  for (const s of samples) agregar(s.tiempo, s.archivo, s.volumen);
+  eventos.sort((a, b) =>
+    a.tiempo !== b.tiempo
+      ? a.tiempo - b.tiempo
+      : a.archivo < b.archivo
+        ? -1
+        : a.archivo > b.archivo
+          ? 1
+          : 0,
+  );
+  return { eventos };
 }
 
 /** Entero mayor que 0, o `undefined` (los no publicados traen 0 o -1: T-066). */
@@ -361,7 +530,7 @@ export function parseOsu(text: string): ParseResult {
   // Ausente o vacia no es un error: un mapa con cero notas no tiene sentido
   // para jugar, pero no viola ningun invariante de Chart, y el ticket no lo
   // marca como caso de fallo obligatorio.
-  const notes = parseHitObjects(secciones.hitObjectLines);
+  const { notas: notes, keysounds } = parseHitObjects(secciones.hitObjectLines);
 
   const eventos = parseEventos(secciones.eventLines);
   const source = secciones.metadata.get('Source');
@@ -393,6 +562,14 @@ export function parseOsu(text: string): ParseResult {
     timingPoints: puntos.timingPoints,
     speedPoints: puntos.speedPoints,
     notes,
+    // T-066 (D7): solo un mapa con AudioFilename "virtual" trae receta.
+    ...(audioFile.trim().toLowerCase() === 'virtual' && {
+      audioVirtual: construirAudioVirtual(
+        keysounds,
+        samplesDeEventos(secciones.eventLines),
+        secciones.timingLines,
+      ),
+    }),
   };
 
   return { ok: true, chart };

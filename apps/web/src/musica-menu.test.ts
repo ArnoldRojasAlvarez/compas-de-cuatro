@@ -8,7 +8,13 @@ import type { Chart } from '@tetra/core';
 import type { CancionGuardada } from '@tetra/storage';
 
 const { listarCancionesFalso } = vi.hoisted(() => ({ listarCancionesFalso: vi.fn() }));
-vi.mock('@tetra/storage', () => ({ listarCanciones: listarCancionesFalso }));
+vi.mock('@tetra/storage', () => ({
+  listarCanciones: listarCancionesFalso,
+  // T-066: musica-menu pasa por obtenerAudioDeDificultad, que pregunta si la cancion es virtual.
+  esCancionVirtual: (c: { audio?: Blob; keysounds?: unknown }) =>
+    c.audio === undefined && c.keysounds !== undefined,
+  leerMuestras: vi.fn(async () => new Map()),
+}));
 
 import { crearMusicaMenu } from './musica-menu.js';
 

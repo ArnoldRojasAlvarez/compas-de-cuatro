@@ -20,6 +20,7 @@ import { MODELO_CALIBRADO, SKILLSETS, replayPerfecto } from '@tetra/core';
 import {
   borrarCancion,
   conservarPartidaReciente,
+  esCancionVirtual,
   exportarCancion,
   guardarEnHistorial,
   guardarPartida,
@@ -45,7 +46,8 @@ import {
   fechaYHoraCorta,
   motivoDeRechazoDelReplay,
 } from './replay-logica.js';
-import { decodificarBlobDeAudio, mensajeDeErrorDeCarga } from './cargador-logica.js';
+import { mensajeDeErrorDeCarga } from './cargador-logica.js';
+import { obtenerAudioDeDificultad } from './audio-de-cancion.js';
 import { cargarAudioDelClickTrack, cargarChartDelClickTrack } from './click-track.js';
 import { fondoEscena } from './fondo-escena.js';
 import { leerKeyMap } from './keymap.js';
@@ -472,6 +474,24 @@ export function mostrarSongSelect(contenedor: HTMLElement, opciones: OpcionesSon
   botonClickTrack.textContent = 'Jugar click track';
   pie.appendChild(botonClickTrack);
 
+  // T-066: mientras se arma el audio de una cancion virtual (el preview o al jugar).
+  const preparandoEl = document.createElement('div');
+  preparandoEl.className = 'tetra-ss-preparando';
+  preparandoEl.setAttribute('role', 'status');
+  preparandoEl.hidden = true;
+  const girador = document.createElement('span');
+  girador.className = 'tetra-ss-preparando-girador';
+  girador.setAttribute('aria-hidden', 'true');
+  const textoPreparando = document.createElement('span');
+  textoPreparando.textContent = 'Preparando el audio...';
+  preparandoEl.append(girador, textoPreparando);
+  pie.appendChild(preparandoEl);
+  /** true mientras "Jugar" espera el audio de una cancion virtual. */
+  let preparandoPartida = false;
+  function actualizarPreparando(): void {
+    preparandoEl.hidden = !(preparandoPartida || reproductor.preparando);
+  }
+
   // Mensaje de error: una linea corta, el detalle tecnico en `title`, y un
   // boton para cerrarlo. Oculto mientras no hay nada que decir.
   const errorEl = document.createElement('div');
@@ -565,6 +585,7 @@ export function mostrarSongSelect(contenedor: HTMLElement, opciones: OpcionesSon
     else cambiarBotonIcono(botonPreview, 'pausa', 'Pausar el preview');
     reproductorEl.classList.toggle('tetra-ss-reproductor-inactivo', !reproductor.activo);
     if (!reproductor.activo) pintarProgreso(0);
+    actualizarPreparando();
   }
   reproductor.alCambiar(pintarReproductor);
   pintarReproductor();
@@ -668,7 +689,11 @@ export function mostrarSongSelect(contenedor: HTMLElement, opciones: OpcionesSon
     renderizar();
     if (yaEnfocada) return; // no reinicia el preview si ya era esta misma cancion
     const primeraDificultad = cancion.dificultades[0];
-    void reproductor.reproducir(cancion, primeraDificultad ? primeraDificultad.metadata.previewTime : 0);
+    void reproductor.reproducir(
+      cancion,
+      primeraDificultad ? primeraDificultad.metadata.previewTime : 0,
+      primeraDificultad,
+    );
   }
 
   function enfocarDificultad(indice: number): void {
@@ -676,6 +701,11 @@ export function mostrarSongSelect(contenedor: HTMLElement, opciones: OpcionesSon
     const chart = cancionEnfocada()?.dificultades[indice];
     if (chart) solicitarDificultad(chart, true);
     renderizar(); // misma cancion, mismo audio: no hace falta tocar el preview
+    // T-066: salvo en una cancion de audio virtual, donde cada dificultad tiene su propio sonido.
+    const cancion = cancionEnfocada();
+    if (chart && cancion && esCancionVirtual(cancion)) {
+      void reproductor.reproducir(cancion, chart.metadata.previewTime, chart);
+    }
   }
 
   /** Sin cancion enfocada (lista vacia o sin resultados): preview parado y fondo por defecto. */
@@ -1254,6 +1284,11 @@ export function mostrarSongSelect(contenedor: HTMLElement, opciones: OpcionesSon
       const nombreDificultad = info.nombre;
       const botonEditar = crearBotonIcono('editar', 'Editar en el mapeador', 'tetra-song-select-editar');
       botonEditar.dataset.foco = 'editar';
+      if (esCancionVirtual(cancion)) {
+        // T-066 (D11): al guardar desde el mapeador se perderia la receta del audio virtual.
+        botonEditar.disabled = true;
+        botonEditar.title = 'El mapeador no abre canciones con audio virtual.';
+      }
       botonEditar.addEventListener('click', () => {
         desmontar();
         fondoEscena().limpiar();
@@ -1576,9 +1611,15 @@ export function mostrarSongSelect(contenedor: HTMLElement, opciones: OpcionesSon
     try {
       const ctxDeDecodificacion = new AudioContext();
       let audioBuffer: AudioBuffer;
+      // T-066: en una cancion virtual el audio se arma al cargar (o sale de la cache si el
+      // preview ya lo armo); mientras tanto se muestra "Preparando el audio...".
+      preparandoPartida = esCancionVirtual(cancion);
+      actualizarPreparando();
       try {
-        audioBuffer = await decodificarBlobDeAudio(cancion.audio, ctxDeDecodificacion);
+        audioBuffer = await obtenerAudioDeDificultad(cancion, chart, ctxDeDecodificacion);
       } finally {
+        preparandoPartida = false;
+        actualizarPreparando();
         await ctxDeDecodificacion.close();
       }
       await jugar(chart, audioBuffer, escenaDeCancion(cancion, chart), cancion.id, reproducir);

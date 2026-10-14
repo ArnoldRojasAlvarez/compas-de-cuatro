@@ -100,7 +100,7 @@ describe('importarOsz + listarCanciones', () => {
     expect(canciones[0]!.id).toBe(id);
     expect(canciones[0]!.titulo).toBe('Cancion de prueba');
     expect(canciones[0]!.artista).toBe('Artista de prueba');
-    expect(canciones[0]!.audio.size).toBe(3);
+    expect(canciones[0]!.audio!.size).toBe(3);
     expect(canciones[0]!.dificultades).toHaveLength(1);
     expect(canciones[0]!.dificultades[0]!.notes).toHaveLength(2);
   });
@@ -120,7 +120,7 @@ describe('importarOsz + listarCanciones', () => {
     expect(cancion.id).toBe(id);
     // Las dos comparten el mismo audio (una sola cancion, ver el ticket,
     // "Parte A"): no queda duplicado por dificultad.
-    expect(cancion.audio.size).toBe(3);
+    expect(cancion.audio!.size).toBe(3);
     expect(cancion.dificultades).toHaveLength(2);
     const nombres = cancion.dificultades.map((d) => d.metadata.difficultyName).sort();
     expect(nombres).toEqual(['Hard', 'Normal']);
@@ -196,8 +196,8 @@ describe('con el .osz real del fixture de T-005', () => {
     }
     // El audio del fixture es un WAV de 7 segundos: tiene que haber
     // quedado guardado como Blob, no como texto ni vacio.
-    expect(guardado.audio.type).toBe('audio/wav');
-    expect(guardado.audio.size).toBeGreaterThan(44); // mas que solo el header WAV
+    expect(guardado.audio!.type).toBe('audio/wav');
+    expect(guardado.audio!.size).toBeGreaterThan(44); // mas que solo el header WAV
   });
 });
 
@@ -458,7 +458,7 @@ describe('exportarCancion', () => {
       expect(igual.overallDifficulty).toBe(d.overallDifficulty);
       expect(igual.metadata.creator).toBe(d.metadata.creator);
     }
-    expect(await bytesDeBlob(reimportada.audio)).toEqual(Array.from(AUDIO_BYTES));
+    expect(await bytesDeBlob(reimportada.audio!)).toEqual(Array.from(AUDIO_BYTES));
     expect(await bytesDeBlob(reimportada.background!)).toEqual(Array.from(FONDO_BYTES));
     expect(await bytesDeBlob(reimportada.video!)).toEqual(Array.from(VIDEO_BYTES));
     expect(reimportada.videoOffset).toBe(-120);

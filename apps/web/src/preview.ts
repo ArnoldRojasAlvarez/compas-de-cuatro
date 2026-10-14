@@ -8,18 +8,26 @@
 // suspende (pausa), la posicion se congela sola.
 //
 // El audio decodificado se cachea por cancion (Map): re-enfocar una cancion ya
-// escuchada no vuelve a decodificar su audio.
+// escuchada no vuelve a decodificar su audio. Las canciones de audio virtual
+// (T-066) no entran en ese Map: cada dificultad tiene su propio sonido y pesan
+// unos 95 MB renderizadas; su unica entrada de cache vive en audio-de-cancion.ts.
 
-import type { CancionGuardada, SongId } from '@tetra/storage';
-import type { Ms } from '@tetra/core';
-import { decodificarBlobDeAudio } from './cargador-logica.js';
+import { esCancionVirtual, type CancionGuardada, type SongId } from '@tetra/storage';
+import type { Chart, Ms } from '@tetra/core';
+import { obtenerAudioDeDificultad } from './audio-de-cancion.js';
 import { inicioDePreviewSegundos } from './musica-menu-logica.js';
 import { fraccionDePosicion, posicionDePreviewSegundos } from './song-select-logica.js';
 import { gananciaDeVolumen, leerVolumen } from './volumen.js';
 
 export interface ReproductorPreview {
-  /** Empieza el preview de `cancion` desde `inicioMs` (el previewTime). Si estaba en pausa, reanuda. */
-  reproducir(cancion: CancionGuardada, inicioMs: Ms): Promise<void>;
+  /**
+   * Empieza el preview de `cancion` desde `inicioMs` (el previewTime). Si estaba en pausa, reanuda.
+   * `chart` es la dificultad enfocada: en una cancion de audio virtual decide que sonido se arma
+   * (T-066); en las demas no importa.
+   */
+  reproducir(cancion: CancionGuardada, inicioMs: Ms, chart?: Chart): Promise<void>;
+  /** true mientras se renderiza el audio virtual del preview ("Preparando el audio..."). */
+  readonly preparando: boolean;
   /** Corta el sonido (no cierra el contexto: se puede volver a `reproducir`). */
   detener(): void;
   alternarPausa(): void;
@@ -48,6 +56,7 @@ export function crearReproductorDePreview(): ReproductorPreview {
   let inicioCtxS = 0;
   let pausado = false;
   let destruido = false;
+  let preparando = false;
   let token = 0;
   const cache = new Map<SongId, AudioBuffer>();
   const oyentes: Array<() => void> = [];
@@ -105,11 +114,12 @@ export function crearReproductorDePreview(): ReproductorPreview {
   window.addEventListener('pointerdown', reanudarConGesto);
   window.addEventListener('keydown', reanudarConGesto);
 
-  async function reproducir(cancion: CancionGuardada, inicioMs: Ms): Promise<void> {
+  async function reproducir(cancion: CancionGuardada, inicioMs: Ms, chart?: Chart): Promise<void> {
     if (destruido) return;
     pararFuente();
     bufferActual = null;
     const miToken = ++token;
+    preparando = false;
     try {
       const { ctx: contexto } = obtenerContexto();
       if (pausado) {
@@ -117,10 +127,23 @@ export function crearReproductorDePreview(): ReproductorPreview {
         pausado = false;
         void contexto.resume();
       }
-      let buffer = cache.get(cancion.id);
-      if (!buffer) {
-        buffer = await decodificarBlobDeAudio(cancion.audio, contexto);
-        cache.set(cancion.id, buffer);
+      let buffer: AudioBuffer | undefined;
+      if (esCancionVirtual(cancion)) {
+        const dificultad = chart ?? cancion.dificultades[0];
+        if (dificultad === undefined) return;
+        preparando = true;
+        avisar();
+        buffer = await obtenerAudioDeDificultad(cancion, dificultad, contexto, {
+          cancelado: () => miToken !== token || destruido,
+        });
+      } else {
+        buffer = cache.get(cancion.id);
+        if (!buffer) {
+          const primera = chart ?? cancion.dificultades[0];
+          if (primera === undefined) return;
+          buffer = await obtenerAudioDeDificultad(cancion, primera, contexto);
+          cache.set(cancion.id, buffer);
+        }
       }
       // El foco pudo haber cambiado de nuevo mientras esto decodificaba (por
       // ejemplo, el usuario tipeo varias letras seguidas en buscar): si ya no
@@ -132,11 +155,13 @@ export function crearReproductorDePreview(): ReproductorPreview {
       // Preview best-effort (audio corrupto, AudioContext no disponible): no
       // debe romper el song select por un audio que no decodifica.
     }
+    if (miToken === token) preparando = false;
     avisar();
   }
 
   function detener(): void {
     token++; // un reproducir() a medio decodificar no debe arrancar despues
+    preparando = false;
     pararFuente();
     bufferActual = null;
     avisar();
@@ -146,6 +171,7 @@ export function crearReproductorDePreview(): ReproductorPreview {
     if (destruido) return;
     destruido = true;
     token++;
+    preparando = false;
     window.removeEventListener('pointerdown', reanudarConGesto);
     window.removeEventListener('keydown', reanudarConGesto);
     pararFuente();
@@ -176,6 +202,9 @@ export function crearReproductorDePreview(): ReproductorPreview {
     },
     get pausado() {
       return pausado;
+    },
+    get preparando() {
+      return preparando;
     },
     get activo() {
       return bufferActual !== null && fuente !== null;

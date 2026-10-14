@@ -6,6 +6,7 @@ import {
   instanteDeContextoDelGolpe,
   leerTipoHitsound,
   suenaElGolpe,
+  suenaElHitsound,
 } from './hitsound-logica.js';
 
 function crearStorageFalso(inicial: Record<string, string> = {}): Storage {
@@ -81,5 +82,21 @@ describe('suenaElGolpe', () => {
 
   it('una pulsacion sin nota a tiro (sin resultado) no suena', () => {
     expect(suenaElGolpe(undefined)).toBe(false);
+  });
+});
+
+describe('suenaElHitsound (T-066: sin hitsounds sintetizados con audio virtual)', () => {
+  const conReceta = { audioVirtual: { eventos: [] } };
+
+  it('en una dificultad normal suena en cada golpe valido', () => {
+    expect(suenaElHitsound({}, 'perfect')).toBe(true);
+    expect(suenaElHitsound({}, 'miss')).toBe(false);
+    expect(suenaElHitsound({}, undefined)).toBe(false);
+  });
+
+  it('en una dificultad con audioVirtual nunca suena (la nota ya esta en la mezcla)', () => {
+    for (const juicio of ['max', 'perfect', 'great', 'good', 'bad', 'miss'] as const) {
+      expect(suenaElHitsound(conReceta, juicio)).toBe(false);
+    }
   });
 });

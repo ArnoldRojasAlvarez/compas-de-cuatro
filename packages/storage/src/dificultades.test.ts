@@ -97,7 +97,7 @@ describe('guardarDificultad y borrarDificultad (IndexedDB)', () => {
     const id = await crearCancion(['Normal']);
     await guardarDificultad(id, chart('Otra'));
     const cancion = await leerCancion(id);
-    expect(new Uint8Array(await cancion!.audio.arrayBuffer())).toEqual(new Uint8Array([1, 2, 3]));
+    expect(new Uint8Array(await cancion!.audio!.arrayBuffer())).toEqual(new Uint8Array([1, 2, 3]));
   });
 
   it('guardar en una cancion que no existe falla con un mensaje claro', async () => {

@@ -616,6 +616,43 @@
   color: var(--texto);
 }
 
+/* T-066: "Preparando el audio..." mientras se arma el audio de una cancion
+   virtual. El girador es una animacion de CSS (transform): sigue girando aunque
+   el hilo principal este ocupado renderizando. */
+.tetra-ss-preparando {
+  display: flex;
+  align-items: center;
+  gap: var(--espacio-2);
+  padding: var(--espacio-1) var(--espacio-3);
+  color: var(--tinta-2);
+  font-size: var(--tipo-sm);
+}
+
+.tetra-ss-preparando[hidden] {
+  display: none;
+}
+
+.tetra-ss-preparando-girador {
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--linea);
+  border-top-color: var(--tinta);
+  border-radius: 50%;
+  animation: tetra-ss-girar 0.8s linear infinite;
+}
+
+@keyframes tetra-ss-girar {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tetra-ss-preparando-girador {
+    animation-duration: 2.4s;
+  }
+}
+
 /* ---------------------------------------------------------------------- */
 /* Estado vacio: una linea y el boton de importar. El panel pasa a una sola */
 /* columna (clase tetra-ss-esta-vacio, la pone song-select.ts).             */

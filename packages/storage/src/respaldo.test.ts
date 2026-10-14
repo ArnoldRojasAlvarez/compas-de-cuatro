@@ -244,7 +244,7 @@ describe('respaldo: ida y vuelta', () => {
       expect(copia.videoOffset).toBe(original.videoOffset);
       // Mismo audio, byte por byte (y el mismo tipo MIME).
       expect(await bytesDeBlob(copia.audio)).toEqual(await bytesDeBlob(original.audio));
-      expect(copia.audio.type).toBe('audio/wav');
+      expect(copia.audio!.type).toBe('audio/wav');
       expect(copia.background === undefined).toBe(original.background === undefined);
       expect(copia.video === undefined).toBe(original.video === undefined);
     }

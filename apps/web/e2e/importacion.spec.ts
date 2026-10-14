@@ -97,12 +97,13 @@ test('un .osz solo de 7K muestra la causa a la vista, sin pasar el mouse', async
   await expect(page.locator('.tetra-song-item')).toHaveCount(0);
 });
 
-test('un set de audio virtual falla con el mensaje del audio virtual', async ({ page }) => {
+test('un set de audio virtual sin sus muestras falla con la causa a la vista', async ({ page }) => {
   await irASongSelect(page);
+  // Sin keysounds ni lineas Sample: el mapa virtual no pide ningun sonido.
   await importar(page, 'piano.osz', crearOsz('Piano', { audio: 'virtual' }));
 
   await expect(page.locator('.tetra-song-select-error-texto')).toContainText(
-    'Este .osz no trae pista de música: usa audio virtual (el sonido sale de muestras por nota) y Tetra todavía no lo soporta.',
+    'Este .osz usa audio virtual pero no pide ningún sonido: no hay nada que reproducir.',
   );
 });
 

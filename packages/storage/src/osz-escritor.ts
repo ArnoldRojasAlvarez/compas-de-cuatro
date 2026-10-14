@@ -16,9 +16,15 @@ export interface EntradaOsz {
   titulo: string;
   artista: string;
   creador: string;
-  /** Nombre del archivo de audio dentro del zip. Tiene que coincidir con AudioFilename del .osu. */
-  audioNombre: string;
-  audio: Uint8Array;
+  /** Nombre del archivo de audio dentro del zip. Tiene que coincidir con AudioFilename del .osu. Ausente si el audio es virtual. */
+  audioNombre?: string;
+  audio?: Uint8Array;
+  /**
+   * T-066 (paso 3): las muestras de un audio virtual, con su nombre dentro del
+   * zip (el normalizado que usa la receta). Sin `audio` y con AudioFilename
+   * "virtual" en los .osu.
+   */
+  muestras?: readonly { nombre: string; bytes: Uint8Array }[];
   /** Imagen de fondo (T-049). `nombre` es la ruta dentro del zip y tiene que coincidir con la del .osu. */
   fondo?: { nombre: string; bytes: Uint8Array };
   /** Video de fondo (T-049). Igual que `fondo`: el nombre coincide con el de la linea Video del .osu. */
@@ -51,11 +57,18 @@ export function construirOsz(entrada: EntradaOsz): Uint8Array {
   if (entrada.dificultades.length === 0) {
     throw new Error('Hace falta al menos una dificultad para armar el .osz.');
   }
-  const archivos: Zippable = {
+  const archivos: Zippable = {};
+  const usados = new Set<string>();
+  if (entrada.audioNombre !== undefined && entrada.audio !== undefined) {
     // El audio ya viene comprimido (mp3, ogg): se guarda sin recomprimir.
-    [entrada.audioNombre]: [entrada.audio, { level: 0 }],
-  };
-  const usados = new Set<string>([entrada.audioNombre]);
+    archivos[entrada.audioNombre] = [entrada.audio, { level: 0 }];
+    usados.add(entrada.audioNombre);
+  }
+  // Las muestras de un audio virtual tambien vienen comprimidas.
+  for (const muestra of entrada.muestras ?? []) {
+    archivos[muestra.nombre] = [muestra.bytes, { level: 0 }];
+    usados.add(muestra.nombre);
+  }
   // Imagen y video tambien vienen comprimidos: se guardan sin recomprimir.
   for (const extra of [entrada.fondo, entrada.video]) {
     if (extra === undefined) continue;

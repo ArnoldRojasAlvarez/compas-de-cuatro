@@ -879,6 +879,11 @@ export function mostrarMapeador(contenedor: HTMLElement, opciones: OpcionesMapea
         aviso('Esa dificultad ya no está en la biblioteca.', 'error');
         return;
       }
+      // T-066 (D11): sin pista no hay audio que cargar, y guardar perderia la receta.
+      if (cancion.audio === undefined) {
+        aviso('El mapeador no abre canciones con audio virtual.', 'error');
+        return;
+      }
       const primero = chart.timingPoints[0];
       sesion.base = {
         songId,

@@ -51,14 +51,23 @@ function rutaEvento(ruta: string): string {
   return limpiar(ruta).replace(/"/g, '');
 }
 
-/** Lineas de [Events]: fondo y video, solo los que el chart declara. */
-function lineasEventos(m: Chart['metadata']): string[] {
+/** Lineas de [Events]: fondo y video (los que el chart declara) y, si el audio es virtual, todos los sonidos de la receta (T-066). */
+function lineasEventos(chart: Chart): string[] {
+  const m = chart.metadata;
   const lineas: string[] = [];
   if (m.backgroundFile !== undefined && rutaEvento(m.backgroundFile) !== '') {
     lineas.push(`0,0,"${rutaEvento(m.backgroundFile)}",0,0`);
   }
   if (m.videoFile !== undefined && rutaEvento(m.videoFile) !== '') {
     lineas.push(`Video,${Math.round(m.videoOffset ?? 0)},"${rutaEvento(m.videoFile)}"`);
+  }
+  // T-066 (D11): el audio virtual se exporta como lineas Sample con el volumen
+  // ya resuelto; las notas van sin keysound (ver lineaNota), asi que suena igual.
+  if (chart.audioVirtual !== undefined && chart.audioVirtual.eventos.length > 0) {
+    lineas.push('//Storyboard Sound Samples');
+    for (const e of chart.audioVirtual.eventos) {
+      lineas.push(`Sample,${Math.round(e.tiempo)},0,"${rutaEvento(e.archivo)}",${Math.round(e.volumen)}`);
+    }
   }
   return lineas;
 }
@@ -116,7 +125,7 @@ export function escribirOsu(chart: Chart): string {
     '',
     '[Events]',
     '//Background and Video events',
-    ...lineasEventos(m),
+    ...lineasEventos(chart),
     '',
     '[TimingPoints]',
     ...puntos.map((p) => p.linea),

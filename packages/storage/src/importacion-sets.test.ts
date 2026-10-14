@@ -85,9 +85,9 @@ describe('importarArchivoOsz: un .osz con dos pistas (T-066 paso 2)', () => {
     const porId = new Map(guardadas.map((c) => [c.id, c]));
     const uno = porId.get(r.canciones[0]!.id)!;
     const dos = porId.get(r.canciones[1]!.id)!;
-    expect(uno.audio.size).toBe(1);
+    expect(uno.audio!.size).toBe(1);
     expect(uno.dificultades.map((d) => d.metadata.difficultyName)).toEqual(['Easy', 'Hard']);
-    expect(dos.audio.size).toBe(2);
+    expect(dos.audio!.size).toBe(2);
     expect(dos.dificultades.map((d) => d.metadata.difficultyName)).toEqual(['Unica']);
     expect(uno.conjunto).toBeUndefined();
   });
