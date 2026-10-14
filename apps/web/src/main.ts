@@ -11,6 +11,7 @@ import { iniciarRouter } from './router.js';
 import { montarHeader } from './header.js';
 import { instalarPresentacion } from './presentacion.js';
 import { asegurarCancionDemo } from './demo/index.js';
+import { purgarReplaysRecientes } from '@tetra/storage';
 
 const contenedor = document.getElementById('app');
 if (!contenedor) {
@@ -23,3 +24,6 @@ instalarPresentacion();
 iniciarRouter(contenedor);
 // T-051: siembra la cancion demo la primera vez (no bloquea el arranque).
 void asegurarCancionDemo();
+// T-065: al abrir la app se borran los replays recientes de mas de 7 dias (y los que pasen de 200).
+// Las fijadas y el replay de la mejor partida no se tocan. Un fallo no estorba el arranque.
+void purgarReplaysRecientes().catch(() => undefined);

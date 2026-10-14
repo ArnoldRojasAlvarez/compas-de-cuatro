@@ -138,3 +138,57 @@ export function normalizarRegistroPartida(valor: unknown): RegistroPartida | und
 export function claveDeRegistroPartida(registro: RegistroPartida): string {
   return `${registro.fecha}|${registro.hash}`;
 }
+
+/**
+ * T-065: lo que se guarda en la tienda 'recientes' (version 8): una fila por
+ * partida completada, con su replay. A diferencia de 'replays' (uno por mapa, el
+ * de la mejor partida, que vive siempre), estas filas se purgan solas: las de mas
+ * de 7 dias y las que pasen de 200, salvo las `fijado` ("Conservar").
+ */
+export interface ReplayRecienteGuardado {
+  /** Clave: `<hash>|<fecha>` (ver `idDeReplayReciente`). Reimportar un respaldo no duplica. */
+  id: string;
+  /** El hash del mapa (el mismo de 'records'). */
+  hash: string;
+  /** Fecha ISO de la partida. */
+  fecha: string;
+  /** El replay serializado (`serializarReplay`). */
+  texto: string;
+  /** El resumen de la partida, para listarla sin leer el replay. */
+  partida: PartidaJugada;
+  /** "Conservar": una fila fijada no se purga nunca. */
+  fijado: boolean;
+}
+
+/** Lo que muestra la lista de partidas recientes: la fila sin el texto del replay. */
+export type ResumenDeReciente = Omit<ReplayRecienteGuardado, 'texto'>;
+
+/** La clave de una partida reciente: el mapa y el instante de la partida. */
+export function idDeReplayReciente(hash: string, fecha: string): string {
+  return `${hash}|${fecha}`;
+}
+
+/**
+ * Una fila de recientes bien formada, o `undefined`. Con `verificarTexto` (por
+ * defecto) tambien se exige que el replay se lea y sea de ese hash: asi lo hacen
+ * la lectura de un replay y el respaldo. Sin eso (listar, purgar) solo se mira la
+ * forma, sin parsear el texto. Nunca lanza.
+ */
+export function normalizarReplayReciente(
+  valor: unknown,
+  verificarTexto = true,
+): ReplayRecienteGuardado | undefined {
+  if (!esObjeto(valor)) return undefined;
+  const { id, hash, fecha, texto, fijado } = valor;
+  if (typeof hash !== 'string' || hash === '') return undefined;
+  if (typeof fecha !== 'string' || !Number.isFinite(Date.parse(fecha))) return undefined;
+  if (id !== idDeReplayReciente(hash, fecha)) return undefined;
+  if (typeof texto !== 'string') return undefined;
+  const partida = normalizarPartida(valor['partida']);
+  if (partida === undefined) return undefined;
+  if (verificarTexto) {
+    const replay = leerReplay(texto);
+    if (replay === null || replay.hashMapa !== hash) return undefined;
+  }
+  return { id, hash, fecha, texto, partida, fijado: fijado === true };
+}

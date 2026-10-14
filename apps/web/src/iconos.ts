@@ -20,7 +20,9 @@ export type NombreIcono =
   | 'cerrar'
   | 'auto'
   | 'replay'
-  | 'copiar';
+  | 'copiar'
+  | 'conservar'
+  | 'conservada';
 
 interface DefinicionIcono {
   /** Trazos (path d). */
@@ -68,6 +70,9 @@ const ICONOS: Record<NombreIcono, DefinicionIcono> = {
   replay: { trazos: ['M4.5 12a7.5 7.5 0 1 0 2.4-5.5', 'M4 4.5v4h4', 'M12 8v4l2.5 1.5'] },
   // T-061: dos hojas encimadas (copiar al portapapeles).
   copiar: { trazos: ['M9 9h10.5v11H9z', 'M15 9V4H5v11h4'] },
+  // T-065: marcador (conservar una partida reciente); el lleno es el de una ya conservada.
+  conservar: { trazos: ['M7 4.5h10v15l-5-3.8-5 3.8z'] },
+  conservada: { trazos: ['M7 4.5h10v15l-5-3.8-5 3.8z'], relleno: true },
 }
 
 const NS = 'http://www.w3.org/2000/svg';

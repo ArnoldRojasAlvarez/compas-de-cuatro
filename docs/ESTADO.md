@@ -1,6 +1,6 @@
 # Estado del proyecto
 
-Ultima actualizacion: 13 de octubre de 2026.
+Ultima actualizacion: 13 de octubre de 2026 (T-065).
 
 Estado corto y siempre al dia. **Si sos una sesion NUEVA, empeza por
 `docs/HANDOFF.md`** (metodo de trabajo, reglas, lecciones), despues
@@ -8,7 +8,7 @@ Estado corto y siempre al dia. **Si sos una sesion NUEVA, empeza por
 
 ## Donde esta todo
 
-- `main`: limpio, verde, 1520 tests + 64 e2e (ver nota de T-061 abajo; el e2e se verifica con `--workers=1`, ver T-063).
+- `main`: limpio, verde, 1548 tests + 67 e2e (ver nota de T-061 abajo; el e2e se verifica con `--workers=1`, ver T-063).
 - Estado demo: menu con musica de la biblioteca, song select sobre la escena, partida con fondo y video, cuatro skins propias, cancion demo sembrada.
 - En curso: nada.
 
@@ -69,6 +69,7 @@ Estado corto y siempre al dia. **Si sos una sesion NUEVA, empeza por
 | T-060 | LN que desaparecian: el cuerpo se dibuja si el tramo entero toca la pista (test que falla en el codigo viejo); offset GLOBAL por defecto (es el del equipo, como en osu!): teclas `-`/`=` en partida, "Ajustar offset" en la pausa y "Corregir offset" en resultados lo corrigen, con "Solo esta canción" como opcion chica; media en vivo junto a la barra de error; "Calibrar" en ajustes (metronomo a 120 BPM, fechado con el mapa de tiempo de T-063); el offset por cancion es una barra compacta (la de T-058) en el song select con arrastre, rueda, flechas, doble clic a 0 y teclas `-`/`=`. Los 95 ms de Xevel eran el total (68 previos + 27): la cuenta es correcta, el boton ahora dice de cuanto a cuanto |
 | T-063 | Reloj interpolado: `ctx.currentTime` avanza en rafagas de ~10 ms y cada pulsacion heredaba hasta un bloque de error (12 ms de rango medidos, std 2,9); ahora el reloj se ancla a `getOutputTimestamp()` e interpola con `performance.now()` (rango 0,2 ms, std 0,03), `clock.desdeTimeStamp(ts)` fecha la entrada, la pista se dibuja suave, y el interpolado nunca se aleja mas de 30 ms de la lectura cruda (el audio manda); `tools/medir-reloj.mjs` lo mide en Chromium real. Ojo: el e2e en paralelo (workers por defecto) falla por carga en la maquina de Arnold tambien en `main`; verificar con `--workers=1` |
 | T-064 | Bloqueo de atajos del navegador en partida: preventDefault de todo lo que el juego no usa (Alt+numpad, Alt solo, Ctrl+W/P/R, F1, F5; decisión pura `debeBloquearTecla`), Keyboard Lock en pantalla completa en Chromium (Ctrl+W/T/N/Tab, Escape sigue pausando), `beforeunload` solo con partida, y una nota en "Antes de presentar". Alt+Tab, la tecla Windows y Alt+F4 no se pueden bloquear desde una página. Falta la prueba real en Opera con pantalla completa (el e2e usa dobles) |
+| T-065 | Replays de las partidas recientes: toda partida completada guarda su replay 7 días (tienda `recientes`, base v8, purga al abrir la app: más de 7 días y tope de 200, el replay de la mejor partida siempre se conserva); "Conservar" fija una; en el song select, lista "Partidas recientes" de la dificultad con "Ver replay" y "Conservar"; en resultados, "Ver replay" de la partida recién jugada (mismo audio, fondo, skin, HUD y modo presentación); el respaldo lleva solo las recientes fijadas; test de determinismo de un replay guardado como reciente |
 
 La prueba de feel de Arnold ya se hizo: en una cancion real sus golpes salieron
 centrados en cero. El motor esta bien sincronizado.

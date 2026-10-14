@@ -8,6 +8,7 @@ import {
   MENSAJE_SIN_REPLAY,
   etiquetaDeReproduccion,
   fechaCorta,
+  fechaYHoraCorta,
   motivoDeRechazoDelReplay,
 } from './replay-logica.js';
 
@@ -99,5 +100,19 @@ describe('motivoDeRechazoDelReplay', () => {
     const replay: Replay = replayPerfecto(recortado);
     expect(motivoDeRechazoDelReplay(replay, chart)).toBe(MENSAJE_REPLAY_DE_OTRO_MAPA);
     expect(motivoDeRechazoDelReplay(replay, chart, recortado)).toBeNull();
+  });
+});
+
+describe('fechaYHoraCorta (T-065)', () => {
+  // Se arman con la hora local para que el test no dependa de la zona horaria de quien lo corre.
+  it('da dia, mes y hora local con dos digitos', () => {
+    expect(fechaYHoraCorta(new Date(2026, 9, 13, 21, 5).toISOString())).toBe('13 oct 21:05');
+    expect(fechaYHoraCorta(new Date(2026, 0, 2, 0, 7).toISOString())).toBe('2 ene 00:07');
+    expect(fechaYHoraCorta(new Date(2026, 11, 31, 23, 59).toISOString())).toBe('31 dic 23:59');
+  });
+
+  it('una fecha que no se entiende da vacio', () => {
+    expect(fechaYHoraCorta('ayer')).toBe('');
+    expect(fechaYHoraCorta('')).toBe('');
   });
 });

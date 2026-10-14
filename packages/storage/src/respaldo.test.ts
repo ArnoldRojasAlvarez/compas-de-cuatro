@@ -222,6 +222,7 @@ describe('respaldo: ida y vuelta', () => {
       recordsActualizados: 0,
       replaysNuevos: 0,
       historialNuevo: 0,
+      recientesNuevos: 0,
       ajustesRestaurados: 3,
     });
 
@@ -527,6 +528,7 @@ describe('leerRespaldo: rechaza lo que no sirve sin tocar nada', () => {
       recordsActualizados: 0,
       replaysNuevos: 0,
       historialNuevo: 0,
+      recientesNuevos: 0,
       ajustesRestaurados: 0,
     });
   });

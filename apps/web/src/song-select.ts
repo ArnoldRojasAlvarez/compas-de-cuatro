@@ -19,6 +19,7 @@ import type { Chart, DifficultyResult, Rango, RecordDeMapa, Replay, ScoreState }
 import { MODELO_CALIBRADO, SKILLSETS, replayPerfecto } from '@tetra/core';
 import {
   borrarCancion,
+  conservarPartidaReciente,
   exportarCancion,
   guardarEnHistorial,
   guardarPartida,
@@ -26,17 +27,22 @@ import {
   importarOsz,
   leerRecords,
   leerReplayGuardado,
+  leerReplayReciente,
   listarCanciones,
+  listarPartidasRecientes,
   nombreSeguro,
   type CancionGuardada,
+  type ResumenDeReciente,
   type SongId,
 } from '@tetra/storage';
 import { runGame, type EscenaPartida, type OpcionesPartida } from './game.js';
 import { registroDePartida, type GolpeConColumna } from './historial-logica.js';
 import {
   MENSAJE_MAPA_SIN_NOTAS,
+  MENSAJE_RECIENTE_NO_ESTA,
   MENSAJE_REPLAY_ILEGIBLE,
   MENSAJE_SIN_REPLAY,
+  fechaYHoraCorta,
   motivoDeRechazoDelReplay,
 } from './replay-logica.js';
 import { decodificarBlobDeAudio, mensajeDeErrorDeCarga } from './cargador-logica.js';
@@ -139,6 +145,8 @@ interface EstadoSongSelect {
   records: ReadonlyMap<string, RecordDeMapa>;
   /** T-044: claves de las dificultades con replay de la mejor partida guardado. */
   conReplay: ReadonlySet<string>;
+  /** T-065: partidas recientes por clave de dificultad, leidas la primera vez que la dificultad se enfoca. */
+  recientes: Map<string, ResumenDeReciente[]>;
 }
 
 /**
@@ -166,6 +174,7 @@ export function mostrarSongSelect(contenedor: HTMLElement, opciones: OpcionesSon
     filtroEstrellasMax: null,
     records: new Map(),
     conReplay: new Set(),
+    recientes: new Map(),
   };
 
   /** true despues de `desmontar`: todo lo asincrono que llegue tarde (lecturas de la base, resultados del worker) se descarta. */
@@ -217,6 +226,26 @@ export function mostrarSongSelect(contenedor: HTMLElement, opciones: OpcionesSon
     } catch {
       estado.conReplay = new Set();
     }
+  }
+
+  // -- T-065: partidas recientes de la dificultad enfocada. Se piden la primera
+  // vez que se enfoca (solo filas chicas, no los replays) y se guardan en
+  // `estado.recientes`; el song select se vuelve a montar despues de cada
+  // partida, asi que siempre arranca con la lista al dia. --
+  const cargandoRecientes = new Set<string>();
+
+  function solicitarRecientes(chart: Chart): void {
+    const clave = claveDe(chart);
+    if (estado.recientes.has(clave) || cargandoRecientes.has(clave)) return;
+    cargandoRecientes.add(clave);
+    void listarPartidasRecientes(clave)
+      .then((lista) => estado.recientes.set(clave, lista))
+      // Un fallo de la base deja la dificultad sin lista, nunca rota.
+      .catch(() => estado.recientes.set(clave, []))
+      .finally(() => {
+        cargandoRecientes.delete(clave);
+        if (!desmontado) renderizarDetalle();
+      });
   }
 
   /**
@@ -802,6 +831,82 @@ export function mostrarSongSelect(contenedor: HTMLElement, opciones: OpcionesSon
     return bloque;
   }
 
+  /**
+   * T-065: "Partidas recientes" de la dificultad enfocada: fecha y hora, precision,
+   * rango y score de cada una, con "Ver replay" y "Conservar". La que es el
+   * record lleva "Mejor". Las conservadas llevan el marcador lleno y la purga
+   * no las borra.
+   */
+  function crearListaDeRecientes(
+    chart: Chart,
+    recientes: readonly ResumenDeReciente[],
+  ): HTMLElement {
+    const mejorFecha = recordDe(chart)?.mejor.fecha;
+    const seccion = document.createElement('section');
+    seccion.className = 'tetra-ss-recientes';
+    seccion.setAttribute('aria-label', 'Partidas recientes');
+
+    const titulo = document.createElement('h3');
+    titulo.className = 'tetra-ss-recientes-titulo';
+    titulo.textContent = 'Partidas recientes';
+    seccion.appendChild(titulo);
+
+    const lista = document.createElement('ul');
+    lista.className = 'tetra-ss-recientes-lista';
+    for (const reciente of recientes) {
+      const fila = document.createElement('li');
+      fila.className = reciente.fijado
+        ? 'tetra-ss-reciente tetra-ss-reciente-fijada'
+        : 'tetra-ss-reciente';
+
+      const fecha = document.createElement('span');
+      fecha.className = 'tetra-ss-reciente-fecha';
+      fecha.textContent = fechaYHoraCorta(reciente.fecha);
+      const precision = document.createElement('span');
+      precision.className = 'tetra-ss-reciente-precision';
+      precision.textContent = formatearPrecision(reciente.partida.accuracy);
+      const score = document.createElement('span');
+      score.className = 'tetra-ss-reciente-score';
+      score.textContent = formatearMiles(reciente.partida.score);
+      fila.append(
+        fecha,
+        precision,
+        crearLetraDeRango(reciente.partida.rango, 'tetra-ss-reciente-rango'),
+        score,
+      );
+      if (reciente.fecha === mejorFecha) {
+        const mejor = document.createElement('span');
+        mejor.className = 'tetra-ss-reciente-mejor';
+        mejor.textContent = 'Mejor';
+        mejor.title = 'Es tu mejor partida de esta dificultad';
+        fila.appendChild(mejor);
+      }
+
+      const acciones = document.createElement('span');
+      acciones.className = 'tetra-ss-reciente-acciones';
+      const ver = crearBotonIcono('replay', 'Ver replay', 'tetra-ss-reciente-ver');
+      ver.title = `Ver replay del ${fechaYHoraCorta(reciente.fecha)}`;
+      ver.dataset.foco = `reciente-ver-${reciente.id}`;
+      ver.addEventListener('click', () => void verReplayReciente(reciente));
+      const conservar = crearBotonIcono(
+        reciente.fijado ? 'conservada' : 'conservar',
+        reciente.fijado ? 'Dejar de conservar' : 'Conservar',
+        'tetra-ss-reciente-conservar',
+      );
+      conservar.title = reciente.fijado
+        ? 'Conservada: no se borra. Clic para soltarla.'
+        : 'Conservar: no se borra a los 7 días';
+      conservar.setAttribute('aria-pressed', String(reciente.fijado));
+      conservar.dataset.foco = `reciente-conservar-${reciente.id}`;
+      conservar.addEventListener('click', () => void alternarConservada(chart, reciente));
+      acciones.append(ver, conservar);
+      fila.appendChild(acciones);
+      lista.appendChild(fila);
+    }
+    seccion.appendChild(lista);
+    return seccion;
+  }
+
   /** Perfil de skillsets de la dificultad en foco: barras finas, sin titulo ni parrafos. */
   function crearPerfil(chart: Chart): HTMLElement {
     const resultado = resultadosDificultad.get(chart);
@@ -1172,6 +1277,13 @@ export function mostrarSongSelect(contenedor: HTMLElement, opciones: OpcionesSon
     acciones.appendChild(botonBorrar);
 
     detalleEl.appendChild(acciones);
+
+    // T-065: las partidas recientes de esta dificultad (sin ellas, nada).
+    solicitarRecientes(chart);
+    const recientes = estado.recientes.get(claveDe(chart));
+    if (recientes !== undefined && recientes.length > 0) {
+      detalleEl.appendChild(crearListaDeRecientes(chart, recientes));
+    }
     restaurarFoco(detalleEl, focoPrevio);
   }
 
@@ -1267,15 +1379,41 @@ export function mostrarSongSelect(contenedor: HTMLElement, opciones: OpcionesSon
 
   // -- Jugar --
 
-  function mostrarBotonVolverDesdeResultados(): void {
-    const boton = document.createElement('button');
-    boton.type = 'button';
-    boton.className = 'tetra-resultados-volver-song-select';
-    boton.textContent = 'Volver al song select';
-    boton.addEventListener('click', () => volverAlSongSelect());
+  /**
+   * Los botones de abajo de la pantalla de resultados: "Ver replay" (T-065, la
+   * partida recien terminada vuelve a correr con el mismo audio, fondo, skin y
+   * HUD) y "Volver al song select". `verReplay` es undefined si no hay nada que
+   * ver; `etiquetaVer` dice "Ver replay" o, si lo que acaba de terminar ya era una
+   * reproduccion, "Ver de nuevo".
+   */
+  function mostrarBotonVolverDesdeResultados(
+    verReplay?: () => void,
+    etiquetaVer = 'Ver replay',
+  ): void {
+    const volver = document.createElement('button');
+    volver.type = 'button';
+    volver.className = 'tetra-resultados-volver-song-select';
+    volver.textContent = 'Volver al song select';
+    volver.addEventListener('click', () => volverAlSongSelect());
     // raizApp(), no `contenedor`: runGame ya pinto los resultados sobre
     // #app (ver el comentario de raizApp() mas arriba).
-    raizApp().appendChild(boton);
+    if (verReplay === undefined) {
+      raizApp().appendChild(volver);
+      return;
+    }
+    const barra = document.createElement('div');
+    barra.className = 'tetra-resultados-acciones';
+    const ver = document.createElement('button');
+    ver.type = 'button';
+    ver.className = 'tetra-resultados-ver-replay';
+    ver.textContent = etiquetaVer;
+    ver.addEventListener('click', () => {
+      // Un solo clic: mientras arranca la reproduccion el boton no vuelve a responder.
+      ver.disabled = true;
+      verReplay();
+    });
+    barra.append(ver, volver);
+    raizApp().appendChild(barra);
   }
 
   /**
@@ -1289,9 +1427,10 @@ export function mostrarSongSelect(contenedor: HTMLElement, opciones: OpcionesSon
     score: ScoreState,
     medido: MedidoEnLaPartida,
     replay: Replay,
+    fecha: string,
   ): Promise<void> {
     try {
-      const partida = partidaDesdeScore(score, new Date().toISOString(), medido);
+      const partida = partidaDesdeScore(score, fecha, medido);
       // T-044: el replay de esta partida reemplaza al guardado solo si es la nueva mejor.
       const guardada = await guardarPartida(claveDe(chart), partida, replay);
       const aviso = avisoDeRecord(guardada.esMejor, guardada.anterior, partida);
@@ -1367,6 +1506,8 @@ export function mostrarSongSelect(contenedor: HTMLElement, opciones: OpcionesSon
     // fondo de la escena NO se limpia: la partida pone el suyo (T-053) y asi
     // no parpadea.
     desmontar();
+    // La misma fecha para el record, la reciente y la etiqueta de "Ver replay".
+    const fechaDeLaPartida = new Date().toISOString();
     let resultado = await runGame(chart, audio, undefined, opcionesPartida);
     // T-026: "Reintentar" en el menu de pausa vuelve a jugar el mismo mapa sin
     // pasar por el song select ni volver a decodificar el audio.
@@ -1383,10 +1524,21 @@ export function mostrarSongSelect(contenedor: HTMLElement, opciones: OpcionesSon
           resultado.score,
           { pulsaciones: resultado.pulsaciones, desviaciones: resultado.desviaciones },
           resultado.replay,
+          fechaDeLaPartida,
         );
         await registrarEnHistorial(chart, resultado.score, resultado.desviaciones);
       }
-      mostrarBotonVolverDesdeResultados();
+      // T-065: "Ver replay" de la partida recien jugada, o "Ver de nuevo" si lo que
+      // termino ya era el auto o un replay. Va con el mismo audio, fondo y skin.
+      const aVer: NonNullable<OpcionesPartida['reproducir']> = reproducir ?? {
+        replay: resultado.replay,
+        modo: 'replay',
+        fecha: fechaDeLaPartida,
+      };
+      mostrarBotonVolverDesdeResultados(
+        () => void jugar(chart, audio, escena, cancionId, aVer),
+        reproducir === undefined ? 'Ver replay' : 'Ver de nuevo',
+      );
     } else {
       volverAlSongSelect();
     }
@@ -1460,6 +1612,51 @@ export function mostrarSongSelect(contenedor: HTMLElement, opciones: OpcionesSon
     }
     ocultarError();
     await jugarDificultadEnfocada({ replay: guardado.replay, modo: 'replay', fecha: guardado.fecha });
+  }
+
+  /** T-065: "Ver replay" de una partida reciente. Sin record, igual que "Ver mejor partida". */
+  async function verReplayReciente(reciente: ResumenDeReciente): Promise<void> {
+    const chart = cancionEnfocada()?.dificultades[estado.dificultadEnfocadaIndice];
+    if (!chart || iniciandoPartida) return;
+    let guardado: Awaited<ReturnType<typeof leerReplayReciente>>;
+    try {
+      guardado = await leerReplayReciente(reciente.id);
+    } catch (error) {
+      mostrarError(mensajeDeErrorDeCarga(error));
+      return;
+    }
+    if (desmontado) return;
+    const motivo =
+      guardado === undefined
+        ? MENSAJE_RECIENTE_NO_ESTA
+        : motivoDeRechazoDelReplay(guardado.replay, chart);
+    if (motivo !== null || guardado === undefined) {
+      mostrarError(motivo ?? MENSAJE_RECIENTE_NO_ESTA);
+      return;
+    }
+    ocultarError();
+    await jugarDificultadEnfocada({ replay: guardado.replay, modo: 'replay', fecha: guardado.fecha });
+  }
+
+  /** T-065: "Conservar" fija la partida reciente (no la borra la purga de los 7 dias); otro clic la suelta. */
+  async function alternarConservada(chart: Chart, reciente: ResumenDeReciente): Promise<void> {
+    const clave = claveDe(chart);
+    const fijar = !reciente.fijado;
+    try {
+      const existe = await conservarPartidaReciente(reciente.id, fijar);
+      if (desmontado) return;
+      const lista = estado.recientes.get(clave) ?? [];
+      estado.recientes.set(
+        clave,
+        existe
+          ? lista.map((r) => (r.id === reciente.id ? { ...r, fijado: fijar } : r))
+          : lista.filter((r) => r.id !== reciente.id),
+      );
+      if (!existe) mostrarError(MENSAJE_RECIENTE_NO_ESTA);
+      renderizarDetalle();
+    } catch (error) {
+      mostrarError(mensajeDeErrorDeCarga(error));
+    }
   }
 
   // -- Importar .osz: boton "+" o soltar en cualquier parte de la ventana --

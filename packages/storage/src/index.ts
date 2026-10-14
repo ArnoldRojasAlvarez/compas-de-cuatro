@@ -41,11 +41,23 @@ import {
   leerRecordsDeLaBase,
   leerReplayDeLaBase,
   listarHashesConReplayDeLaBase,
+  listarRecientesDeLaBase,
+  leerReplayRecienteDeLaBase,
+  fijarRecienteEnLaBase,
+  purgarRecientesDeLaBase,
 } from './db.js';
 import type { SongId, CancionGuardada, SkinId, SkinGuardada } from './db.js';
+import type { ResumenDeReciente } from './records-validacion.js';
 
 export type { SongId, CancionGuardada, SkinId, SkinGuardada, DificultadCacheada } from './db.js';
-export type { ReplayGuardado } from './records-validacion.js';
+export type {
+  ReplayGuardado,
+  ReplayRecienteGuardado,
+  ResumenDeReciente,
+} from './records-validacion.js';
+export { idDeReplayReciente } from './records-validacion.js';
+// T-065: reglas de la purga de las partidas recientes.
+export { DIAS_REPLAYS_RECIENTES, TOPE_REPLAYS_RECIENTES, idsAPurgar } from './db.js';
 export type { MapaImportado, CancionImportada } from './osz.js';
 export {
   elegirArchivoOsu,
@@ -230,6 +242,36 @@ export function leerReplayGuardado(
 /** T-044: los hashes de los mapas con replay guardado (solo claves, no lee los replays). */
 export function hashesConReplay(): Promise<Set<string>> {
   return listarHashesConReplayDeLaBase();
+}
+
+/**
+ * T-065: las partidas recientes de un mapa (todas las completadas en los ultimos
+ * 7 dias, mas las fijadas), de la mas nueva a la mas vieja. Es barata: no lee los
+ * replays. `hash` es `String(hashMapa(chart))`.
+ */
+export function listarPartidasRecientes(hash: string): Promise<ResumenDeReciente[]> {
+  return listarRecientesDeLaBase(hash);
+}
+
+/** T-065: el replay de una partida reciente (por su `id`) y su fecha. `undefined` si ya no esta o esta corrupto. */
+export function leerReplayReciente(
+  id: string,
+): Promise<{ replay: Replay; fecha: string } | undefined> {
+  return leerReplayRecienteDeLaBase(id);
+}
+
+/** T-065: "Conservar". Fija una partida reciente para que la purga no la borre (o la suelta con `false`). `false` si ya no existe. */
+export function conservarPartidaReciente(id: string, fijado = true): Promise<boolean> {
+  return fijarRecienteEnLaBase(id, fijado);
+}
+
+/**
+ * T-065: purga las partidas recientes al abrir la app: fuera las de mas de 7
+ * dias y las que pasen de las 200 mas nuevas; las fijadas no se tocan y el replay
+ * de la mejor partida (tienda aparte) tampoco. Devuelve cuantas borro.
+ */
+export function purgarReplaysRecientes(ahoraMs?: number): Promise<number> {
+  return purgarRecientesDeLaBase(ahoraMs);
 }
 
 /**
