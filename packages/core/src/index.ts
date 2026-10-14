@@ -38,6 +38,17 @@ export {
 
 export { escribirOsu } from './chart/osu-escritor.js';
 
+// T-066 (paso 3): audio virtual, la parte pura.
+export {
+  COLA_DE_EVENTOS_MS,
+  COLA_DE_NOTAS_MS,
+  duracionDeAudioVirtual,
+  indiceDeMuestra,
+  mezclarMuestra,
+  normalizarNombreDeMuestra,
+  normalizarPico,
+} from './audio-virtual/mezcla.js';
+
 export type { Onset, AnalisisOnsets, OpcionesOnsets } from './mapeador/onsets.js';
 export { analizarOnsets } from './mapeador/onsets.js';
 export type { EstimacionTempo, OpcionesTempo } from './mapeador/tempo.js';

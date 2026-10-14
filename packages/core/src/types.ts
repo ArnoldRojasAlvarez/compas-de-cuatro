@@ -96,6 +96,25 @@ export interface ChartMetadata {
   beatmapSetId?: number;
 }
 
+/**
+ * Un sonido de la pista virtual (T-066, D7): una muestra que empieza en
+ * `tiempo`. Sale de un keysound de nota o de una linea `Sample` de [Events].
+ */
+export interface EventoDeMuestra {
+  /** ms desde el inicio de la pista virtual. Nunca negativo. */
+  tiempo: Ms;
+  /** Nombre normalizado (minusculas, '/', sin './'). */
+  archivo: string;
+  /** 1 a 100, ya resuelto (D7). */
+  volumen: number;
+}
+
+/** Receta del audio de una dificultad con `AudioFilename:virtual` (T-066). */
+export interface AudioVirtual {
+  /** Ordenados por tiempo y despues por archivo. */
+  eventos: EventoDeMuestra[];
+}
+
 export interface Chart {
   metadata: ChartMetadata;
   /**
@@ -112,6 +131,8 @@ export interface Chart {
    * El parser es responsable de garantizarlo; el resto del codigo lo asume.
    */
   notes: Note[];
+  /** Solo si AudioFilename es "virtual" (T-066, D7). No entra en `hashMapa`. */
+  audioVirtual?: AudioVirtual;
 }
 
 // ---------------------------------------------------------------------------
