@@ -11,7 +11,7 @@ import { iniciarRouter } from './router.js';
 import { montarHeader } from './header.js';
 import { instalarPresentacion } from './presentacion.js';
 import { asegurarCancionDemo } from './demo/index.js';
-import { purgarReplaysRecientes } from '@tetra/storage';
+import { limpiarMuestrasHuerfanas, purgarReplaysRecientes } from '@tetra/storage';
 import { fusionarDuplicadosYMigrar } from './fusionar-duplicados.js';
 
 const contenedor = document.getElementById('app');
@@ -31,3 +31,7 @@ void purgarReplaysRecientes().catch(() => undefined);
 // T-066: las canciones duplicadas (el mismo .osz importado mas de una vez) se
 // fusionan en una, con sus records, replays, recientes y offset por cancion.
 void fusionarDuplicadosYMigrar();
+// T-066 (paso 3): red de seguridad de las canciones con audio virtual. Borrar una
+// cancion ya borra sus muestras; esto limpia las que hayan quedado sin dueno. Un
+// fallo no estorba el arranque.
+void limpiarMuestrasHuerfanas().catch(() => undefined);

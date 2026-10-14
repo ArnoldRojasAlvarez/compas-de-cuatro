@@ -57,7 +57,7 @@ import {
   opacidadDePistaSegunAtenuacion,
 } from './apariencia.js';
 import { gananciaDeVolumen, leerVolumen, leerVolumenEfectos } from './volumen.js';
-import { instanteDeContextoDelGolpe, leerTipoHitsound, suenaElGolpe } from './hitsound-logica.js';
+import { instanteDeContextoDelGolpe, leerTipoHitsound, suenaElHitsound } from './hitsound-logica.js';
 import { liberarTexturasDeSkin, resolverSkinDePartida } from './skin-activa.js';
 import { crearFondoDePartida, crearIntroDePartida } from './escena.js';
 import { medidasDePista, type EscenaPartida } from './escena-logica.js';
@@ -1186,7 +1186,7 @@ export function runGame(
             // T-027: el hitsound se programa en el instante de la pulsacion,
             // convertido de tiempo de juego a tiempo del contexto. Si ya paso,
             // start() lo hace sonar en el acto. El miss no suena.
-            if (suenaElGolpe(resultado?.judgement)) {
+            if (suenaElHitsound(chart, resultado?.judgement)) {
               reproducirHitsound(
                 ctx,
                 bufferDeGolpe,

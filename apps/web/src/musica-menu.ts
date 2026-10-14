@@ -15,6 +15,7 @@ import {
   elegirSiguienteId,
   inicioDePreviewSegundos,
 } from './musica-menu-logica.js';
+import { obtenerAudioDeDificultad } from './audio-de-cancion.js';
 import { conDificultadesOrdenadas } from './song-select-logica.js';
 import { gananciaDeVolumen, leerVolumen } from './volumen.js';
 
@@ -154,9 +155,15 @@ export function crearMusicaMenu(): MusicaMenu {
 
   async function tocarCancion(cancion: CancionGuardada, miToken: number): Promise<boolean> {
     try {
-      const buffer = await decodificar(await cancion.audio.arrayBuffer());
+      // T-066: la primera dificultad (la mas facil, la lista ya viene ordenada) da el sonido
+      // de una cancion de audio virtual; en las demas es solo la pista.
+      const primera = cancion.dificultades[0];
+      if (ctx === null || primera === undefined) return false;
+      const buffer = await obtenerAudioDeDificultad(cancion, primera, ctx, {
+        cancelado: () => detenido || miToken !== token,
+      });
       if (detenido || miToken !== token) return true; // otro pedido tomo el lugar: no es un fallo
-      const previewMs = cancion.dificultades[0]?.metadata.previewTime ?? 0;
+      const previewMs = primera.metadata.previewTime;
       arrancar(buffer, inicioDePreviewSegundos(previewMs, buffer.duration), false, () => {
         if (!detenido && miToken === token) void avanzar(Math.random);
       });

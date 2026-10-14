@@ -269,3 +269,41 @@ describe('planearFusiones (D4)', () => {
     expect(planearFusiones([plan!.resultado])).toEqual([]);
   });
 });
+
+describe('keysounds de canciones virtuales (T-066 paso 3)', () => {
+  const virtual = (id: string, dificultades: Chart[], keysounds: Record<string, string>, extra = {}) =>
+    ({ id, titulo: 'Pieza', artista: 'Arnold', keysounds, dificultades, ...extra }) as CancionGuardada;
+
+  it('combinarConExistente une los keysounds si cambia algo y gana el nombre que ya estaba', () => {
+    const existente = virtual('a', [chart('Normal', 100)], { 'a.ogg': 'h1', 'b.ogg': 'h2' });
+    const r = combinarConExistente(existente, {
+      dificultades: [chart('Dificil', 200)],
+      keysounds: { 'b.ogg': 'otro', 'c.ogg': 'h3' },
+    });
+    expect(r.resumen.estado).toBe('actualizada');
+    expect(r.cancion.keysounds).toEqual({ 'a.ogg': 'h1', 'b.ogg': 'h2', 'c.ogg': 'h3' });
+  });
+
+  it('si no cambia nada, la existente queda igual aunque traiga keysounds', () => {
+    const existente = virtual('a', [chart('Normal', 100)], { 'a.ogg': 'h1' });
+    const r = combinarConExistente(existente, {
+      dificultades: [chart('Normal', 100)],
+      keysounds: { 'z.ogg': 'h9' },
+    });
+    expect(r.cancion).toBe(existente);
+  });
+
+  it('planearFusiones une los keysounds de las absorbidas; gana la sobreviviente', () => {
+    const vieja = virtual('a', [chart('Normal', 100)], { 'a.ogg': 'h1' }, { importadaEn: 1 });
+    const nueva = virtual(
+      'b',
+      [chart('Normal', 100), chart('Dificil', 200)],
+      { 'a.ogg': 'otro', 'b.ogg': 'h2' },
+      { importadaEn: 2 },
+    );
+    const [plan] = planearFusiones([nueva, vieja]);
+    expect(plan!.resultado.id).toBe('a');
+    expect(plan!.resultado.keysounds).toEqual({ 'a.ogg': 'h1', 'b.ogg': 'h2' });
+    expect(plan!.resultado.audio).toBeUndefined();
+  });
+});
