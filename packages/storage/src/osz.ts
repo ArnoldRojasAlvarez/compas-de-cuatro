@@ -18,7 +18,13 @@
 
 import { unzipSync, type Unzipped } from 'fflate';
 import type { Chart, Ms } from '@tetra/core';
-import { agruparEnCanciones, leerCabeceraOsu, parseOsu } from '@tetra/core';
+import type { GrupoDeCancion } from '@tetra/core';
+import {
+  agruparEnCanciones,
+  leerCabeceraOsu,
+  normalizarNombreDeMuestra,
+  parseOsu,
+} from '@tetra/core';
 import { ErrorDeImportacion } from './errores.js';
 
 const decodificadorUtf8 = new TextDecoder('utf-8');
@@ -179,7 +185,12 @@ export interface CancionImportada {
   artista: string;
   /** Title del set, solo si `titulo` es una pieza del set (T-066, D5). */
   conjunto?: string;
-  audio: Blob;
+  /** Pista de musica. Ausente solo si la cancion es de audio virtual (T-066, paso 3). */
+  audio?: Blob;
+  /** Audio virtual: nombre normalizado de la muestra -> hash SHA-256 (hexadecimal) en `muestras`. */
+  keysounds?: Record<string, string>;
+  /** Audio virtual: los archivos de sonido de la cancion, por hash (cada uno una sola vez). */
+  muestras?: Map<string, Blob>;
   background?: Blob;
   /** Solo si el .osz trae un video reproducible (mp4, m4v, webm) que alguna dificultad declara. */
   video?: Blob;
@@ -215,6 +226,26 @@ export interface AnalisisOsz {
 
 /** Tamano maximo de un .osz (T-066, tabla de errores). */
 export const MAX_BYTES_OSZ = 300 * 1024 * 1024;
+/** Limite del audio virtual (T-066, D9): ultimo evento de una dificultad. */
+export const MAX_MS_AUDIO_VIRTUAL = 10 * 60 * 1000;
+/** Limite del audio virtual (T-066, D9): eventos por dificultad. */
+export const MAX_EVENTOS_AUDIO_VIRTUAL = 60_000;
+
+const TEXTO_LIMITE_VIRTUAL = '10 minutos y 60 000 sonidos';
+
+/** SHA-256 en hexadecimal (minusculas) de unos bytes. */
+export async function sha256Hex(bytes: Uint8Array<ArrayBuffer>): Promise<string> {
+  const resumen = new Uint8Array(await crypto.subtle.digest('SHA-256', bytes));
+  return Array.from(resumen, (b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+/** true si la dificultad virtual pasa del limite de eventos o de duracion (D9). */
+function pasaElLimiteVirtual(chart: Chart): boolean {
+  const eventos = chart.audioVirtual?.eventos ?? [];
+  if (eventos.length > MAX_EVENTOS_AUDIO_VIRTUAL) return true;
+  const ultimo = eventos[eventos.length - 1]; // ordenados por tiempo
+  return ultimo !== undefined && ultimo.tiempo > MAX_MS_AUDIO_VIRTUAL;
+}
 
 /** `A`, `A y B`, `A, B y C`. */
 function unirConY(partes: readonly string[]): string {
@@ -285,9 +316,11 @@ function nombreDeArchivo(archivo: Blob): string | undefined {
  * grupo en orden y se queda el primero que exista en el zip (T-054). Un grupo
  * cuyo audio falta se omite con aviso si otro grupo entra; si no entra
  * ninguno, falla con `audio-faltante`. Un grupo de audio virtual
- * (`AudioFilename:virtual`) no tiene pista: se omite con aviso, y si todos
- * son virtuales falla con `audio-virtual` (el paso 3 de T-066 los va a
- * soportar). El fondo y el video de cada cancion salen de la primera
+ * (`AudioFilename:virtual`, T-066 paso 3) no tiene pista: arma su sonido con
+ * las muestras que pide su receta (`armarCancionVirtual`), que se guardan
+ * deduplicadas por SHA-256; respeta los limites de D9 y, si no entra ningun
+ * grupo, falla con el error del primero (`muestras-faltantes`,
+ * `virtual-fuera-de-limite` o `audio-faltante`). El fondo y el video de cada cancion salen de la primera
  * dificultad de su grupo que declare uno que exista en el zip (T-049); un
  * video que el navegador no reproduce se ignora en silencio.
  *
@@ -394,44 +427,20 @@ export async function analizarOsz(archivo: Blob): Promise<AnalisisOsz> {
   // separado: su audio, su fondo y su video salen de sus propias dificultades.
   const grupos = agruparEnCanciones(dificultades);
   const canciones: CancionImportada[] = [];
-  let hayGruposReales = false;
-  let primerAudioFaltante: string | undefined;
+  // El error del primer grupo que no entro: es el que se lanza si no entra ninguno.
+  let primerFallo: ErrorDeImportacion | undefined;
   for (const grupo of grupos) {
     const charts = grupo.indices.map((i) => dificultades[i]!);
-
-    if (esAudioVirtual(charts[0]!.metadata.audioFile)) {
-      // Paso 3 de T-066: el audio virtual todavia no se soporta.
-      avisos.push(`Se omitió "${grupo.titulo}": usa audio virtual, que Tetra todavía no soporta.`);
+    const resultado = esAudioVirtual(charts[0]!.metadata.audioFile)
+      ? await armarCancionVirtual(grupo, charts, zip, avisos)
+      : armarCancionReal(grupo, charts, zip, avisos);
+    if (resultado.cancion === undefined) {
+      primerFallo ??= resultado.fallo;
       continue;
     }
-    hayGruposReales = true;
+    const cancion = resultado.cancion;
 
-    // T-054: el audio es el de la primera dificultad (en orden) del grupo cuyo
-    // `AudioFilename` exista en el zip (dentro de un grupo declaran la misma pista,
-    // pero puede venir escrita distinto).
-    let audio: Blob | undefined;
-    for (const chart of charts) {
-      const bytesAudio = buscarEnZip(zip, chart.metadata.audioFile);
-      if (bytesAudio === undefined) continue;
-      audio = new Blob([bytesAudio], { type: mimeDesdeNombre(chart.metadata.audioFile) });
-      break;
-    }
-    if (audio === undefined) {
-      const pedido = charts[0]!.metadata.audioFile;
-      primerAudioFaltante ??= pedido;
-      avisos.push(`Se omitió "${grupo.titulo}": falta el audio "${pedido}".`);
-      continue;
-    }
-
-    const cancion: CancionImportada = {
-      titulo: grupo.titulo,
-      artista: grupo.artista,
-      ...(grupo.conjunto !== undefined && { conjunto: grupo.conjunto }),
-      audio,
-      dificultades: charts,
-    };
-
-    for (const chart of charts) {
+    for (const chart of cancion.dificultades) {
       const nombreFondo = chart.metadata.backgroundFile;
       if (nombreFondo === undefined) continue;
       const bytesFondo = buscarEnZip(zip, nombreFondo);
@@ -440,7 +449,7 @@ export async function analizarOsz(archivo: Blob): Promise<AnalisisOsz> {
       break;
     }
 
-    for (const chart of charts) {
+    for (const chart of cancion.dificultades) {
       const nombreVideo = chart.metadata.videoFile;
       if (nombreVideo === undefined || !esVideoReproducible(nombreVideo)) continue;
       const bytesVideo = buscarEnZip(zip, nombreVideo);
@@ -454,19 +463,142 @@ export async function analizarOsz(archivo: Blob): Promise<AnalisisOsz> {
   }
 
   if (canciones.length === 0) {
-    if (!hayGruposReales) {
-      throw new ErrorDeImportacion(
-        'audio-virtual',
-        'Este .osz no trae pista de música: usa audio virtual (el sonido sale de muestras por nota) y Tetra todavía no lo soporta.',
-      );
-    }
-    throw new ErrorDeImportacion(
-      'audio-faltante',
-      `Falta el audio: el mapa pide "${primerAudioFaltante ?? ''}" y el .osz no lo trae.`,
+    // No deberia pasar sin `primerFallo` (cada grupo que no entra lo deja), pero
+    // si pasara, el mensaje mas cercano es que no hay mapas utilizables.
+    throw (
+      primerFallo ??
+      new ErrorDeImportacion('sin-osu', 'El .osz no trae ningún mapa (.osu) que se pueda importar.')
     );
   }
 
   return { canciones, titulo: dificultades[0]!.metadata.title, omitidas, avisos };
+}
+
+/** Un grupo armado, o el error que se lanzara si no entra ningun grupo. */
+type ResultadoDeGrupo =
+  | { cancion: CancionImportada; fallo?: undefined }
+  | { cancion?: undefined; fallo: ErrorDeImportacion };
+
+/**
+ * Un grupo de audio real. T-054: el audio es el de la primera dificultad (en
+ * orden) del grupo cuyo `AudioFilename` exista en el zip (dentro de un grupo
+ * declaran la misma pista, pero puede venir escrita distinto). Sin audio, el
+ * grupo se omite con aviso.
+ */
+function armarCancionReal(
+  grupo: GrupoDeCancion,
+  charts: Chart[],
+  zip: Unzipped,
+  avisos: string[],
+): ResultadoDeGrupo {
+  for (const chart of charts) {
+    const bytesAudio = buscarEnZip(zip, chart.metadata.audioFile);
+    if (bytesAudio === undefined) continue;
+    const audio = new Blob([bytesAudio], { type: mimeDesdeNombre(chart.metadata.audioFile) });
+    return {
+      cancion: {
+        titulo: grupo.titulo,
+        artista: grupo.artista,
+        ...(grupo.conjunto !== undefined && { conjunto: grupo.conjunto }),
+        audio,
+        dificultades: charts,
+      },
+    };
+  }
+  const pedido = charts[0]!.metadata.audioFile;
+  avisos.push(`Se omitió "${grupo.titulo}": falta el audio "${pedido}".`);
+  return {
+    fallo: new ErrorDeImportacion(
+      'audio-faltante',
+      `Falta el audio: el mapa pide "${pedido}" y el .osz no lo trae.`,
+    ),
+  };
+}
+
+/**
+ * T-066 (paso 3): un grupo de audio virtual. Se descartan (con aviso) las
+ * dificultades que pasan del limite (D9). De las que quedan se reunen los
+ * nombres de todas las recetas, se buscan en el zip y se les calcula el
+ * SHA-256: la cancion guarda `nombre -> hash` y las muestras por hash (cada
+ * archivo una sola vez, aunque dos nombres traigan los mismos bytes). Las que
+ * faltan solo se avisan: esas notas no suenan. Si faltan todas, el grupo se
+ * omite.
+ */
+async function armarCancionVirtual(
+  grupo: GrupoDeCancion,
+  charts: Chart[],
+  zip: Unzipped,
+  avisos: string[],
+): Promise<ResultadoDeGrupo> {
+  const dentroDelLimite: Chart[] = [];
+  for (const chart of charts) {
+    if (pasaElLimiteVirtual(chart)) {
+      avisos.push(
+        `Se omitió "${chart.metadata.difficultyName}": pasa el límite del audio virtual (${TEXTO_LIMITE_VIRTUAL}).`,
+      );
+    } else {
+      dentroDelLimite.push(chart);
+    }
+  }
+  if (dentroDelLimite.length === 0) {
+    return {
+      fallo: new ErrorDeImportacion(
+        'virtual-fuera-de-limite',
+        `Ninguna dificultad entra en el límite del audio virtual (${TEXTO_LIMITE_VIRTUAL}).`,
+      ),
+    };
+  }
+
+  const nombres = new Set<string>();
+  for (const chart of dentroDelLimite) {
+    for (const evento of chart.audioVirtual?.eventos ?? []) {
+      nombres.add(normalizarNombreDeMuestra(evento.archivo));
+    }
+  }
+
+  const keysounds: Record<string, string> = {};
+  const muestras = new Map<string, Blob>();
+  let faltan = 0;
+  for (const nombre of nombres) {
+    const bytes = buscarEnZip(zip, nombre);
+    if (bytes === undefined) {
+      faltan += 1;
+      continue;
+    }
+    const hash = await sha256Hex(bytes);
+    keysounds[nombre] = hash;
+    if (!muestras.has(hash)) muestras.set(hash, new Blob([bytes], { type: mimeDesdeNombre(nombre) }));
+  }
+
+  if (muestras.size === 0) {
+    avisos.push(
+      `Se omitió "${grupo.titulo}": ninguna de sus ${nombres.size} muestras de sonido viene en el .osz.`,
+    );
+    return {
+      fallo: new ErrorDeImportacion(
+        'muestras-faltantes',
+        `Falta el audio virtual: ninguna de las ${nombres.size} muestras de sonido que pide el mapa viene en el .osz.`,
+      ),
+    };
+  }
+  if (faltan > 0) {
+    avisos.push(
+      faltan === 1
+        ? `Falta 1 muestra de sonido en "${grupo.titulo}": esa nota no va a sonar.`
+        : `Faltan ${faltan} muestras de sonido en "${grupo.titulo}": esas notas no van a sonar.`,
+    );
+  }
+
+  return {
+    cancion: {
+      titulo: grupo.titulo,
+      artista: grupo.artista,
+      ...(grupo.conjunto !== undefined && { conjunto: grupo.conjunto }),
+      keysounds,
+      muestras,
+      dificultades: dentroDelLimite,
+    },
+  };
 }
 
 /**

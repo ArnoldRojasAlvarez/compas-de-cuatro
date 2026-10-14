@@ -34,7 +34,10 @@ import { construirOsz, type EntradaOsz } from './osz-escritor.js';
 import { extraerImagenesDeOsk } from './osk.js';
 import {
   aplicarFusionesEnLaBase,
+  esCancionVirtual,
   guardarCancion,
+  leerMuestrasDeLaBase,
+  limpiarMuestrasHuerfanasEnLaBase,
   listarCancionesDeLaBase,
   leerCancionDeLaBase,
   borrarCancionDeLaBase,
@@ -56,7 +59,16 @@ import {
 import type { SongId, CancionGuardada, SkinId, SkinGuardada } from './db.js';
 import type { ResumenDeReciente } from './records-validacion.js';
 
-export type { SongId, CancionGuardada, SkinId, SkinGuardada, DificultadCacheada } from './db.js';
+export type {
+  SongId,
+  CancionGuardada,
+  SkinId,
+  SkinGuardada,
+  DificultadCacheada,
+  MuestraGuardada,
+} from './db.js';
+// T-066 (paso 3): una cancion es virtual si no tiene pista y si las muestras de su receta.
+export { esCancionVirtual } from './db.js';
 export type {
   ReplayGuardado,
   ReplayRecienteGuardado,
@@ -184,7 +196,8 @@ export async function importarArchivoOsz(archivo: Blob): Promise<ResultadoImport
           titulo: extraido.titulo,
           artista: extraido.artista,
           ...(extraido.conjunto !== undefined && { conjunto: extraido.conjunto }),
-          audio: extraido.audio,
+          ...(extraido.audio !== undefined && { audio: extraido.audio }),
+          ...(extraido.keysounds !== undefined && { keysounds: extraido.keysounds }),
           // Los opcionales solo se agregan si existen: nada de claves en undefined.
           ...(extraido.background !== undefined && { background: extraido.background }),
           ...(extraido.video !== undefined && {
@@ -194,7 +207,8 @@ export async function importarArchivoOsz(archivo: Blob): Promise<ResultadoImport
           importadaEn: Date.now(),
           dificultades: extraido.dificultades,
         };
-        await guardarCancion(nueva);
+        // Cancion y muestras nuevas en UNA transaccion (las que ya estaban no se reescriben).
+        await guardarCancion(nueva, extraido.muestras);
         biblioteca.push(nueva);
         resumenes.push({
           id,
@@ -207,7 +221,7 @@ export async function importarArchivoOsz(archivo: Blob): Promise<ResultadoImport
       } else {
         const { cancion, resumen: cambios } = combinarConExistente(coincide, extraido);
         if (cambios.estado === 'actualizada') {
-          await guardarCancion(cancion);
+          await guardarCancion(cancion, extraido.muestras);
           biblioteca[biblioteca.indexOf(coincide)] = cancion;
         }
         resumenes.push({ id: coincide.id, titulo: coincide.titulo, ...cambios });
@@ -307,6 +321,22 @@ export function leerDificultadDeCache(clave: string): Promise<DifficultyResult |
 export async function guardarCancionCreada(entrada: EntradaOsz): Promise<SongId> {
   const osz = construirOsz(entrada);
   return importarOsz(new Blob([new Uint8Array(osz)], { type: 'application/zip' }));
+}
+
+/**
+ * T-066 (paso 3): los blobs de las muestras pedidas, por hash (el de
+ * `CancionGuardada.keysounds`). Las que no estan no aparecen en el mapa.
+ */
+export function leerMuestras(hashes: readonly string[]): Promise<Map<string, Blob>> {
+  return leerMuestrasDeLaBase(hashes);
+}
+
+/**
+ * T-066 (paso 3): borra las muestras que ninguna cancion referencia (red de
+ * seguridad de `borrarCancion`, que ya borra las propias). Devuelve cuantas borro.
+ */
+export function limpiarMuestrasHuerfanas(): Promise<number> {
+  return limpiarMuestrasHuerfanasEnLaBase();
 }
 
 /** Devuelve una cancion por id, con todas sus dificultades. `undefined` si no existe. */
@@ -457,6 +487,10 @@ export async function exportarCancion(id: SongId): Promise<Blob> {
     throw new Error('La canción no tiene dificultades: no se puede exportar.');
   }
 
+  // T-066 (paso 3, D11): una cancion virtual exporta sus muestras con su nombre
+  // normalizado y cada .osu con `AudioFilename: virtual` (escribirOsu escribe la
+  // receta como lineas Sample y las notas sin keysound).
+  const virtual = esCancionVirtual(cancion);
   const audioNombre = primera.metadata.audioFile;
   const nombreFondo =
     cancion.background === undefined
@@ -471,18 +505,33 @@ export async function exportarCancion(id: SongId): Promise<Blob> {
         )?.metadata.videoFile;
 
   const dificultades = cancion.dificultades.map((chart) => {
-    const metadata = { ...chart.metadata, audioFile: audioNombre };
+    const metadata = { ...chart.metadata, audioFile: virtual ? 'virtual' : audioNombre };
     if (nombreFondo !== undefined) metadata.backgroundFile = nombreFondo;
     if (nombreVideo !== undefined) metadata.videoFile = nombreVideo;
     return { version: chart.metadata.difficultyName, texto: escribirOsu({ ...chart, metadata }) };
   });
 
+  let pista: { audioNombre: string; audio: Uint8Array } | { muestras: { nombre: string; bytes: Uint8Array }[] };
+  if (virtual) {
+    const keysounds = cancion.keysounds ?? {};
+    const blobs = await leerMuestrasDeLaBase(Object.values(keysounds));
+    const muestras: { nombre: string; bytes: Uint8Array }[] = [];
+    for (const [nombre, hash] of Object.entries(keysounds)) {
+      const blob = blobs.get(hash);
+      if (blob !== undefined) muestras.push({ nombre, bytes: await bytesDe(blob) });
+    }
+    pista = { muestras };
+  } else if (cancion.audio !== undefined) {
+    pista = { audioNombre, audio: await bytesDe(cancion.audio) };
+  } else {
+    throw new Error('La canción no tiene audio: no se puede exportar.');
+  }
+
   const osz = construirOsz({
     titulo: cancion.titulo,
     artista: cancion.artista,
     creador: primera.metadata.creator,
-    audioNombre,
-    audio: await bytesDe(cancion.audio),
+    ...pista,
     ...(cancion.background !== undefined &&
       nombreFondo !== undefined && {
         fondo: { nombre: nombreFondo, bytes: await bytesDe(cancion.background) },

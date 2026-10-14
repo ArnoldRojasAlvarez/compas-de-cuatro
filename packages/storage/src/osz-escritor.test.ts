@@ -58,7 +58,7 @@ describe('construirOsz', () => {
       'Dificil',
       'Facil',
     ]);
-    expect(new Uint8Array(await cancion.audio.arrayBuffer())).toEqual(AUDIO);
+    expect(new Uint8Array(await cancion.audio!.arrayBuffer())).toEqual(AUDIO);
     const dificil = cancion.dificultades.find((d) => d.metadata.difficultyName === 'Dificil')!;
     expect(dificil.notes).toEqual(chart('Dificil', 2).notes);
   });

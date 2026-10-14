@@ -67,6 +67,17 @@ function nombreLibre(nombre: string, usados: ReadonlySet<string>): string {
   }
 }
 
+/**
+ * T-066 (paso 3): une los `keysounds` (nombre -> hash) de dos canciones. Si un
+ * nombre choca gana el de `prioritario` (la sobreviviente o la existente).
+ */
+function unirKeysounds(
+  prioritario: Record<string, string> | undefined,
+  otro: Record<string, string>,
+): Record<string, string> {
+  return { ...otro, ...prioritario };
+}
+
 function conNombre(chart: Chart, nombre: string): Chart {
   if (chart.metadata.difficultyName === nombre) return chart;
   return { ...chart, metadata: { ...chart.metadata, difficultyName: nombre } };
@@ -109,10 +120,13 @@ export function coincidenciaEnBiblioteca(
  * - Sin coincidencia: se agrega al final (con ` (2)`, ` (3)` si el nombre choca).
  * - Las existentes que no vienen se conservan. El audio y el id tambien.
  * - Fondo y video se completan solo si la existente no los tenia.
+ * - Audio virtual (T-066, paso 3): si cambia algo, los `keysounds` se unen (el
+ *   nombre que ya estaba conserva su hash).
  */
 export function combinarConExistente(
   existente: CancionGuardada,
-  entrante: Pick<CancionGuardada, 'dificultades' | 'background' | 'video' | 'videoOffset'>,
+  entrante: Pick<CancionGuardada, 'dificultades' | 'background' | 'video' | 'videoOffset'> &
+    Partial<Pick<CancionGuardada, 'keysounds'>>,
 ): { cancion: CancionGuardada; resumen: ResumenDeCombinacion } {
   const dificultades = [...existente.dificultades];
   let agregadas = 0;
@@ -158,6 +172,9 @@ export function combinarConExistente(
   }
 
   const huboCambios = agregadas > 0 || actualizadas > 0 || completados;
+  if (huboCambios && entrante.keysounds !== undefined) {
+    cancion = { ...cancion, keysounds: unirKeysounds(existente.keysounds, entrante.keysounds) };
+  }
   return {
     cancion: huboCambios ? cancion : existente,
     resumen: {
@@ -203,6 +220,7 @@ function crearUnion(n: number): { buscar: (i: number) => number; unir: (a: numbe
  *   nombres de D3.
  * - Fondo, video (con su offset) y `conjunto` (T-066, paso 2): los de la
  *   sobreviviente; si no tiene, los de la primera absorbida que los tenga.
+ *   `keysounds` (paso 3): se unen, gana la sobreviviente si un nombre choca.
  *
  * Idempotente: sobre el resultado, una segunda corrida no devuelve planes.
  */
@@ -242,6 +260,12 @@ export function planearFusiones(canciones: readonly CancionGuardada[]): PlanDeFu
         const usados = new Set(dificultades.map((d) => d.metadata.difficultyName));
         dificultades.push(conNombre(chart, nombreLibre(chart.metadata.difficultyName, usados)));
         for (const k of suyas) claves.add(k);
+      }
+      if (absorbida.keysounds !== undefined) {
+        resultado = {
+          ...resultado,
+          keysounds: unirKeysounds(resultado.keysounds, absorbida.keysounds),
+        };
       }
       if (resultado.conjunto === undefined && absorbida.conjunto !== undefined) {
         resultado = { ...resultado, conjunto: absorbida.conjunto };

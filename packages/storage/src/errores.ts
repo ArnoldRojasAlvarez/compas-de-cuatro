@@ -13,9 +13,8 @@ export type CodigoErrorImportacion =
   | 'sin-4k'
   | 'osu-invalido'
   | 'audio-faltante'
-  | 'audio-virtual' // solo pasos 1 y 2; el paso 3 lo quita
-  | 'muestras-faltantes' // paso 3
-  | 'virtual-fuera-de-limite' // paso 3
+  | 'muestras-faltantes'
+  | 'virtual-fuera-de-limite'
   | 'sin-espacio'
   | 'base';
 

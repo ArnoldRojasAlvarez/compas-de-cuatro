@@ -85,7 +85,13 @@ const NOMBRE_BASE = 'tetra-mapas';
 // viene de 1 a 7 conserva todo y solo gana la tienda nueva (con sus indices
 // 'hash' y 'fecha'). 'replays' (el de la mejor partida) no se toca: el replay de
 // la mejor sigue siendo permanente, 'recientes' se purga sola al abrir la app.
-const VERSION_BASE = 8;
+//
+// T-066 (paso 3) agrega 'muestras' (los archivos de sonido de las canciones con
+// audio virtual, compartidos entre canciones y dificultades, con clave el
+// SHA-256 de su contenido): version 9, mismo guard con `contains`. Quien viene
+// de 1 a 8 conserva todo y solo gana la tienda nueva; ninguna fila existente se
+// transforma.
+const VERSION_BASE = 9;
 const NOMBRE_TIENDA_MAPAS_LEGADO = 'mapas';
 const NOMBRE_TIENDA_SKINS = 'skins';
 const NOMBRE_TIENDA_CANCIONES = 'canciones';
@@ -94,6 +100,7 @@ const NOMBRE_TIENDA_RECORDS = 'records';
 const NOMBRE_TIENDA_REPLAYS = 'replays';
 const NOMBRE_TIENDA_HISTORIAL = 'historial';
 const NOMBRE_TIENDA_RECIENTES = 'recientes';
+const NOMBRE_TIENDA_MUESTRAS = 'muestras';
 
 /** T-065: cuantos dias se guarda el replay de una partida reciente (si no esta fijada). */
 export const DIAS_REPLAYS_RECIENTES = 7;
@@ -125,7 +132,13 @@ export interface CancionGuardada {
    * un set con varias (T-066, D5). Entra en la busqueda del song select.
    */
   conjunto?: string;
-  audio: Blob;
+  /** Pista de musica. Ausente solo si la cancion es de audio virtual (T-066, paso 3). */
+  audio?: Blob;
+  /**
+   * Audio virtual (T-066): nombre normalizado de la muestra -> hash (SHA-256 en
+   * hexadecimal) de la tienda 'muestras'. Presente solo en canciones sin `audio`.
+   */
+  keysounds?: Record<string, string>;
   background?: Blob;
   /** Solo si el .osz trae un video que el navegador puede reproducir (mp4, m4v, webm). */
   video?: Blob;
@@ -147,6 +160,17 @@ export interface CancionGuardada {
 export interface DificultadCacheada {
   clave: string;
   resultado: DifficultyResult;
+}
+
+/** Un archivo de sonido de la tienda 'muestras' (T-066, paso 3): `hash` es el SHA-256 de sus bytes. */
+export interface MuestraGuardada {
+  hash: string;
+  blob: Blob;
+}
+
+/** true si la cancion es de audio virtual: no tiene pista y si las muestras de su receta. */
+export function esCancionVirtual(cancion: CancionGuardada): boolean {
+  return cancion.audio === undefined && cancion.keysounds !== undefined;
 }
 
 export type SkinId = string;
@@ -191,6 +215,9 @@ function abrirBaseDeDatos(): Promise<IDBDatabase> {
         recientes.createIndex('hash', 'hash');
         recientes.createIndex('fecha', 'fecha');
       }
+      if (!db.objectStoreNames.contains(NOMBRE_TIENDA_MUESTRAS)) {
+        db.createObjectStore(NOMBRE_TIENDA_MUESTRAS, { keyPath: 'hash' });
+      }
     };
 
     peticion.onsuccess = () => resolve(peticion.result);
@@ -200,16 +227,134 @@ function abrirBaseDeDatos(): Promise<IDBDatabase> {
   });
 }
 
-/** Guarda (o reemplaza si el id ya existia) una cancion completa, con todas sus dificultades. */
-export async function guardarCancion(cancion: CancionGuardada): Promise<void> {
+/**
+ * Guarda (o reemplaza si el id ya existia) una cancion completa, con todas sus
+ * dificultades. Con `muestras` (T-066, paso 3) guarda ademas, en la MISMA
+ * transaccion, las que todavia no estan en la tienda 'muestras' (por hash: una
+ * muestra ya guardada no se reescribe).
+ */
+export async function guardarCancion(
+  cancion: CancionGuardada,
+  muestras?: ReadonlyMap<string, Blob>,
+): Promise<void> {
   const db = await abrirBaseDeDatos();
   try {
     await new Promise<void>((resolve, reject) => {
-      const tx = db.transaction(NOMBRE_TIENDA_CANCIONES, 'readwrite');
-      tx.objectStore(NOMBRE_TIENDA_CANCIONES).put(cancion);
+      const conMuestras = muestras !== undefined && muestras.size > 0;
+      const tx = db.transaction(
+        conMuestras ? [NOMBRE_TIENDA_CANCIONES, NOMBRE_TIENDA_MUESTRAS] : NOMBRE_TIENDA_CANCIONES,
+        'readwrite',
+      );
       tx.oncomplete = () => resolve();
       tx.onerror = () => reject(tx.error ?? new Error('No se pudo guardar la canción.'));
       tx.onabort = () => reject(tx.error ?? new Error('Se abortó el guardado de la canción.'));
+      tx.objectStore(NOMBRE_TIENDA_CANCIONES).put(cancion);
+      if (conMuestras) {
+        const tienda = tx.objectStore(NOMBRE_TIENDA_MUESTRAS);
+        for (const [hash, blob] of muestras) {
+          const lectura = tienda.getKey(hash);
+          lectura.onsuccess = () => {
+            if (lectura.result === undefined) tienda.put({ hash, blob } satisfies MuestraGuardada);
+          };
+        }
+      }
+    });
+  } finally {
+    db.close();
+  }
+}
+
+/** Los blobs de las muestras pedidas, por hash. Las que no estan no aparecen en el mapa. */
+export async function leerMuestrasDeLaBase(hashes: readonly string[]): Promise<Map<string, Blob>> {
+  const resultado = new Map<string, Blob>();
+  if (hashes.length === 0) return resultado;
+  const db = await abrirBaseDeDatos();
+  try {
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction(NOMBRE_TIENDA_MUESTRAS, 'readonly');
+      const tienda = tx.objectStore(NOMBRE_TIENDA_MUESTRAS);
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error ?? new Error('No se pudieron leer las muestras.'));
+      tx.onabort = () => reject(tx.error ?? new Error('Se abortó la lectura de las muestras.'));
+      for (const hash of new Set(hashes)) {
+        const lectura = tienda.get(hash);
+        lectura.onsuccess = () => {
+          const fila = lectura.result as MuestraGuardada | undefined;
+          if (fila !== undefined && fila.blob instanceof Blob) resultado.set(hash, fila.blob);
+        };
+      }
+    });
+    return resultado;
+  } finally {
+    db.close();
+  }
+}
+
+/** Todas las muestras guardadas (para el respaldo). */
+export async function listarMuestrasDeLaBase(): Promise<MuestraGuardada[]> {
+  const db = await abrirBaseDeDatos();
+  try {
+    return await new Promise<MuestraGuardada[]>((resolve, reject) => {
+      const tx = db.transaction(NOMBRE_TIENDA_MUESTRAS, 'readonly');
+      const peticion = tx.objectStore(NOMBRE_TIENDA_MUESTRAS).getAll();
+      peticion.onsuccess = () =>
+        resolve(
+          (peticion.result as MuestraGuardada[]).filter(
+            (m) => typeof m.hash === 'string' && m.blob instanceof Blob,
+          ),
+        );
+      peticion.onerror = () =>
+        reject(peticion.error ?? new Error('No se pudieron listar las muestras.'));
+    });
+  } finally {
+    db.close();
+  }
+}
+
+/** Los hashes de muestras que referencia una cancion (vacio si no es virtual). */
+function hashesDeMuestrasDe(cancion: CancionGuardada | undefined): string[] {
+  const keysounds: unknown = cancion?.keysounds;
+  if (typeof keysounds !== 'object' || keysounds === null) return [];
+  return Object.values(keysounds as Record<string, unknown>).filter(
+    (h): h is string => typeof h === 'string',
+  );
+}
+
+/**
+ * T-066: borra las muestras que ninguna cancion referencia, en una transaccion.
+ * Es la red de seguridad de `borrarCancionDeLaBase`. Devuelve cuantas borro.
+ */
+export async function limpiarMuestrasHuerfanasEnLaBase(): Promise<number> {
+  const db = await abrirBaseDeDatos();
+  try {
+    return await new Promise<number>((resolve, reject) => {
+      const tx = db.transaction([NOMBRE_TIENDA_CANCIONES, NOMBRE_TIENDA_MUESTRAS], 'readwrite');
+      const muestras = tx.objectStore(NOMBRE_TIENDA_MUESTRAS);
+      let borradas = 0;
+      tx.oncomplete = () => resolve(borradas);
+      tx.onerror = () => reject(tx.error ?? new Error('No se pudieron limpiar las muestras.'));
+      tx.onabort = () => reject(tx.error ?? new Error('Se abortó la limpieza de las muestras.'));
+
+      const claves = muestras.getAllKeys();
+      claves.onsuccess = () => {
+        const huerfanas = new Set((claves.result as IDBValidKey[]).map(String));
+        if (huerfanas.size === 0) return;
+        const recorrido = tx.objectStore(NOMBRE_TIENDA_CANCIONES).openCursor();
+        recorrido.onsuccess = () => {
+          const cursor = recorrido.result;
+          if (cursor !== null) {
+            for (const hash of hashesDeMuestrasDe(cursor.value as CancionGuardada)) {
+              huerfanas.delete(hash);
+            }
+            cursor.continue();
+            return;
+          }
+          for (const hash of huerfanas) {
+            muestras.delete(hash);
+            borradas += 1;
+          }
+        };
+      };
     });
   } finally {
     db.close();
@@ -312,6 +457,7 @@ export async function borrarCancionDeLaBase(id: SongId): Promise<void> {
           NOMBRE_TIENDA_RECORDS,
           NOMBRE_TIENDA_REPLAYS,
           NOMBRE_TIENDA_RECIENTES,
+          NOMBRE_TIENDA_MUESTRAS,
         ],
         'readwrite',
       );
@@ -319,15 +465,19 @@ export async function borrarCancionDeLaBase(id: SongId): Promise<void> {
       const records = tx.objectStore(NOMBRE_TIENDA_RECORDS);
       const replays = tx.objectStore(NOMBRE_TIENDA_REPLAYS);
       const recientes = tx.objectStore(NOMBRE_TIENDA_RECIENTES);
+      const muestras = tx.objectStore(NOMBRE_TIENDA_MUESTRAS);
       tx.oncomplete = () => resolve();
       tx.onerror = () => reject(tx.error ?? new Error('No se pudo borrar la canción.'));
       tx.onabort = () => reject(tx.error ?? new Error('Se abortó el borrado de la canción.'));
 
       const lectura = canciones.get(id);
       lectura.onsuccess = () => {
-        const aBorrar = clavesDeRecordsDe(lectura.result as CancionGuardada | undefined);
+        const cancionABorrar = lectura.result as CancionGuardada | undefined;
+        const aBorrar = clavesDeRecordsDe(cancionABorrar);
+        // T-066: las muestras de la cancion que ninguna otra referencia.
+        const muestrasABorrar = new Set(hashesDeMuestrasDe(cancionABorrar));
         canciones.delete(id);
-        if (aBorrar.size === 0) return;
+        if (aBorrar.size === 0 && muestrasABorrar.size === 0) return;
         // Las que otra cancion todavia usa se salvan del borrado.
         const recorrido = canciones.openCursor();
         recorrido.onsuccess = () => {
@@ -337,10 +487,14 @@ export async function borrarCancionDeLaBase(id: SongId): Promise<void> {
               for (const clave of clavesDeRecordsDe(cursor.value as CancionGuardada)) {
                 aBorrar.delete(clave);
               }
+              for (const hash of hashesDeMuestrasDe(cursor.value as CancionGuardada)) {
+                muestrasABorrar.delete(hash);
+              }
             }
             cursor.continue();
             return;
           }
+          for (const hash of muestrasABorrar) muestras.delete(hash);
           for (const clave of aBorrar) {
             records.delete(clave);
             replays.delete(clave);
@@ -914,6 +1068,8 @@ export async function restaurarEnLaBase(
     replays?: ReplayGuardado[];
     historial?: RegistroPartida[];
     recientes?: ReplayRecienteGuardado[];
+    /** T-066 (paso 3): las muestras de las canciones virtuales; las que ya estan (por hash) no se tocan. */
+    muestras?: MuestraGuardada[];
   },
   mezclar: (previo: RecordDeMapa | undefined, entrante: RecordDeMapa) => RecordDeMapa | undefined,
 ): Promise<ResultadoEscrituraRespaldo> {
@@ -939,6 +1095,7 @@ export async function restaurarEnLaBase(
           NOMBRE_TIENDA_REPLAYS,
           NOMBRE_TIENDA_HISTORIAL,
           NOMBRE_TIENDA_RECIENTES,
+          NOMBRE_TIENDA_MUESTRAS,
         ],
         'readwrite',
       );
@@ -965,6 +1122,18 @@ export async function restaurarEnLaBase(
           } else {
             resultado.cancionesExistentes += 1;
           }
+        };
+      }
+
+      // T-066: las muestras viajan una vez por hash; si ya estaba, no se reescribe.
+      const tiendaMuestras = tx.objectStore(NOMBRE_TIENDA_MUESTRAS);
+      const hashesMuestras = new Set<string>();
+      for (const muestra of contenido.muestras ?? []) {
+        if (hashesMuestras.has(muestra.hash)) continue;
+        hashesMuestras.add(muestra.hash);
+        const lectura = tiendaMuestras.getKey(muestra.hash);
+        lectura.onsuccess = () => {
+          if (lectura.result === undefined) tiendaMuestras.put(muestra);
         };
       }
 

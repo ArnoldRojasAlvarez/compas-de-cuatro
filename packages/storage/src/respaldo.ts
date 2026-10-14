@@ -10,6 +10,8 @@
 //   canciones/<n>/fondo.<ext>         el JSON (JSON.stringify de un Blob da
 //   canciones/<n>/video.<ext>         `{}` y se perderia el audio en silencio)
 //   skins/<n>/<clave>.<ext>
+//   muestras/<n>.<ext>                (T-066) los sonidos de las canciones con
+//                                     audio virtual, cada uno una sola vez
 //
 // El manifest dice, por cada Blob, en que archivo del zip esta y que tipo
 // MIME tenia. Las rutas del zip se arman con indices, no con los ids ni los
@@ -24,13 +26,14 @@ import type { Chart, RecordDeMapa, RegistroPartida } from '@tetra/core';
 import {
   listarCancionesDeLaBase,
   listarHistorialDeLaBase,
+  listarMuestrasDeLaBase,
   listarRecientesFijadosDeLaBase,
   listarRecordsDeLaBase,
   listarReplaysDeLaBase,
   listarSkinsDeLaBase,
   restaurarEnLaBase,
 } from './db.js';
-import type { CancionGuardada, SkinGuardada } from './db.js';
+import type { CancionGuardada, MuestraGuardada, SkinGuardada } from './db.js';
 import { CLAVES_IMAGENES_SKIN, type ImagenesDeSkin } from './osk.js';
 import {
   normalizarRecord,
@@ -68,6 +71,11 @@ export interface ContenidoRespaldo {
    * Ausente en respaldos viejos.
    */
   recientes?: ReplayRecienteGuardado[];
+  /**
+   * T-066 (paso 3): los archivos de sonido de las canciones con audio virtual,
+   * cada uno una vez (por su hash). Ausente en respaldos de antes.
+   */
+  muestras?: MuestraGuardada[];
   /** Claves 'tetra:*' de localStorage. */
   ajustes: Record<string, string>;
 }
@@ -116,9 +124,16 @@ interface CancionManifest {
   videoOffset?: number;
   importadaEn?: number;
   dificultades: Chart[];
-  audio: ArchivoRef;
+  /** Ausente solo en una cancion de audio virtual (que lleva `keysounds`). */
+  audio?: ArchivoRef;
+  /** T-066: nombre de la muestra -> hash (las muestras estan en `ManifestRespaldo.muestras`). */
+  keysounds?: Record<string, string>;
   fondo?: ArchivoRef;
   video?: ArchivoRef;
+}
+
+interface MuestraManifest extends ArchivoRef {
+  hash: string;
 }
 
 interface SkinManifest {
@@ -140,6 +155,8 @@ interface ManifestRespaldo {
   historial?: RegistroPartida[];
   /** T-065: solo las fijadas; opcional al leer. */
   recientes?: ReplayRecienteGuardado[];
+  /** T-066: opcional al leer (los respaldos de antes no lo traen). */
+  muestras?: MuestraManifest[];
   ajustes: Record<string, string>;
 }
 
@@ -186,12 +203,23 @@ export async function exportarRespaldo(c: ContenidoRespaldo): Promise<Blob> {
       ...(cancion.videoOffset !== undefined && { videoOffset: cancion.videoOffset }),
       ...(cancion.importadaEn !== undefined && { importadaEn: cancion.importadaEn }),
       dificultades: cancion.dificultades,
-      audio: await agregar(`${base}/audio`, cancion.audio),
+      ...(cancion.audio !== undefined && { audio: await agregar(`${base}/audio`, cancion.audio) }),
+      ...(cancion.keysounds !== undefined && { keysounds: cancion.keysounds }),
       ...(cancion.background !== undefined && {
         fondo: await agregar(`${base}/fondo`, cancion.background),
       }),
       ...(cancion.video !== undefined && { video: await agregar(`${base}/video`, cancion.video) }),
     });
+  }
+
+  // Cada muestra una sola vez, por hash, aunque varias canciones la usen.
+  const muestras: MuestraManifest[] = [];
+  const hashesVistos = new Set<string>();
+  for (const muestra of c.muestras ?? []) {
+    if (hashesVistos.has(muestra.hash)) continue;
+    hashesVistos.add(muestra.hash);
+    const ref = await agregar(`muestras/${muestras.length}`, muestra.blob);
+    muestras.push({ hash: muestra.hash, ...ref });
   }
 
   const skins: SkinManifest[] = [];
@@ -214,6 +242,7 @@ export async function exportarRespaldo(c: ContenidoRespaldo): Promise<Blob> {
     replays: c.replays ?? [],
     historial: c.historial ?? [],
     recientes: (c.recientes ?? []).filter((fila) => fila.fijado),
+    muestras,
     ajustes: c.ajustes,
   };
   archivos['manifest.json'] = strToU8(JSON.stringify(manifest, null, 2));
@@ -269,6 +298,16 @@ function esChartValido(valor: unknown): valor is Chart {
     }
     if (nota['kind'] === 'hold' && !esNumeroFinito(nota['endTime'])) return false;
   }
+  // T-066: la receta del audio virtual, si trae una, tiene que tener forma de receta.
+  const virtual = valor['audioVirtual'];
+  if (virtual !== undefined) {
+    if (!esObjeto(virtual) || !Array.isArray(virtual['eventos'])) return false;
+    for (const evento of virtual['eventos'] as unknown[]) {
+      if (!esObjeto(evento)) return false;
+      if (!esNumeroFinito(evento['tiempo']) || !esNumeroFinito(evento['volumen'])) return false;
+      if (!esTexto(evento['archivo'])) return false;
+    }
+  }
   return true;
 }
 
@@ -282,6 +321,22 @@ function blobDeReferencia(archivos: Unzipped, ref: unknown, quien: string): Blob
     throw new ErrorDeRespaldo(`El respaldo está incompleto: falta ${ref['archivo']} (${quien}).`);
   }
   return new Blob([bytes as Uint8Array<ArrayBuffer>], { type: ref['tipo'] });
+}
+
+/** `keysounds` del manifest: nombre -> hash, todo texto. `undefined` si no hay; error si esta mal formado. */
+function leerKeysounds(crudo: unknown, nombre: string): Record<string, string> | undefined {
+  if (crudo === undefined) return undefined;
+  if (!esObjeto(crudo)) {
+    throw new ErrorDeRespaldo(`El respaldo está dañado: ${nombre} tiene sonidos inválidos.`);
+  }
+  const resultado: Record<string, string> = {};
+  for (const [archivo, hash] of Object.entries(crudo)) {
+    if (!esTexto(hash) || hash === '') {
+      throw new ErrorDeRespaldo(`El respaldo está dañado: ${nombre} tiene sonidos inválidos.`);
+    }
+    resultado[archivo] = hash;
+  }
+  return resultado;
 }
 
 function leerCancion(archivos: Unzipped, crudo: unknown, indice: number): CancionGuardada {
@@ -301,12 +356,20 @@ function leerCancion(archivos: Unzipped, crudo: unknown, indice: number): Cancio
   const videoOffset = crudo['videoOffset'];
   const importadaEn = crudo['importadaEn'];
   const conjunto = crudo['conjunto'];
+  // T-066: una cancion de audio virtual no trae `audio` sino `keysounds`.
+  const keysounds = leerKeysounds(crudo['keysounds'], nombre);
+  if (crudo['audio'] === undefined && keysounds === undefined) {
+    throw new ErrorDeRespaldo(`El respaldo está dañado: ${nombre} no tiene audio.`);
+  }
   return {
     id,
     titulo,
     artista,
     ...(esTexto(conjunto) && conjunto !== '' && { conjunto }),
-    audio: blobDeReferencia(archivos, crudo['audio'], `audio de ${nombre}`),
+    ...(crudo['audio'] !== undefined && {
+      audio: blobDeReferencia(archivos, crudo['audio'], `audio de ${nombre}`),
+    }),
+    ...(keysounds !== undefined && { keysounds }),
     ...(crudo['fondo'] !== undefined && {
       background: blobDeReferencia(archivos, crudo['fondo'], `fondo de ${nombre}`),
     }),
@@ -418,6 +481,20 @@ export async function leerRespaldo(zip: Blob): Promise<ContenidoRespaldo> {
       if (fila !== undefined && fila.fijado) recientesValidas.push(fila);
     }
   }
+  // T-066: las muestras (opcional). Una entrada sin hash o sin su archivo es un respaldo roto.
+  const muestrasValidas: MuestraGuardada[] = [];
+  const muestrasCrudas = manifest['muestras'];
+  if (Array.isArray(muestrasCrudas)) {
+    for (const crudo of muestrasCrudas as unknown[]) {
+      if (!esObjeto(crudo) || !esTexto(crudo['hash']) || crudo['hash'] === '') {
+        throw new ErrorDeRespaldo('El respaldo está dañado: una muestra de sonido no indica su hash.');
+      }
+      muestrasValidas.push({
+        hash: crudo['hash'],
+        blob: blobDeReferencia(archivos, crudo, `muestra de sonido ${crudo['hash']}`),
+      });
+    }
+  }
   const ajustesValidos: Record<string, string> = {};
   for (const [clave, valor] of Object.entries(ajustes)) {
     if (esAjusteRestaurable(clave, valor)) ajustesValidos[clave] = valor;
@@ -431,6 +508,7 @@ export async function leerRespaldo(zip: Blob): Promise<ContenidoRespaldo> {
     replays: replaysValidos,
     historial: historialValido,
     recientes: recientesValidas,
+    muestras: muestrasValidas,
     ajustes: ajustesValidos,
   };
 }
@@ -524,6 +602,7 @@ export async function reunirContenidoActual(): Promise<ContenidoRespaldo> {
     replays: await listarReplaysDeLaBase(),
     historial: await listarHistorialDeLaBase(),
     recientes: await listarRecientesFijadosDeLaBase(),
+    muestras: await listarMuestrasDeLaBase(),
     ajustes: leerAjustesLocales(),
   };
 }
