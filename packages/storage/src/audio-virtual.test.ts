@@ -242,6 +242,17 @@ describe('avisos y errores del audio virtual', () => {
     expect(await listarCanciones()).toHaveLength(0);
   });
 
+  it('un set virtual que no pide ningun sonido falla con muestras-faltantes y su propio mensaje', async () => {
+    await expect(
+      importarArchivoOsz(
+        oszVirtual({ 'x.osu': osuVirtual({ version: 'Normal', notas: ['64,192,1000,1,0,0:0:0:0:'] }) }),
+      ),
+    ).rejects.toMatchObject({
+      codigo: 'muestras-faltantes',
+      message: 'Este .osz usa audio virtual pero no pide ningún sonido: no hay nada que reproducir.',
+    });
+  });
+
   it('una dificultad con mas de 60 000 eventos se omite con aviso y las demas entran', async () => {
     const muchas = Array.from({ length: 60_001 }, (_, i) => `Sample,${i},0,"a.ogg",100`);
     const r = await importarArchivoOsz(

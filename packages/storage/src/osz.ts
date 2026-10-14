@@ -570,6 +570,16 @@ async function armarCancionVirtual(
     if (!muestras.has(hash)) muestras.set(hash, new Blob([bytes], { type: mimeDesdeNombre(nombre) }));
   }
 
+  if (nombres.size === 0) {
+    // Una receta vacia: ni un keysound ni una linea Sample. No hay nada que reproducir.
+    avisos.push(`Se omitió "${grupo.titulo}": usa audio virtual pero no pide ningún sonido.`);
+    return {
+      fallo: new ErrorDeImportacion(
+        'muestras-faltantes',
+        'Este .osz usa audio virtual pero no pide ningún sonido: no hay nada que reproducir.',
+      ),
+    };
+  }
   if (muestras.size === 0) {
     avisos.push(
       `Se omitió "${grupo.titulo}": ninguna de sus ${nombres.size} muestras de sonido viene en el .osz.`,
