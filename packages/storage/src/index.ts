@@ -23,10 +23,17 @@ import {
   type Replay,
 } from '@tetra/core';
 import { ponerDificultad, quitarDificultad } from './dificultades.js';
-import { esVideoReproducible, extraerCancionDeOsz } from './osz.js';
+import { analizarOsz, esVideoReproducible, type Omitidas } from './osz.js';
+import { ErrorDeImportacion } from './errores.js';
+import {
+  coincidenciaEnBiblioteca,
+  combinarConExistente,
+  planearFusiones,
+} from './duplicados.js';
 import { construirOsz, type EntradaOsz } from './osz-escritor.js';
 import { extraerImagenesDeOsk } from './osk.js';
 import {
+  aplicarFusionesEnLaBase,
   guardarCancion,
   listarCancionesDeLaBase,
   leerCancionDeLaBase,
@@ -58,13 +65,18 @@ export type {
 export { idDeReplayReciente } from './records-validacion.js';
 // T-065: reglas de la purga de las partidas recientes.
 export { DIAS_REPLAYS_RECIENTES, TOPE_REPLAYS_RECIENTES, idsAPurgar } from './db.js';
-export type { MapaImportado, CancionImportada } from './osz.js';
+export type { MapaImportado, CancionImportada, Omitidas, AnalisisOsz } from './osz.js';
+export { ErrorDeImportacion } from './errores.js';
+export type { CodigoErrorImportacion } from './errores.js';
+export type { PlanDeFusion } from './duplicados.js';
+export { planearFusiones, combinarConExistente } from './duplicados.js';
 export {
   elegirArchivoOsu,
   elegirArchivosOsu,
   mimeDesdeNombre,
   extraerMapaDeOsz,
   extraerCancionDeOsz,
+  analizarOsz,
 } from './osz.js';
 export type { DificultadParaOsz, EntradaOsz } from './osz-escritor.js';
 export { construirOsz, nombreDeOsu, nombreSeguro } from './osz-escritor.js';
@@ -91,35 +103,148 @@ function crearIdSkin(): SkinId {
   return crypto.randomUUID();
 }
 
+export type EstadoImportacion = 'nueva' | 'ya-estaba' | 'actualizada';
+
+export interface CancionImportadaResumen {
+  id: SongId;
+  titulo: string;
+  estado: EstadoImportacion;
+  /** Dificultades agregadas a una cancion que ya estaba (0 si es nueva o ya-estaba). */
+  dificultadesAgregadas: number;
+  /** Dificultades reemplazadas por una version nueva del mismo BeatmapID. */
+  dificultadesActualizadas: number;
+  /** true si se completo un fondo o un video que la cancion existente no tenia. */
+  archivosCompletados: boolean;
+}
+
+export interface ResultadoImportacion {
+  /** En el orden de los grupos (paso 1: siempre una). Nunca vacio: si no hay nada que importar, se lanza. */
+  canciones: CancionImportadaResumen[];
+  /** Title del set (el de la primera dificultad valida). */
+  titulo: string;
+  /** Lo que se dejo afuera sin hacer fallar la importacion. */
+  omitidas: Omitidas;
+  /** Avisos ya redactados, en el orden en que se generaron. */
+  avisos: string[];
+}
+
+/** `QuotaExceededError` (el nombre cambia entre navegadores y fake-indexeddb, pero no el mensaje). */
+function esErrorDeCuota(error: unknown): boolean {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    ((error as { name?: unknown }).name === 'QuotaExceededError' ||
+      (error as { code?: unknown }).code === 22)
+  );
+}
+
+/** Todo lo que no sea un `ErrorDeImportacion` se envuelve: nunca sale otro tipo de error. */
+function aErrorDeImportacion(error: unknown): ErrorDeImportacion {
+  if (error instanceof ErrorDeImportacion) return error;
+  if (esErrorDeCuota(error)) {
+    return new ErrorDeImportacion(
+      'sin-espacio',
+      'No hay espacio para guardar la canción: el navegador llenó su cuota. Borrá canciones que no uses o exportá un respaldo y liberá espacio.',
+      { cause: error },
+    );
+  }
+  const detalle = error instanceof Error ? error.message : String(error);
+  return new ErrorDeImportacion('base', `No se pudo guardar en la biblioteca: ${detalle}`, {
+    cause: error,
+  });
+}
+
 /**
- * Importa un archivo .osz: lo descomprime, parsea todos los .osu que trae
- * adentro (una dificultad por cada uno que sea mania 4K valido) y guarda la
- * cancion resultante, con su audio (y portada, si hay) compartidos entre
- * todas sus dificultades, en IndexedDB. Devuelve el id con el que quedo
- * guardada.
+ * Importa un archivo .osz con deduplicacion (T-066, D3): lo descomprime,
+ * parsea todas las dificultades de mania 4K y, si la cancion ya esta en la
+ * biblioteca (comparte alguna clave de identidad con una existente), la
+ * combina con esa en vez de duplicarla: conserva el id, agrega o actualiza
+ * dificultades y completa fondo o video. Si no, crea una cancion nueva.
+ *
+ * Lanza `ErrorDeImportacion` si no queda ninguna cancion para importar;
+ * nunca lanza otro tipo de error (cualquier otro se envuelve como `base`, o
+ * `sin-espacio` si es `QuotaExceededError`). Un `Blob` suelto no se chequea
+ * por extension; un `File` si.
+ */
+export async function importarArchivoOsz(archivo: Blob): Promise<ResultadoImportacion> {
+  try {
+    const { cancion: extraido, omitidas, avisos } = await analizarOsz(archivo);
+    const existentes = await listarCancionesDeLaBase();
+    const coincide = coincidenciaEnBiblioteca(extraido.dificultades, existentes);
+
+    let resumen: CancionImportadaResumen;
+    if (coincide === undefined) {
+      const id = crearId();
+      const nueva: CancionGuardada = {
+        id,
+        titulo: extraido.titulo,
+        artista: extraido.artista,
+        audio: extraido.audio,
+        // Los opcionales solo se agregan si existen: nada de claves en undefined.
+        ...(extraido.background !== undefined && { background: extraido.background }),
+        ...(extraido.video !== undefined && {
+          video: extraido.video,
+          videoOffset: extraido.videoOffset ?? 0,
+        }),
+        importadaEn: Date.now(),
+        dificultades: extraido.dificultades,
+      };
+      await guardarCancion(nueva);
+      resumen = {
+        id,
+        titulo: extraido.titulo,
+        estado: 'nueva',
+        dificultadesAgregadas: 0,
+        dificultadesActualizadas: 0,
+        archivosCompletados: false,
+      };
+    } else {
+      const { cancion, resumen: cambios } = combinarConExistente(coincide, extraido);
+      if (cambios.estado === 'actualizada') await guardarCancion(cancion);
+      resumen = { id: coincide.id, titulo: coincide.titulo, ...cambios };
+    }
+
+    // Pedir que el navegador no desaloje la biblioteca: no se espera ni se usa
+    // el resultado (pedirAlmacenamientoPersistente nunca lanza).
+    void pedirAlmacenamientoPersistente();
+    return { canciones: [resumen], titulo: extraido.titulo, omitidas, avisos };
+  } catch (error) {
+    throw aErrorDeImportacion(error);
+  }
+}
+
+/**
+ * Compatibilidad (mapeador, tests): el id de la primera cancion de
+ * `importarArchivoOsz`. Si el contenido ya estaba en la biblioteca, devuelve
+ * el id de esa en vez de crear una copia.
  */
 export async function importarOsz(archivo: Blob): Promise<SongId> {
-  const extraido = await extraerCancionDeOsz(archivo);
-  const id = crearId();
-  const cancion: CancionGuardada = {
-    id,
-    titulo: extraido.titulo,
-    artista: extraido.artista,
-    audio: extraido.audio,
-    // Los opcionales solo se agregan si existen: nada de claves en undefined.
-    ...(extraido.background !== undefined && { background: extraido.background }),
-    ...(extraido.video !== undefined && {
-      video: extraido.video,
-      videoOffset: extraido.videoOffset ?? 0,
-    }),
-    importadaEn: Date.now(),
-    dificultades: extraido.dificultades,
-  };
-  await guardarCancion(cancion);
-  // Pedir que el navegador no desaloje la biblioteca: no se espera ni se usa
-  // el resultado (pedirAlmacenamientoPersistente nunca lanza).
-  void pedirAlmacenamientoPersistente();
-  return id;
+  return (await importarArchivoOsz(archivo)).canciones[0]!.id;
+}
+
+export interface FusionDeDuplicados {
+  sobreviviente: SongId;
+  /** De la importacion mas nueva a la mas vieja (ver D4, offset por cancion). */
+  absorbidas: SongId[];
+}
+
+/**
+ * T-066 (D4): fusiona las canciones que ya estan duplicadas en la biblioteca
+ * (las que comparten alguna clave de identidad). La sobreviviente conserva su
+ * id y recibe las dificultades, el fondo y el video que le falten; las
+ * absorbidas se borran sin tocar records, replays ni recientes. Idempotente:
+ * devuelve las fusiones hechas (vacio si no habia duplicados). El offset por
+ * cancion vive en localStorage (apps/web): quien llama lo migra con lo que
+ * devuelve esto.
+ */
+export async function fusionarDuplicados(): Promise<FusionDeDuplicados[]> {
+  const planes = planearFusiones(await listarCancionesDeLaBase());
+  if (planes.length === 0) return [];
+  await aplicarFusionesEnLaBase(planes);
+  return planes.map((plan) => ({
+    sobreviviente: plan.resultado.id,
+    absorbidas: plan.absorbidas,
+  }));
 }
 
 /** Devuelve todas las canciones guardadas hasta ahora, cada una con todas sus dificultades. */

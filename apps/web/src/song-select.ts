@@ -24,7 +24,7 @@ import {
   guardarEnHistorial,
   guardarPartida,
   hashesConReplay,
-  importarOsz,
+  importarArchivoOsz,
   leerRecords,
   leerReplayGuardado,
   leerReplayReciente,
@@ -75,6 +75,7 @@ import {
   nivelDeEstrellas,
   nombreVisibleDeDificultad,
   ordenarCanciones,
+  textoDeImportacion,
   textoDeImportacionFallida,
   type CriterioDeOrden,
 } from './song-select-logica.js';
@@ -588,11 +589,23 @@ export function mostrarSongSelect(contenedor: HTMLElement, opciones: OpcionesSon
   function mostrarError(mensaje: string, detalle?: string): void {
     mensajeError.textContent = mensaje;
     errorEl.title = detalle ?? mensaje;
+    errorEl.classList.remove('tetra-song-select-error-aviso');
+    errorEl.setAttribute('role', 'alert');
+    errorEl.hidden = false;
+  }
+  /** T-066: el mismo banner con tono neutro, para avisar algo que no es un fallo (por ejemplo "ya estaba en la biblioteca"). */
+  function mostrarAviso(texto: string): void {
+    mensajeError.textContent = texto;
+    errorEl.title = texto;
+    errorEl.classList.add('tetra-song-select-error-aviso');
+    errorEl.setAttribute('role', 'status');
     errorEl.hidden = false;
   }
   function ocultarError(): void {
     mensajeError.textContent = '';
     errorEl.title = '';
+    errorEl.classList.remove('tetra-song-select-error-aviso');
+    errorEl.setAttribute('role', 'alert');
     errorEl.hidden = true;
   }
 
@@ -1663,12 +1676,15 @@ export function mostrarSongSelect(contenedor: HTMLElement, opciones: OpcionesSon
 
   async function manejarOsz(archivo: File): Promise<void> {
     try {
-      const id = await importarOsz(archivo);
+      const resultado = await importarArchivoOsz(archivo);
       // Un error de una importacion anterior ya no tiene sentido (T-054).
       ocultarError();
-      await cargarCanciones(id);
+      // Se enfoca la primera cancion del resultado (nueva, ya estaba o actualizada).
+      await cargarCanciones(resultado.canciones[0]!.id);
+      const texto = textoDeImportacion(resultado);
+      if (texto !== null) mostrarAviso(texto);
     } catch (error) {
-      mostrarError(textoDeImportacionFallida(archivo.name), mensajeDeErrorDeCarga(error));
+      mostrarError(textoDeImportacionFallida(archivo.name, error));
     }
   }
 

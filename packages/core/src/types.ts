@@ -90,6 +90,10 @@ export interface ChartMetadata {
   /** [Metadata] Source y Tags, tal cual (recortados). Ausentes si vienen vacios. */
   source?: string;
   tags?: string;
+  /** [Metadata] BeatmapID, solo si es mayor que 0 (T-066). */
+  beatmapId?: number;
+  /** [Metadata] BeatmapSetID, solo si es mayor que 0 (T-066). */
+  beatmapSetId?: number;
 }
 
 export interface Chart {

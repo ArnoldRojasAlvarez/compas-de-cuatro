@@ -20,6 +20,7 @@ import {
   listarCanciones,
   restaurarRespaldo,
 } from './index.js';
+import { guardarCancion } from './db.js';
 
 const NOMBRE_BASE = 'tetra-mapas';
 
@@ -73,6 +74,18 @@ async function importar(...dificultades: string[][]): Promise<{ id: string; hash
   const id = await importarOsz(new Blob([new Uint8Array(zipSync(entradas))]));
   const cancion = (await listarCanciones()).find((c) => c.id === id)!;
   return { id, hashes: cancion.dificultades.map((d) => String(hashMapa(d))) };
+}
+
+/**
+ * T-066: importar dos veces ya no duplica, asi que para probar que borrar una
+ * cancion respeta lo que comparte con otra se escribe la copia directo en la
+ * base (como queda, por ejemplo, tras restaurar un respaldo antes de fusionar).
+ */
+async function duplicarEnLaBase(id: string): Promise<string> {
+  const original = (await listarCanciones()).find((c) => c.id === id)!;
+  const copia = { ...original, id: `${id}-copia` };
+  await guardarCancion(copia);
+  return copia.id;
 }
 
 function conteos(valores: Partial<Record<Judgement, number>> = {}): Record<Judgement, number> {
@@ -255,12 +268,12 @@ describe('borrarCancion y replays', () => {
 
   it('si otra cancion tiene el mismo mapa, su replay se conserva (igual que su record)', async () => {
     const primera = await importar(NOTAS_A);
-    const copia = await importar(NOTAS_A);
+    const copiaId = await duplicarEnLaBase(primera.id);
     const hash = primera.hashes[0]!;
     await guardarPartida(hash, partida(400_000, FECHA_1), replayDe(hash, 1));
     await borrarCancion(primera.id);
     expect(await leerReplayGuardado(hash)).toBeDefined();
-    await borrarCancion(copia.id);
+    await borrarCancion(copiaId);
     expect(await leerReplayGuardado(hash)).toBeUndefined();
   });
 });

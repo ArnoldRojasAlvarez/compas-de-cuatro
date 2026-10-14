@@ -7,6 +7,9 @@ export { createJudgeEngine, HP_DELTAS } from './judge/engine.js';
 
 export type { ParseResult } from './chart/osu.js';
 export { parseOsu } from './chart/osu.js';
+export type { CabeceraOsu } from './chart/cabecera.js';
+export { leerCabeceraOsu } from './chart/cabecera.js';
+export { clavesDeIdentidad } from './chart/identidad.js';
 
 export {
   construirFilas,
