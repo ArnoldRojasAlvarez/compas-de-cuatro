@@ -53,3 +53,18 @@ export function motivoDeRechazoDelReplay(
   }
   return null;
 }
+
+/**
+ * T-065: "13 oct 21:05", la fecha y la hora LOCALES de una partida (a diferencia
+ * de `fechaCorta`, que lee el dia del texto: aca importa la hora que vio el
+ * jugador). Una fecha que no se entiende da "".
+ */
+export function fechaYHoraCorta(iso: string): string {
+  const instante = new Date(iso);
+  if (Number.isNaN(instante.getTime())) return '';
+  const dos = (n: number): string => String(n).padStart(2, '0');
+  return `${instante.getDate()} ${MESES[instante.getMonth()]!} ${dos(instante.getHours())}:${dos(instante.getMinutes())}`;
+}
+
+export const MENSAJE_RECIENTE_NO_ESTA =
+  'Esa partida ya no está guardada (se borró al pasar los 7 días).';

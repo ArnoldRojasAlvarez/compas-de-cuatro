@@ -433,3 +433,49 @@
   z-index: 5;
   box-shadow: 0 0 0 8px var(--fondo);
 }
+
+/* T-065: "Ver replay" junto a "Volver al song select". Los dos botones viajan en
+   una barra pegada al borde inferior (lo que antes hacia solo el de volver). */
+#app .tetra-resultados-acciones {
+  position: sticky;
+  bottom: var(--espacio-4);
+  z-index: 5;
+  display: flex;
+  align-self: center;
+  justify-content: center;
+  gap: var(--espacio-3);
+  box-sizing: border-box;
+  width: calc(100% - var(--espacio-4) * 2);
+  max-width: calc(800px - var(--espacio-4) * 2);
+  margin: 0 0 var(--espacio-6);
+  padding: 0;
+  box-shadow: 0 0 0 8px var(--fondo);
+  background: var(--fondo);
+}
+
+#app .tetra-resultados-acciones .tetra-resultados-volver-song-select {
+  position: static;
+  flex: 1;
+  width: auto;
+  min-width: 0;
+  margin: 0;
+  box-shadow: none;
+}
+
+#app .tetra-resultados-ver-replay {
+  box-sizing: border-box;
+  padding: var(--espacio-3) var(--espacio-5);
+  font-size: var(--tipo-base);
+  font-weight: 600;
+  color: var(--acento);
+  background: transparent;
+  border-color: var(--acento);
+}
+
+#app .tetra-resultados-ver-replay:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--acento) 14%, transparent);
+}
+
+#app .tetra-resultados-ver-replay:disabled {
+  opacity: 0.6;
+}

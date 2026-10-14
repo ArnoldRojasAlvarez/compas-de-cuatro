@@ -24,6 +24,7 @@ import type { Chart, RecordDeMapa, RegistroPartida } from '@tetra/core';
 import {
   listarCancionesDeLaBase,
   listarHistorialDeLaBase,
+  listarRecientesFijadosDeLaBase,
   listarRecordsDeLaBase,
   listarReplaysDeLaBase,
   listarSkinsDeLaBase,
@@ -35,7 +36,9 @@ import {
   normalizarRecord,
   normalizarRegistroPartida,
   normalizarReplayGuardado,
+  normalizarReplayReciente,
   type ReplayGuardado,
+  type ReplayRecienteGuardado,
 } from './records-validacion.js';
 
 const FORMATO = 'tetra-respaldo';
@@ -59,6 +62,12 @@ export interface ContenidoRespaldo {
   replays?: ReplayGuardado[];
   /** T-045: tienda 'historial' (version 7): un resumen por partida completada. Ausente en respaldos viejos. */
   historial?: RegistroPartida[];
+  /**
+   * T-065: las partidas recientes FIJADAS ("Conservar"), con su replay. Las demas
+   * no viajan: se purgan solas a los 7 dias y inflarian el zip (hasta 200 replays).
+   * Ausente en respaldos viejos.
+   */
+  recientes?: ReplayRecienteGuardado[];
   /** Claves 'tetra:*' de localStorage. */
   ajustes: Record<string, string>;
 }
@@ -76,6 +85,8 @@ export interface ResumenRestauracion {
   replaysNuevos: number;
   /** T-045: partidas del historial que no estaban (las repetidas, por fecha y mapa, no cuentan). */
   historialNuevo: number;
+  /** T-065: partidas recientes fijadas que no estaban. */
+  recientesNuevos: number;
   /** Claves de localStorage escritas (0 si no se pidio sobrescribir). */
   ajustesRestaurados: number;
 }
@@ -126,6 +137,8 @@ interface ManifestRespaldo {
   replays?: ReplayGuardado[];
   /** T-045: opcional al leer, igual que `replays`. */
   historial?: RegistroPartida[];
+  /** T-065: solo las fijadas; opcional al leer. */
+  recientes?: ReplayRecienteGuardado[];
   ajustes: Record<string, string>;
 }
 
@@ -198,6 +211,7 @@ export async function exportarRespaldo(c: ContenidoRespaldo): Promise<Blob> {
     records: c.records,
     replays: c.replays ?? [],
     historial: c.historial ?? [],
+    recientes: (c.recientes ?? []).filter((fila) => fila.fijado),
     ajustes: c.ajustes,
   };
   archivos['manifest.json'] = strToU8(JSON.stringify(manifest, null, 2));
@@ -390,6 +404,16 @@ export async function leerRespaldo(zip: Blob): Promise<ContenidoRespaldo> {
       if (registro !== undefined) historialValido.push(registro);
     }
   }
+  // T-065: igual con las partidas recientes fijadas. Una fila sin fijar no
+  // entra: el respaldo solo lleva las que el jugador quiso conservar.
+  const recientesValidas: ReplayRecienteGuardado[] = [];
+  const recientesCrudas = manifest['recientes'];
+  if (Array.isArray(recientesCrudas)) {
+    for (const crudo of recientesCrudas as unknown[]) {
+      const fila = normalizarReplayReciente(crudo);
+      if (fila !== undefined && fila.fijado) recientesValidas.push(fila);
+    }
+  }
   const ajustesValidos: Record<string, string> = {};
   for (const [clave, valor] of Object.entries(ajustes)) {
     if (esAjusteRestaurable(clave, valor)) ajustesValidos[clave] = valor;
@@ -402,6 +426,7 @@ export async function leerRespaldo(zip: Blob): Promise<ContenidoRespaldo> {
     records: recordsValidos,
     replays: replaysValidos,
     historial: historialValido,
+    recientes: recientesValidas,
     ajustes: ajustesValidos,
   };
 }
@@ -494,6 +519,7 @@ export async function reunirContenidoActual(): Promise<ContenidoRespaldo> {
     records: await listarRecordsDeLaBase(),
     replays: await listarReplaysDeLaBase(),
     historial: await listarHistorialDeLaBase(),
+    recientes: await listarRecientesFijadosDeLaBase(),
     ajustes: leerAjustesLocales(),
   };
 }

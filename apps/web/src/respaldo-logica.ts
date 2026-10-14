@@ -51,7 +51,9 @@ export function lineaDeRestauracion(r: ResumenRestauracion): string {
   if (r.skinsNuevas > 0) partes.push(plural(r.skinsNuevas, 'skin', 'skins'));
   const records = r.recordsNuevos + r.recordsActualizados;
   if (records > 0) partes.push(plural(records, 'récord', 'récords'));
-  if (r.replaysNuevos > 0) partes.push(plural(r.replaysNuevos, 'replay', 'replays'));
+  // T-065: las partidas recientes fijadas que vuelven tambien son replays.
+  const replays = r.replaysNuevos + r.recientesNuevos;
+  if (replays > 0) partes.push(plural(replays, 'replay', 'replays'));
   if (r.historialNuevo > 0) partes.push(plural(r.historialNuevo, 'partida', 'partidas'));
   if (r.ajustesRestaurados > 0) partes.push('ajustes');
   return partes.join(', ');

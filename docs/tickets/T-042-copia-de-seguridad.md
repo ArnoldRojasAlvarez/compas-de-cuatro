@@ -55,3 +55,7 @@ Sincronizacion en la nube, cuentas de usuario (decision de producto: backend que
 ## Terminado cuando
 
 Checks en verde y se restauro un respaldo en un perfil de navegador limpio.
+
+## Actualización de T-065
+
+El respaldo lleva ahora también las partidas recientes **fijadas** ("Conservar", clave `recientes` del manifest, opcional al leer; la versión del respaldo sigue en 1). Las no fijadas no viajan: se purgan solas a los 7 días. Ver `docs/tickets/T-065-replays-recientes.md`.

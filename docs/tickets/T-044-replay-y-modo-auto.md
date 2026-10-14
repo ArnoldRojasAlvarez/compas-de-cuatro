@@ -107,3 +107,7 @@ Checks en verde y se grabo un video corto de pantalla del modo auto con la canci
   corresponde al `mejor` que queda.
 - Mapeador: "Auto" y "Auto desde el cabezal" (el replay se genera sobre las notas que se juegan).
 - Mirar un replay o el auto no suma tiempo jugado, ni intentos, ni record.
+
+## Actualización de T-065
+
+Además del replay de la mejor partida, ahora se guarda el de toda partida completada durante 7 días (tienda `recientes`), con lista en el song select y "Ver replay" en resultados. Ver `docs/tickets/T-065-replays-recientes.md`.

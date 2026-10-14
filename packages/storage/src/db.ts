@@ -23,11 +23,17 @@ import type {
 } from '@tetra/core';
 import {
   claveDeRegistroPartida,
+  idDeReplayReciente,
   normalizarRecord,
   normalizarRegistroPartida,
   normalizarReplayGuardado,
+  normalizarReplayReciente,
 } from './records-validacion.js';
-import type { ReplayGuardado } from './records-validacion.js';
+import type {
+  ReplayGuardado,
+  ReplayRecienteGuardado,
+  ResumenDeReciente,
+} from './records-validacion.js';
 import type { ImagenesDeSkin } from './osk.js';
 
 const NOMBRE_BASE = 'tetra-mapas';
@@ -72,7 +78,13 @@ const NOMBRE_BASE = 'tetra-mapas';
 // cancion, y borrar un mapa de la biblioteca no borra lo que el jugador jugo.
 // Claves fuera de linea (`fecha|hash`, ver claveDeRegistroPartida): el orden de
 // las claves es el cronologico y reimportar un respaldo no duplica nada.
-const VERSION_BASE = 7;
+//
+// T-065 agrega 'recientes' (el replay de TODAS las partidas completadas, con su
+// resumen y la marca `fijado`): version 8, mismo guard con `contains`. Quien
+// viene de 1 a 7 conserva todo y solo gana la tienda nueva (con sus indices
+// 'hash' y 'fecha'). 'replays' (el de la mejor partida) no se toca: el replay de
+// la mejor sigue siendo permanente, 'recientes' se purga sola al abrir la app.
+const VERSION_BASE = 8;
 const NOMBRE_TIENDA_MAPAS_LEGADO = 'mapas';
 const NOMBRE_TIENDA_SKINS = 'skins';
 const NOMBRE_TIENDA_CANCIONES = 'canciones';
@@ -80,6 +92,12 @@ const NOMBRE_TIENDA_DIFICULTADES = 'dificultades';
 const NOMBRE_TIENDA_RECORDS = 'records';
 const NOMBRE_TIENDA_REPLAYS = 'replays';
 const NOMBRE_TIENDA_HISTORIAL = 'historial';
+const NOMBRE_TIENDA_RECIENTES = 'recientes';
+
+/** T-065: cuantos dias se guarda el replay de una partida reciente (si no esta fijada). */
+export const DIAS_REPLAYS_RECIENTES = 7;
+/** T-065: cuantas partidas recientes sin fijar se guardan como maximo. */
+export const TOPE_REPLAYS_RECIENTES = 200;
 
 export type SongId = string;
 
@@ -162,6 +180,11 @@ function abrirBaseDeDatos(): Promise<IDBDatabase> {
       if (!db.objectStoreNames.contains(NOMBRE_TIENDA_HISTORIAL)) {
         db.createObjectStore(NOMBRE_TIENDA_HISTORIAL);
       }
+      if (!db.objectStoreNames.contains(NOMBRE_TIENDA_RECIENTES)) {
+        const recientes = db.createObjectStore(NOMBRE_TIENDA_RECIENTES, { keyPath: 'id' });
+        recientes.createIndex('hash', 'hash');
+        recientes.createIndex('fecha', 'fecha');
+      }
     };
 
     peticion.onsuccess = () => resolve(peticion.result);
@@ -241,7 +264,7 @@ function clavesDeRecordsDe(cancion: CancionGuardada | undefined): Set<string> {
 
 /**
  * Borra una cancion entera y, en la misma transaccion, los records y los
- * replays de sus dificultades (T-055, T-044). Un record solo se conserva si OTRA cancion de la
+ * replays de sus dificultades, mejores y recientes (T-055, T-044, T-065). Un record solo se conserva si OTRA cancion de la
  * biblioteca tiene una dificultad con el mismo hash (el mismo .osz importado
  * dos veces): ese record sigue valiendo para la que queda. No hace nada si el
  * id no existe.
@@ -251,12 +274,18 @@ export async function borrarCancionDeLaBase(id: SongId): Promise<void> {
   try {
     await new Promise<void>((resolve, reject) => {
       const tx = db.transaction(
-        [NOMBRE_TIENDA_CANCIONES, NOMBRE_TIENDA_RECORDS, NOMBRE_TIENDA_REPLAYS],
+        [
+          NOMBRE_TIENDA_CANCIONES,
+          NOMBRE_TIENDA_RECORDS,
+          NOMBRE_TIENDA_REPLAYS,
+          NOMBRE_TIENDA_RECIENTES,
+        ],
         'readwrite',
       );
       const canciones = tx.objectStore(NOMBRE_TIENDA_CANCIONES);
       const records = tx.objectStore(NOMBRE_TIENDA_RECORDS);
       const replays = tx.objectStore(NOMBRE_TIENDA_REPLAYS);
+      const recientes = tx.objectStore(NOMBRE_TIENDA_RECIENTES);
       tx.oncomplete = () => resolve();
       tx.onerror = () => reject(tx.error ?? new Error('No se pudo borrar la canción.'));
       tx.onabort = () => reject(tx.error ?? new Error('Se abortó el borrado de la canción.'));
@@ -282,6 +311,11 @@ export async function borrarCancionDeLaBase(id: SongId): Promise<void> {
           for (const clave of aBorrar) {
             records.delete(clave);
             replays.delete(clave);
+            // T-065: tambien las partidas recientes de ese mapa, fijadas o no.
+            const delMapa = recientes.index('hash').getAllKeys(clave);
+            delMapa.onsuccess = () => {
+              for (const id of delMapa.result) recientes.delete(id);
+            };
           }
         };
       };
@@ -302,6 +336,9 @@ export async function borrarCancionDeLaBase(id: SongId): Promise<void> {
  * que habia, en la misma transaccion (record y replay nunca quedan de partidas
  * distintas). Si es la nueva mejor y no trae replay, el viejo se borra: ya no
  * corresponde a la mejor partida. Si no mejoro, el replay guardado no se toca.
+ *
+ * T-065: con `replay`, la partida se guarda ademas entre las recientes (tienda
+ * 'recientes'), mejore o no, en la misma transaccion.
  */
 export async function guardarPartidaEnLaBase(
   hash: string,
@@ -311,9 +348,13 @@ export async function guardarPartidaEnLaBase(
   const db = await abrirBaseDeDatos();
   try {
     return await new Promise((resolve, reject) => {
-      const tx = db.transaction([NOMBRE_TIENDA_RECORDS, NOMBRE_TIENDA_REPLAYS], 'readwrite');
+      const tx = db.transaction(
+        [NOMBRE_TIENDA_RECORDS, NOMBRE_TIENDA_REPLAYS, NOMBRE_TIENDA_RECIENTES],
+        'readwrite',
+      );
       const tienda = tx.objectStore(NOMBRE_TIENDA_RECORDS);
       const replays = tx.objectStore(NOMBRE_TIENDA_REPLAYS);
+      const recientes = tx.objectStore(NOMBRE_TIENDA_RECIENTES);
       let resultado:
         | { record: RecordDeMapa; esMejor: boolean; anterior?: PartidaJugada }
         | undefined;
@@ -323,6 +364,20 @@ export async function guardarPartidaEnLaBase(
       };
       tx.onerror = () => reject(tx.error ?? new Error('No se pudo guardar la partida.'));
       tx.onabort = () => reject(tx.error ?? new Error('Se abortó el guardado de la partida.'));
+
+      // T-065: toda partida completada con replay queda entre las recientes
+      // (se purgan solas al abrir la app), mejore o no el record.
+      if (replay !== undefined) {
+        const reciente: ReplayRecienteGuardado = {
+          id: idDeReplayReciente(hash, partida.fecha),
+          hash,
+          fecha: partida.fecha,
+          texto: serializarReplay(replay),
+          partida,
+          fijado: false,
+        };
+        recientes.put(reciente);
+      }
 
       const lectura = tienda.get(hash);
       lectura.onsuccess = () => {
@@ -386,6 +441,188 @@ export async function listarHashesConReplayDeLaBase(): Promise<Set<string>> {
         resolve(new Set((peticion.result as IDBValidKey[]).filter((k) => typeof k === 'string')) as Set<string>);
       peticion.onerror = () =>
         reject(peticion.error ?? new Error('No se pudieron listar los replays.'));
+    });
+  } finally {
+    db.close();
+  }
+}
+
+// ---------------------------------------------------------------------------
+// T-065: partidas recientes
+// ---------------------------------------------------------------------------
+
+/**
+ * Las partidas recientes de un mapa, de la mas nueva a la mas vieja. No lee ni
+ * valida el texto de los replays (solo la forma de la fila): la lista es barata;
+ * un replay roto se descubre al abrirlo. Las filas mal formadas se ignoran.
+ */
+export async function listarRecientesDeLaBase(hash: string): Promise<ResumenDeReciente[]> {
+  const db = await abrirBaseDeDatos();
+  try {
+    return await new Promise<ResumenDeReciente[]>((resolve, reject) => {
+      const tx = db.transaction(NOMBRE_TIENDA_RECIENTES, 'readonly');
+      const peticion = tx.objectStore(NOMBRE_TIENDA_RECIENTES).index('hash').getAll(hash);
+      peticion.onsuccess = () => {
+        const filas: ResumenDeReciente[] = [];
+        for (const crudo of peticion.result as unknown[]) {
+          const fila = normalizarReplayReciente(crudo, false);
+          if (fila === undefined) continue;
+          filas.push({
+            id: fila.id,
+            hash: fila.hash,
+            fecha: fila.fecha,
+            partida: fila.partida,
+            fijado: fila.fijado,
+          });
+        }
+        filas.sort((a, b) => Date.parse(b.fecha) - Date.parse(a.fecha));
+        resolve(filas);
+      };
+      peticion.onerror = () =>
+        reject(peticion.error ?? new Error('No se pudieron listar las partidas recientes.'));
+    });
+  } finally {
+    db.close();
+  }
+}
+
+/** El replay de una partida reciente, o `undefined` si no esta o no se puede leer (texto roto, hash que no coincide). Nunca lanza por el contenido. */
+export async function leerReplayRecienteDeLaBase(
+  id: string,
+): Promise<{ replay: Replay; fecha: string } | undefined> {
+  const db = await abrirBaseDeDatos();
+  try {
+    return await new Promise<{ replay: Replay; fecha: string } | undefined>((resolve, reject) => {
+      const tx = db.transaction(NOMBRE_TIENDA_RECIENTES, 'readonly');
+      const peticion = tx.objectStore(NOMBRE_TIENDA_RECIENTES).get(id);
+      peticion.onsuccess = () => {
+        const fila = normalizarReplayReciente(peticion.result);
+        const replay = fila === undefined || fila.id !== id ? null : leerReplay(fila.texto);
+        resolve(fila === undefined || replay === null ? undefined : { replay, fecha: fila.fecha });
+      };
+      peticion.onerror = () => reject(peticion.error ?? new Error('No se pudo leer el replay.'));
+    });
+  } finally {
+    db.close();
+  }
+}
+
+/** "Conservar": fija (o suelta) una partida reciente. `false` si la fila ya no existe (por ejemplo la purgo otra pestana). */
+export async function fijarRecienteEnLaBase(id: string, fijado: boolean): Promise<boolean> {
+  const db = await abrirBaseDeDatos();
+  try {
+    return await new Promise<boolean>((resolve, reject) => {
+      const tx = db.transaction(NOMBRE_TIENDA_RECIENTES, 'readwrite');
+      const tienda = tx.objectStore(NOMBRE_TIENDA_RECIENTES);
+      let encontrada = false;
+      tx.oncomplete = () => resolve(encontrada);
+      tx.onerror = () => reject(tx.error ?? new Error('No se pudo conservar la partida.'));
+      tx.onabort = () => reject(tx.error ?? new Error('Se abortó el guardado de la partida.'));
+      const lectura = tienda.get(id);
+      lectura.onsuccess = () => {
+        const fila = normalizarReplayReciente(lectura.result, false);
+        if (fila === undefined) return;
+        encontrada = true;
+        tienda.put({ ...fila, fijado });
+      };
+    });
+  } finally {
+    db.close();
+  }
+}
+
+/** Las partidas recientes fijadas, completas (para el respaldo). Las filas corruptas se ignoran. */
+export async function listarRecientesFijadosDeLaBase(): Promise<ReplayRecienteGuardado[]> {
+  const db = await abrirBaseDeDatos();
+  try {
+    return await new Promise<ReplayRecienteGuardado[]>((resolve, reject) => {
+      const tx = db.transaction(NOMBRE_TIENDA_RECIENTES, 'readonly');
+      const peticion = tx.objectStore(NOMBRE_TIENDA_RECIENTES).getAll();
+      peticion.onsuccess = () => {
+        const filas: ReplayRecienteGuardado[] = [];
+        for (const crudo of peticion.result as unknown[]) {
+          const fila = normalizarReplayReciente(crudo);
+          if (fila !== undefined && fila.fijado) filas.push(fila);
+        }
+        resolve(filas);
+      };
+      peticion.onerror = () =>
+        reject(peticion.error ?? new Error('No se pudieron listar las partidas recientes.'));
+    });
+  } finally {
+    db.close();
+  }
+}
+
+/**
+ * Cuales de las filas (id, fecha, fijado) hay que borrar para dejar las
+ * recientes como mandan las reglas de T-065. Pura, para testearla sin base: las
+ * fijadas no se tocan; de las demas se van las de mas de `dias` dias (o con
+ * fecha ilegible) y, de las que quedan, todas menos las `tope` mas nuevas.
+ */
+export function idsAPurgar(
+  filas: readonly { id: string; fecha: string; fijado: boolean }[],
+  ahoraMs: number,
+  dias: number = DIAS_REPLAYS_RECIENTES,
+  tope: number = TOPE_REPLAYS_RECIENTES,
+): string[] {
+  const limite = ahoraMs - dias * 24 * 60 * 60 * 1000;
+  const aBorrar: string[] = [];
+  const vigentes: { id: string; ms: number }[] = [];
+  for (const fila of filas) {
+    if (fila.fijado) continue;
+    const ms = Date.parse(fila.fecha);
+    if (!Number.isFinite(ms) || ms < limite) aBorrar.push(fila.id);
+    else vigentes.push({ id: fila.id, ms });
+  }
+  vigentes.sort((a, b) => b.ms - a.ms);
+  for (const sobrante of vigentes.slice(Math.max(0, tope))) aBorrar.push(sobrante.id);
+  return aBorrar;
+}
+
+/**
+ * Purga las partidas recientes (se llama al abrir la app): fuera las de mas de
+ * `dias` dias y las que pasen del tope de `tope` mas nuevas; las fijadas se
+ * conservan siempre y no cuentan para el tope. Una fila corrupta tambien se
+ * borra (no sirve para nada). No toca 'replays': el de la mejor partida es
+ * permanente. Devuelve cuantas borro.
+ */
+export async function purgarRecientesDeLaBase(
+  ahoraMs: number = Date.now(),
+  dias: number = DIAS_REPLAYS_RECIENTES,
+  tope: number = TOPE_REPLAYS_RECIENTES,
+): Promise<number> {
+  const db = await abrirBaseDeDatos();
+  try {
+    return await new Promise<number>((resolve, reject) => {
+      const tx = db.transaction(NOMBRE_TIENDA_RECIENTES, 'readwrite');
+      const tienda = tx.objectStore(NOMBRE_TIENDA_RECIENTES);
+      let borradas = 0;
+      tx.oncomplete = () => resolve(borradas);
+      tx.onerror = () => reject(tx.error ?? new Error('No se pudieron purgar las partidas.'));
+      tx.onabort = () => reject(tx.error ?? new Error('Se abortó la purga de las partidas.'));
+
+      const filas: { id: string; fecha: string; fijado: boolean }[] = [];
+      const corruptas: IDBValidKey[] = [];
+      const recorrido = tienda.openCursor();
+      recorrido.onsuccess = () => {
+        const cursor = recorrido.result;
+        if (cursor !== null) {
+          const fila = normalizarReplayReciente(cursor.value, false);
+          if (fila === undefined) corruptas.push(cursor.primaryKey);
+          else filas.push({ id: fila.id, fecha: fila.fecha, fijado: fila.fijado });
+          cursor.continue();
+          return;
+        }
+        for (const clave of corruptas) {
+          tienda.delete(clave);
+          borradas += 1;
+        }
+        for (const id of idsAPurgar(filas, ahoraMs, dias, tope)) {
+          tienda.delete(id);
+          borradas += 1;
+        }
+      };
     });
   } finally {
     db.close();
@@ -623,11 +860,13 @@ export interface ResultadoEscrituraRespaldo {
   replaysNuevos: number;
   /** T-045: partidas del historial que no estaban (las que ya estaban, por fecha y mapa, no se tocan). */
   historialNuevo: number;
+  /** T-065: partidas recientes fijadas que no estaban. */
+  recientesNuevos: number;
 }
 
 /**
  * Escribe un respaldo en la base (T-042), todo en UNA transaccion sobre las
- * cinco tiendas (canciones, skins, records, replays e historial): si algo falla a medias (cuota llena, por ejemplo) se aborta y
+ * seis tiendas (canciones, skins, records, replays, historial y recientes): si algo falla a medias (cuota llena, por ejemplo) se aborta y
  * no queda nada escrito. Nunca pisa: una cancion o skin cuyo id ya existe se
  * deja como esta y se cuenta como existente. Los records se mezclan con
  * `mezclar(previo, entrante)`; si devuelve `undefined` no hay nada que
@@ -641,6 +880,7 @@ export async function restaurarEnLaBase(
     records: RecordDeMapa[];
     replays?: ReplayGuardado[];
     historial?: RegistroPartida[];
+    recientes?: ReplayRecienteGuardado[];
   },
   mezclar: (previo: RecordDeMapa | undefined, entrante: RecordDeMapa) => RecordDeMapa | undefined,
 ): Promise<ResultadoEscrituraRespaldo> {
@@ -653,6 +893,7 @@ export async function restaurarEnLaBase(
     recordsActualizados: 0,
     replaysNuevos: 0,
     historialNuevo: 0,
+    recientesNuevos: 0,
   };
   const db = await abrirBaseDeDatos();
   try {
@@ -664,6 +905,7 @@ export async function restaurarEnLaBase(
           NOMBRE_TIENDA_RECORDS,
           NOMBRE_TIENDA_REPLAYS,
           NOMBRE_TIENDA_HISTORIAL,
+          NOMBRE_TIENDA_RECIENTES,
         ],
         'readwrite',
       );
@@ -751,6 +993,27 @@ export async function restaurarEnLaBase(
               replays.delete(entrante.hash);
             }
           };
+        };
+      }
+
+      // T-065: las partidas recientes del respaldo (solo viajan las fijadas) se
+      // agregan si no estaban. Si ya estaba pero sin fijar, queda fijada: quien
+      // la fijo en el respaldo la queria conservar. Nada mas se pisa.
+      const recientes = tx.objectStore(NOMBRE_TIENDA_RECIENTES);
+      const recientesEntrantes = new Map<string, ReplayRecienteGuardado>();
+      for (const fila of contenido.recientes ?? []) {
+        if (!recientesEntrantes.has(fila.id)) recientesEntrantes.set(fila.id, fila);
+      }
+      for (const entrante of recientesEntrantes.values()) {
+        const lectura = recientes.get(entrante.id);
+        lectura.onsuccess = () => {
+          const actual = normalizarReplayReciente(lectura.result);
+          if (actual === undefined) {
+            recientes.put(entrante);
+            resultado.recientesNuevos += 1;
+          } else if (entrante.fijado && !actual.fijado) {
+            recientes.put({ ...actual, fijado: true });
+          }
         };
       }
 
