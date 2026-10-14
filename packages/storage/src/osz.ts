@@ -18,7 +18,8 @@
 
 import { unzipSync, type Unzipped } from 'fflate';
 import type { Chart, Ms } from '@tetra/core';
-import { parseOsu } from '@tetra/core';
+import { leerCabeceraOsu, parseOsu } from '@tetra/core';
+import { ErrorDeImportacion } from './errores.js';
 
 const decodificadorUtf8 = new TextDecoder('utf-8');
 
@@ -186,103 +187,260 @@ export interface CancionImportada {
   dificultades: Chart[];
 }
 
-/**
- * Descomprime un .osz y parsea TODAS las dificultades de mania 4K validas
- * que contenga (T-011, "Parte A": antes, `extraerMapaDeOsz` arriba solo
- * importaba la primera). Un `.osu` que no parsea (por ejemplo porque es de
- * otro modo de juego, `Mode` distinto de 3: un `.osz` real puede traer
- * dificultades de standard ademas de mania) se saltea en silencio en vez de
- * hacer fallar la cancion entera; si NINGUNA dificultad parsea, se lanza
- * (mismo criterio que `extraerMapaDeOsz`: un .osz sin ninguna dificultad
- * jugable no es un .osz valido para este juego).
- *
- * El audio se resuelve una sola vez por cancion (en un set real las
- * dificultades comparten el mismo `AudioFilename`): se prueba el de cada
- * dificultad en orden y se queda el primero que exista en el zip (T-054). Lo mismo para el titulo y el artista, que se muestran a
- * nivel cancion en el song select (cada dificultad conserva igual su propio
- * `chart.metadata`, incluido su `difficultyName`).
- *
- * T-049: el fondo y el video salen de la primera dificultad (en ese mismo
- * orden) que declare uno que exista en el zip. Un video con extension que el
- * navegador no reproduce (avi, flv, mpg, wmv) se ignora en silencio: la
- * cancion se importa igual, sin video. Todas las busquedas en el zip son
- * tolerantes a mayusculas, `\` y `./` (ver `buscarEnZip`).
- *
- * @throws {Error} si el zip no trae ningun .osu, si ninguno de los que trae
- * parsea como mania 4K, o si NINGUNA dificultad tiene su archivo de audio en
- * el zip (el mensaje nombra el de la primera).
- */
-export async function extraerCancionDeOsz(archivo: Blob): Promise<CancionImportada> {
-  const bytes = new Uint8Array(await archivo.arrayBuffer());
-  const zip = unzipSync(bytes);
-  const nombres = Object.keys(zip);
+/** Lo que se dejo afuera de un .osz sin hacerlo fallar (T-066). */
+export interface Omitidas {
+  /** Dificultades con Mode distinto de 3. */
+  otroModo: number;
+  /** Dificultades de mania con otra cantidad de teclas, por teclas: { 7: 15, 10: 69 }. */
+  otrasTeclas: Record<number, number>;
+  /** Dificultades de mania 4K que no parsearon. */
+  invalidas: number;
+}
 
-  const nombresOsu = elegirArchivosOsu(nombres);
-  if (nombresOsu.length === 0) {
-    throw new Error('El .osz no contiene ningún archivo .osu.');
+/** Resultado de analizar un .osz: la cancion lista para guardar, lo omitido y los avisos ya redactados. */
+export interface AnalisisOsz {
+  cancion: CancionImportada;
+  omitidas: Omitidas;
+  avisos: string[];
+}
+
+/** Tamano maximo de un .osz (T-066, tabla de errores). */
+export const MAX_BYTES_OSZ = 300 * 1024 * 1024;
+
+/** `A`, `A y B`, `A, B y C`. */
+function unirConY(partes: readonly string[]): string {
+  if (partes.length <= 1) return partes.join('');
+  return `${partes.slice(0, -1).join(', ')} y ${partes[partes.length - 1]!}`;
+}
+
+/** `5K (15), 7K (15) y 10K (69)`: por teclas ascendente, con la cantidad siempre. */
+function listaDeTeclas(otrasTeclas: Record<number, number>): string {
+  return unirConY(
+    Object.entries(otrasTeclas)
+      .map(([teclas, cantidad]) => ({ teclas: Number(teclas), cantidad }))
+      .sort((a, b) => a.teclas - b.teclas)
+      .map(({ teclas, cantidad }) => `${teclas}K (${cantidad})`),
+  );
+}
+
+function avisosDeOmitidas(omitidas: Omitidas): string[] {
+  const avisos: string[] = [];
+  const otras = Object.values(omitidas.otrasTeclas).reduce((a, b) => a + b, 0);
+  if (otras > 0) {
+    const lista = listaDeTeclas(omitidas.otrasTeclas);
+    avisos.push(
+      otras === 1
+        ? `Se omitió 1 dificultad de otras teclas: ${lista}.`
+        : `Se omitieron ${otras} dificultades de otras teclas: ${lista}.`,
+    );
+  }
+  if (omitidas.otroModo > 0) {
+    avisos.push(
+      omitidas.otroModo === 1
+        ? 'Se omitió 1 dificultad que no es de osu!mania.'
+        : `Se omitieron ${omitidas.otroModo} dificultades que no son de osu!mania.`,
+    );
+  }
+  if (omitidas.invalidas > 0) {
+    avisos.push(
+      omitidas.invalidas === 1
+        ? 'Se omitió 1 dificultad que no se pudo leer.'
+        : `Se omitieron ${omitidas.invalidas} dificultades que no se pudieron leer.`,
+    );
+  }
+  return avisos;
+}
+
+function esAudioVirtual(nombre: string): boolean {
+  return nombre.trim().toLowerCase() === 'virtual';
+}
+
+/** `File.name` si `archivo` es un `File` (o algo con nombre); `undefined` si es un `Blob` suelto. */
+function nombreDeArchivo(archivo: Blob): string | undefined {
+  const nombre = (archivo as { name?: unknown }).name;
+  return typeof nombre === 'string' ? nombre : undefined;
+}
+
+/**
+ * Descomprime un .osz y lo clasifica (T-066): cada dificultad es de mania 4K
+ * valida, de otro modo, de otras teclas o ilegible, y de eso salen los
+ * errores con causa y los avisos de lo omitido. Orden de los errores (el
+ * primero que aplica): `.osk`, extension que no es `.osz`/`.zip` (solo si
+ * `archivo` es un `File` con nombre), tamano, lectura, zip, sin `.osu`, sin
+ * mania, sin 4K, ninguna legible, audio. Asi el mensaje siempre describe lo
+ * mas cercano a jugable.
+ *
+ * Importa TODAS las dificultades de mania 4K validas (T-011). El audio se
+ * resuelve una sola vez por cancion: se prueba el de cada dificultad en
+ * orden y se queda el primero que exista en el zip (T-054). Una dificultad
+ * de audio virtual (`AudioFilename:virtual`) no tiene pista: si hay otras
+ * con audio real se omite con aviso; si todas son virtuales, falla con
+ * `audio-virtual` (el paso 3 de T-066 las va a soportar). El fondo y el
+ * video salen de la primera dificultad que declare uno que exista en el zip
+ * (T-049); un video que el navegador no reproduce se ignora en silencio.
+ *
+ * @throws {ErrorDeImportacion} siempre que no se puede importar.
+ */
+export async function analizarOsz(archivo: Blob): Promise<AnalisisOsz> {
+  const nombreArchivo = nombreDeArchivo(archivo);
+  if (nombreArchivo !== undefined) {
+    const ext = extensionDe(nombreArchivo);
+    if (ext === 'osk') {
+      throw new ErrorDeImportacion(
+        'es-skin',
+        'Es una skin (.osk): se carga desde Ajustes, en Skin.',
+      );
+    }
+    if (ext !== 'osz' && ext !== 'zip') {
+      throw new ErrorDeImportacion(
+        'no-es-osz',
+        'No es un mapa de osu!: Tetra importa archivos .osz.',
+      );
+    }
+  }
+  if (archivo.size > MAX_BYTES_OSZ) {
+    const mb = Math.ceil(archivo.size / (1024 * 1024));
+    throw new ErrorDeImportacion('muy-grande', `El archivo pesa ${mb} MB y el máximo es 300 MB.`);
   }
 
+  let bytes: Uint8Array;
+  try {
+    bytes = new Uint8Array(await archivo.arrayBuffer());
+  } catch (cause) {
+    throw new ErrorDeImportacion(
+      'lectura',
+      'No se pudo leer el archivo. Puede que se haya movido o borrado mientras se importaba.',
+      { cause },
+    );
+  }
+
+  let zip: Unzipped;
+  try {
+    zip = unzipSync(bytes);
+  } catch (cause) {
+    throw new ErrorDeImportacion(
+      'zip-danado',
+      'El archivo está dañado o no es un .osz: no se pudo abrir como zip.',
+      { cause },
+    );
+  }
+
+  const nombresOsu = elegirArchivosOsu(Object.keys(zip));
+  if (nombresOsu.length === 0) {
+    throw new ErrorDeImportacion('sin-osu', 'El .osz no trae ningún mapa (.osu).');
+  }
+
+  const omitidas: Omitidas = { otroModo: 0, otrasTeclas: {}, invalidas: 0 };
+  let hayMania = false;
+  let primerErrorDeParseo: string | undefined;
   const dificultades: Chart[] = [];
   for (const nombreOsu of nombresOsu) {
     const bytesOsu = zip[nombreOsu];
-    if (bytesOsu === undefined) continue; // no deberia pasar (nombreOsu sale de Object.keys(zip)), guard por las dudas
-    const resultado = parseOsu(decodificadorUtf8.decode(bytesOsu));
+    if (bytesOsu === undefined) continue; // no deberia pasar (sale de Object.keys(zip))
+    const texto = decodificadorUtf8.decode(bytesOsu);
+    const cabecera = leerCabeceraOsu(texto);
+    if (cabecera.modo !== 3) {
+      omitidas.otroModo += 1;
+      continue;
+    }
+    hayMania = true;
+    if (cabecera.teclas !== undefined && cabecera.teclas !== 4) {
+      omitidas.otrasTeclas[cabecera.teclas] = (omitidas.otrasTeclas[cabecera.teclas] ?? 0) + 1;
+      continue;
+    }
+    const resultado = parseOsu(texto);
     if (resultado.ok) {
       dificultades.push(resultado.chart);
+    } else {
+      omitidas.invalidas += 1;
+      primerErrorDeParseo ??= resultado.error;
     }
-    // Un .osu que no parsea (por ejemplo una dificultad de otro modo de
-    // juego) se saltea: no hace falta que TODAS las dificultades del .osz
-    // sean mania 4K validas, alcanza con que alguna lo sea (se valida mas
-    // abajo).
   }
 
-  if (dificultades.length === 0) {
-    throw new Error('El .osz no contiene ninguna dificultad de mania 4K válida.');
+  if (!hayMania) {
+    throw new ErrorDeImportacion(
+      'sin-mania',
+      'Ninguna dificultad es de osu!mania: el .osz es de otro modo de juego (osu!, taiko o catch).',
+    );
   }
+  if (dificultades.length === 0) {
+    if (omitidas.invalidas === 0) {
+      throw new ErrorDeImportacion(
+        'sin-4k',
+        `Ninguna dificultad es de 4 teclas: el .osz trae solo mapas de ${listaDeTeclas(omitidas.otrasTeclas)}.`,
+      );
+    }
+    throw new ErrorDeImportacion(
+      'osu-invalido',
+      `Ninguna dificultad de 4 teclas se pudo leer. ${primerErrorDeParseo ?? ''}`.trimEnd(),
+    );
+  }
+
+  const avisos = avisosDeOmitidas(omitidas);
 
   // T-054: el audio es el de la primera dificultad (en orden) cuyo
   // `AudioFilename` exista en el zip. Hay sets reales donde la primera declara
   // un archivo que no vino y las demas si lo traen: no tiene que fallar por eso.
-  const primera = dificultades[0]!;
+  const reales = dificultades.filter((c) => !esAudioVirtual(c.metadata.audioFile));
+  if (reales.length === 0) {
+    throw new ErrorDeImportacion(
+      'audio-virtual',
+      'Este .osz no trae pista de música: usa audio virtual (el sonido sale de muestras por nota) y Tetra todavía no lo soporta.',
+    );
+  }
   let audio: Blob | undefined;
-  for (const chart of dificultades) {
+  for (const chart of reales) {
     const bytesAudio = buscarEnZip(zip, chart.metadata.audioFile);
     if (bytesAudio === undefined) continue;
     audio = new Blob([bytesAudio], { type: mimeDesdeNombre(chart.metadata.audioFile) });
     break;
   }
   if (audio === undefined) {
-    throw new Error(
-      `El .osz no trae el archivo de audio declarado en el .osu ` +
-        `(AudioFilename:${primera.metadata.audioFile}).`,
+    throw new ErrorDeImportacion(
+      'audio-faltante',
+      `Falta el audio: el mapa pide "${reales[0]!.metadata.audioFile}" y el .osz no lo trae.`,
     );
   }
+  if (reales.length < dificultades.length) {
+    // Set mixto: las de audio virtual no tienen pista y no pueden compartir la de las demas.
+    const titulo = dificultades.find((c) => esAudioVirtual(c.metadata.audioFile))!.metadata.title;
+    avisos.push(`Se omitió "${titulo}": usa audio virtual, que Tetra todavía no soporta.`);
+  }
 
-  const resultado: CancionImportada = {
+  const primera = reales[0]!;
+  const cancion: CancionImportada = {
     titulo: primera.metadata.title,
     artista: primera.metadata.artist,
     audio,
-    dificultades,
+    dificultades: reales,
   };
 
-  for (const chart of dificultades) {
+  for (const chart of reales) {
     const nombreFondo = chart.metadata.backgroundFile;
     if (nombreFondo === undefined) continue;
     const bytesFondo = buscarEnZip(zip, nombreFondo);
     if (bytesFondo === undefined) continue;
-    resultado.background = new Blob([bytesFondo], { type: mimeDesdeNombre(nombreFondo) });
+    cancion.background = new Blob([bytesFondo], { type: mimeDesdeNombre(nombreFondo) });
     break;
   }
 
-  for (const chart of dificultades) {
+  for (const chart of reales) {
     const nombreVideo = chart.metadata.videoFile;
     if (nombreVideo === undefined || !esVideoReproducible(nombreVideo)) continue;
     const bytesVideo = buscarEnZip(zip, nombreVideo);
     if (bytesVideo === undefined) continue;
-    resultado.video = new Blob([bytesVideo], { type: mimeDesdeNombre(nombreVideo) });
-    resultado.videoOffset = chart.metadata.videoOffset ?? 0;
+    cancion.video = new Blob([bytesVideo], { type: mimeDesdeNombre(nombreVideo) });
+    cancion.videoOffset = chart.metadata.videoOffset ?? 0;
     break;
   }
 
-  return resultado;
+  return { cancion, omitidas, avisos };
+}
+
+/**
+ * Como `analizarOsz` pero devolviendo solo la cancion (T-011). Lanza
+ * `ErrorDeImportacion` si el .osz no se puede importar.
+ */
+export async function extraerCancionDeOsz(archivo: Blob): Promise<CancionImportada> {
+  return (await analizarOsz(archivo)).cancion;
 }

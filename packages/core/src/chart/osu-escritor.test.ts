@@ -101,3 +101,23 @@ describe('escribirOsu: Source y Tags', () => {
     expect(texto).not.toContain('Tags:tetra');
   });
 });
+
+describe('escribirOsu: BeatmapID y BeatmapSetID (T-066)', () => {
+  it('los escribe si existen y el viaje de ida y vuelta los conserva', () => {
+    const chart = chartBase();
+    chart.metadata.beatmapId = 777;
+    chart.metadata.beatmapSetId = 332673;
+    const texto = escribirOsu(chart);
+    expect(texto).toContain('BeatmapID:777');
+    expect(texto).toContain('BeatmapSetID:332673');
+    const r = parseOsu(texto);
+    expect(r.ok && r.chart.metadata.beatmapId).toBe(777);
+    expect(r.ok && r.chart.metadata.beatmapSetId).toBe(332673);
+  });
+
+  it('sin ellos no escribe las lineas', () => {
+    const texto = escribirOsu(chartBase());
+    expect(texto).not.toContain('BeatmapID');
+    expect(texto).not.toContain('BeatmapSetID');
+  });
+});

@@ -12,9 +12,15 @@
 //    elegir un indice al azar. Todas puras (reciben datos, devuelven
 //    datos) para poder testearlas sin @tetra/storage ni IndexedDB.
 
-import type { CancionGuardada } from '@tetra/storage';
+import { ErrorDeImportacion } from '@tetra/storage';
+import type {
+  CancionGuardada,
+  CancionImportadaResumen,
+  ResultadoImportacion,
+} from '@tetra/storage';
 import type { Chart, Ms } from '@tetra/core';
 import { isHold } from '@tetra/core';
+import { mensajeDeErrorDeCarga } from './cargador-logica.js';
 
 // ---------------------------------------------------------------------------
 // Datos de una dificultad (Chart individual)
@@ -169,10 +175,86 @@ export function ordenarDificultades(charts: readonly Chart[]): Chart[] {
     .map(({ chart }) => chart);
 }
 
-/** T-054: el mensaje corto de una importacion fallida ("No se pudo importar mapa.osz"); el detalle tecnico va aparte, en el `title`. */
-export function textoDeImportacionFallida(nombreArchivo: string): string {
-  const nombre = nombreArchivo.trim();
-  return nombre === '' ? 'No se pudo importar' : `No se pudo importar ${nombre}`;
+/** Largo maximo del nombre de archivo en el mensaje de una importacion fallida (T-066). */
+const MAX_NOMBRE_EN_MENSAJE = 60;
+
+/**
+ * T-066: el mensaje de una importacion fallida, con la causa a la vista:
+ * `No se pudo importar <nombre>. <mensaje>`. El nombre va entero si tiene
+ * hasta 60 caracteres; si es mas largo, sus primeros 59 mas `…`. Con un
+ * `ErrorDeImportacion` el mensaje es el suyo (ya viene redactado); con
+ * cualquier otro error, el de `mensajeDeErrorDeCarga`. Sin nombre:
+ * `No se pudo importar. <mensaje>`.
+ */
+export function textoDeImportacionFallida(nombreArchivo: string, error: unknown): string {
+  const mensaje =
+    error instanceof ErrorDeImportacion ? error.message : mensajeDeErrorDeCarga(error);
+  const limpio = nombreArchivo.trim();
+  const nombre =
+    limpio.length > MAX_NOMBRE_EN_MENSAJE
+      ? `${limpio.slice(0, MAX_NOMBRE_EN_MENSAJE - 1)}…`
+      : limpio;
+  return nombre === ''
+    ? `No se pudo importar. ${mensaje}`
+    : `No se pudo importar ${nombre}. ${mensaje}`;
+}
+
+/** `A`, `A y B`, `A, B y C`. */
+function unirConY(partes: readonly string[]): string {
+  if (partes.length <= 1) return partes.join('');
+  return `${partes.slice(0, -1).join(', ')} y ${partes[partes.length - 1]!}`;
+}
+
+function pluralizar(n: number, singular: string, plural: string): string {
+  return n === 1 ? singular : plural;
+}
+
+/** `<cambios>` de una cancion `actualizada` (T-066). */
+function cambiosDe(cancion: CancionImportadaResumen): string {
+  const partes: string[] = [];
+  if (cancion.dificultadesAgregadas > 0) {
+    const n = cancion.dificultadesAgregadas;
+    partes.push(
+      n === 1 ? 'se agregó 1 dificultad' : `se agregaron ${n} dificultades`,
+    );
+  }
+  if (cancion.dificultadesActualizadas > 0) {
+    const n = cancion.dificultadesActualizadas;
+    partes.push(
+      n === 1 ? 'se actualizó 1 dificultad' : `se actualizaron ${n} dificultades`,
+    );
+  }
+  if (cancion.archivosCompletados) partes.push('se completó el fondo o el video');
+  return unirConY(partes);
+}
+
+/**
+ * T-066: el texto del banner despues de importar, o `null` si no hay nada que
+ * decir (una cancion nueva y sin avisos: se enfoca y listo). Primero la frase
+ * principal y despues los avisos, separados por un espacio.
+ */
+export function textoDeImportacion(resultado: ResultadoImportacion): string | null {
+  const { canciones, avisos } = resultado;
+  let principal: string | null;
+  if (canciones.length === 1) {
+    const c = canciones[0]!;
+    if (c.estado === 'nueva') principal = avisos.length > 0 ? `"${c.titulo}" importada.` : null;
+    else if (c.estado === 'ya-estaba') principal = `"${c.titulo}" ya estaba en la biblioteca.`;
+    else principal = `"${c.titulo}" ya estaba en la biblioteca: ${cambiosDe(c)}.`;
+  } else {
+    const nuevas = canciones.filter((c) => c.estado === 'nueva').length;
+    const estaban = canciones.filter((c) => c.estado === 'ya-estaba').length;
+    const actualizadas = canciones.filter((c) => c.estado === 'actualizada').length;
+    const partes: string[] = [];
+    if (nuevas > 0) partes.push(`${nuevas} ${pluralizar(nuevas, 'canción nueva', 'canciones nuevas')}`);
+    if (estaban > 0) partes.push(`${estaban} ${pluralizar(estaban, 'ya estaba', 'ya estaban')}`);
+    if (actualizadas > 0) {
+      partes.push(`${actualizadas} ${pluralizar(actualizadas, 'actualizada', 'actualizadas')}`);
+    }
+    principal = `${resultado.titulo}: ${unirConY(partes)}.`;
+  }
+  if (principal === null) return null;
+  return [principal, ...avisos].join(' ');
 }
 
 /** La misma cancion con sus dificultades ya ordenadas (ver `ordenarDificultades`). Los Chart son los mismos objetos: solo cambia el orden. */

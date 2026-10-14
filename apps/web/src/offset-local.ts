@@ -7,10 +7,13 @@
 //
 // Clave `tetra:offset-local:<songId>`. Ojo: `borrarCancion` (@tetra/storage)
 // vive en IndexedDB y no sabe de localStorage, asi que no limpia esta clave.
-// No hace falta: es un entero chico, y si el id vuelve a existir (reimportar
-// el mismo .osz da el mismo id) el ajuste de esa cancion vuelve con el.
+// No hace falta: es un entero chico. Desde T-066 reimportar el mismo .osz
+// no crea otra cancion: devuelve el id de la que ya estaba, asi que el
+// ajuste sigue en su lugar. Si borraste la cancion y la reimportas, tiene un
+// id nuevo y el ajuste hay que volver a ponerlo.
 
 import type { Ms } from '@tetra/core';
+import type { FusionDeDuplicados } from '@tetra/storage';
 
 const PREFIJO_CLAVE = 'tetra:offset-local:';
 
@@ -53,6 +56,31 @@ export function guardarOffsetLocal(
   if (valor === 0) storage.removeItem(claveDe(songId));
   else storage.setItem(claveDe(songId), String(valor));
   return valor;
+}
+
+/**
+ * T-066 (D4): tras fusionar canciones duplicadas, el offset de las absorbidas
+ * pasa a la sobreviviente si esta no tiene (0): toma el primero distinto de 0
+ * de las absorbidas, de la importacion mas nueva a la mas vieja (la que
+ * probablemente se estaba jugando). Despues borra las claves de las
+ * absorbidas. Las fusiones ya traen las absorbidas en ese orden.
+ */
+export function migrarOffsetsLocales(
+  fusiones: readonly FusionDeDuplicados[],
+  storage: Storage = localStorage,
+): void {
+  for (const { sobreviviente, absorbidas } of fusiones) {
+    if (leerOffsetLocal(sobreviviente, storage) === 0) {
+      for (const id of absorbidas) {
+        const valor = leerOffsetLocal(id, storage);
+        if (valor !== 0) {
+          guardarOffsetLocal(sobreviviente, valor, storage);
+          break;
+        }
+      }
+    }
+    for (const id of absorbidas) storage.removeItem(claveDe(id));
+  }
 }
 
 /** Texto del offset con signo para mostrar: "+3 ms", "-12 ms", "0 ms". */

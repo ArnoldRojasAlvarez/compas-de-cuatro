@@ -103,6 +103,8 @@ export function escribirOsu(chart: Chart): string {
     `Version:${limpiar(m.difficultyName)}`,
     `Source:${limpiar(m.source ?? '')}`,
     `Tags:${limpiar(m.tags ?? '') === '' ? 'tetra' : limpiar(m.tags ?? '')}`,
+    ...(m.beatmapId !== undefined ? [`BeatmapID:${m.beatmapId}`] : []),
+    ...(m.beatmapSetId !== undefined ? [`BeatmapSetID:${m.beatmapSetId}`] : []),
     '',
     '[Difficulty]',
     `HPDrainRate:${numero(chart.hpDrain)}`,

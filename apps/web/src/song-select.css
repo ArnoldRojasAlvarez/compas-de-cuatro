@@ -595,12 +595,25 @@
   backdrop-filter: none;
 }
 
+/* T-066: el mensaje con la causa cabe hasta en tres lineas (antes cortaba con
+   puntos suspensivos y la causa solo se veia en el tooltip). */
 .tetra-song-select-error-texto {
   flex: 1;
   min-width: 0;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
+  padding-block: var(--espacio-2);
+  line-height: 1.35;
+}
+
+/* T-066: tono neutro para un aviso que no es un fallo ("ya estaba en la biblioteca"). */
+.tetra-song-select-error.tetra-song-select-error-aviso {
+  border-color: var(--linea);
+  color: var(--texto);
 }
 
 /* ---------------------------------------------------------------------- */

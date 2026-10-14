@@ -14,10 +14,10 @@ import {
   listarCanciones,
 } from './index.js';
 
-function chart(nombre: string, tiempoNota = 500): Chart {
+function chart(nombre: string, tiempoNota = 500, titulo = 'Cancion'): Chart {
   return {
     metadata: {
-      title: 'Cancion',
+      title: titulo,
       artist: 'Arnold',
       creator: 'Arnold',
       difficultyName: nombre,
@@ -57,14 +57,19 @@ describe('ponerDificultad y quitarDificultad (puras)', () => {
   });
 });
 
+// T-066: reimportar el mismo contenido ya no crea otra cancion, asi que cada
+// cancion de estos tests lleva un titulo distinto.
+let contadorDeCanciones = 0;
+
 async function crearCancion(nombres: string[]): Promise<string> {
+  const titulo = `Cancion ${++contadorDeCanciones}`;
   return guardarCancionCreada({
-    titulo: 'Cancion',
+    titulo,
     artista: 'Arnold',
     creador: 'Arnold',
     audioNombre: 'audio.mp3',
     audio: new Uint8Array([1, 2, 3]),
-    dificultades: nombres.map((n) => ({ version: n, texto: escribirOsu(chart(n)) })),
+    dificultades: nombres.map((n) => ({ version: n, texto: escribirOsu(chart(n, 500, titulo)) })),
   });
 }
 

@@ -144,7 +144,7 @@ describe('importarOsz + listarCanciones', () => {
     expect(canciones[0]!.dificultades[0]!.metadata.difficultyName).toBe('Normal');
   });
 
-  it('dos importaciones seguidas quedan como dos canciones con ids distintos', async () => {
+  it('importar dos veces el mismo .osz deja una sola cancion (T-066)', async () => {
     const osz = armarOsz({
       'mapa.osu': new TextEncoder().encode(OSU_DE_PRUEBA),
       'audio.wav': new Uint8Array([1]),
@@ -152,12 +152,11 @@ describe('importarOsz + listarCanciones', () => {
 
     const id1 = await importarOsz(osz);
     const id2 = await importarOsz(osz);
-    expect(id1).not.toBe(id2);
+    expect(id2).toBe(id1);
 
     const canciones = await listarCanciones();
-    expect(canciones).toHaveLength(2);
-    const ids = canciones.map((c) => c.id).sort();
-    expect(ids).toEqual([id1, id2].sort());
+    expect(canciones).toHaveLength(1);
+    expect(canciones[0]!.id).toBe(id1);
   });
 
   it('listarCanciones con la base vacia devuelve un array vacio', async () => {
@@ -414,7 +413,13 @@ describe('importarOsz: fondo, video e importadaEn (T-049)', () => {
 describe('borrarCancion', () => {
   it('la saca de listarCanciones y deja las demas', async () => {
     const id1 = await importarOsz(oszCompleto());
-    const id2 = await importarOsz(oszCompleto());
+    const id2 = await importarOsz(
+      armarOsz({
+        'mapa.osu': new TextEncoder().encode(OSU_DE_PRUEBA),
+        'audio.wav': new Uint8Array([1]),
+      }),
+    );
+    expect(id2).not.toBe(id1);
     await borrarCancion(id1);
     const ids = (await listarCanciones()).map((c) => c.id);
     expect(ids).toEqual([id2]);
@@ -432,6 +437,9 @@ describe('exportarCancion', () => {
 
     const exportado = await exportarCancion(id);
     expect(exportado.type).toBe('application/zip');
+    // T-066: sin borrar antes, reimportarlo da la misma cancion (ya-estaba).
+    expect(await importarOsz(exportado)).toBe(id);
+    await borrarCancion(id);
     const id2 = await importarOsz(exportado);
     expect(id2).not.toBe(id);
 

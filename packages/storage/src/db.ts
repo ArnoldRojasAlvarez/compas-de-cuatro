@@ -35,6 +35,7 @@ import type {
   ResumenDeReciente,
 } from './records-validacion.js';
 import type { ImagenesDeSkin } from './osk.js';
+import type { PlanDeFusion } from './duplicados.js';
 
 const NOMBRE_BASE = 'tetra-mapas';
 // T-011 agrega la tienda 'canciones' (una cancion con N dificultades) a la
@@ -204,6 +205,33 @@ export async function guardarCancion(cancion: CancionGuardada): Promise<void> {
       tx.oncomplete = () => resolve();
       tx.onerror = () => reject(tx.error ?? new Error('No se pudo guardar la canción.'));
       tx.onabort = () => reject(tx.error ?? new Error('Se abortó el guardado de la canción.'));
+    });
+  } finally {
+    db.close();
+  }
+}
+
+/**
+ * T-066 (D4): aplica las fusiones de duplicados en UNA transaccion sobre
+ * 'canciones': `put` de cada sobreviviente ya fusionada y `delete` de cada
+ * absorbida. A proposito NO toca records, replays ni recientes: todas las
+ * claves `hashMapa` de las absorbidas estan en la sobreviviente, asi que
+ * siguen valiendo (por eso no se usa `borrarCancionDeLaBase`).
+ */
+export async function aplicarFusionesEnLaBase(planes: readonly PlanDeFusion[]): Promise<void> {
+  if (planes.length === 0) return;
+  const db = await abrirBaseDeDatos();
+  try {
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction(NOMBRE_TIENDA_CANCIONES, 'readwrite');
+      const canciones = tx.objectStore(NOMBRE_TIENDA_CANCIONES);
+      for (const plan of planes) {
+        canciones.put(plan.resultado);
+        for (const id of plan.absorbidas) canciones.delete(id);
+      }
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error ?? new Error('No se pudieron fusionar las canciones.'));
+      tx.onabort = () => reject(tx.error ?? new Error('Se abortó la fusión de las canciones.'));
     });
   } finally {
     db.close();

@@ -8,6 +8,7 @@ import {
   formatearOffsetLocal,
   guardarOffsetLocal,
   leerOffsetLocal,
+  migrarOffsetsLocales,
 } from './offset-local.js';
 
 function crearStorageFalso(inicial: Record<string, string> = {}): Storage {
@@ -130,5 +131,45 @@ describe('formatearOffsetLocal', () => {
     expect(formatearOffsetLocal(3)).toBe('+3 ms');
     expect(formatearOffsetLocal(-12)).toBe('-12 ms');
     expect(formatearOffsetLocal(0)).toBe('0 ms');
+  });
+});
+
+describe('migrarOffsetsLocales (T-066)', () => {
+  const k = (id: string): string => `tetra:offset-local:${id}`;
+
+  it('respeta el offset de la sobreviviente y borra las claves de las absorbidas', () => {
+    const storage = crearStorageFalso({ [k('s')]: '12', [k('a')]: '-30', [k('b')]: '5' });
+    migrarOffsetsLocales([{ sobreviviente: 's', absorbidas: ['a', 'b'] }], storage);
+    expect(leerOffsetLocal('s', storage)).toBe(12);
+    expect(storage.getItem(k('a'))).toBeNull();
+    expect(storage.getItem(k('b'))).toBeNull();
+  });
+
+  it('si la sobreviviente tiene 0, toma el primero distinto de 0 de la absorbida mas nueva', () => {
+    // Las absorbidas vienen de la importacion mas nueva a la mas vieja.
+    const storage = crearStorageFalso({
+      [k('masNueva')]: '0',
+      [k('media')]: '-7',
+      [k('vieja')]: '9',
+    });
+    migrarOffsetsLocales(
+      [{ sobreviviente: 's', absorbidas: ['masNueva', 'media', 'vieja'] }],
+      storage,
+    );
+    expect(leerOffsetLocal('s', storage)).toBe(-7);
+    expect(storage.getItem(k('media'))).toBeNull();
+    expect(storage.getItem(k('vieja'))).toBeNull();
+  });
+
+  it('sin offsets en ningun lado no crea claves', () => {
+    const storage = crearStorageFalso();
+    migrarOffsetsLocales([{ sobreviviente: 's', absorbidas: ['a'] }], storage);
+    expect(storage.getItem(k('s'))).toBeNull();
+  });
+
+  it('sin fusiones no toca nada', () => {
+    const storage = crearStorageFalso({ [k('a')]: '4' });
+    migrarOffsetsLocales([], storage);
+    expect(leerOffsetLocal('a', storage)).toBe(4);
   });
 });

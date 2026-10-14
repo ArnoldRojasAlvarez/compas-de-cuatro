@@ -277,6 +277,13 @@ function parseHitObjects(lineas: readonly string[]): Note[] {
   return notas;
 }
 
+/** Entero mayor que 0, o `undefined` (los no publicados traen 0 o -1: T-066). */
+function enteroPositivo(crudo: string | undefined): number | undefined {
+  if (crudo === undefined || !/^\d+$/.test(crudo.trim())) return undefined;
+  const n = Number(crudo.trim());
+  return n > 0 && Number.isSafeInteger(n) ? n : undefined;
+}
+
 /** Parsea el texto de un archivo .osu de modo mania con 4 columnas. */
 export function parseOsu(text: string): ParseResult {
   const secciones = dividirSecciones(text);
@@ -359,6 +366,8 @@ export function parseOsu(text: string): ParseResult {
   const eventos = parseEventos(secciones.eventLines);
   const source = secciones.metadata.get('Source');
   const tags = secciones.metadata.get('Tags');
+  const beatmapId = enteroPositivo(secciones.metadata.get('BeatmapID'));
+  const beatmapSetId = enteroPositivo(secciones.metadata.get('BeatmapSetID'));
 
   const chart: Chart = {
     metadata: {
@@ -376,6 +385,8 @@ export function parseOsu(text: string): ParseResult {
       }),
       ...(source !== undefined && source !== '' && { source }),
       ...(tags !== undefined && tags !== '' && { tags }),
+      ...(beatmapId !== undefined && { beatmapId }),
+      ...(beatmapSetId !== undefined && { beatmapSetId }),
     },
     overallDifficulty,
     hpDrain,
