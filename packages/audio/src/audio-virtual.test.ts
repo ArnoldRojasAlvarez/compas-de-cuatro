@@ -204,4 +204,81 @@ describe('renderizarAudioVirtual', () => {
     expect(buffer.getChannelData(0)[4]).toBeCloseTo(0.5, 6);
     expect(buffer.getChannelData(1)[4]).toBeCloseTo(-0.5, 6);
   });
+
+  it('descarta la cola casi muda de una muestra (menos de unos -70 dBFS) sin tocar lo audible', async () => {
+    const { ctx } = crearContextoFalso();
+    (ctx.decodeAudioData as unknown) = vi.fn(async () =>
+      bufferFalso([Float32Array.of(0.5, 0.25, 0.0001, 0.0001)]),
+    );
+    const chart = chartCon([{ tiempo: 2, archivo: 'a.ogg', volumen: 100 }]);
+    const { buffer } = await renderizarAudioVirtual({
+      chart,
+      leerMuestra: lector({ 'a.ogg': [1] }),
+      ctx,
+    });
+    const izq = buffer.getChannelData(0);
+    expect(izq[2]).toBeCloseTo(0.5, 6);
+    expect(izq[3]).toBeCloseTo(0.25, 6);
+    expect(izq[4]).toBe(0);
+    expect(izq[5]).toBe(0);
+  });
+
+  it('una muestra enteramente muda no es faltante: simplemente no aporta', async () => {
+    const { ctx } = crearContextoFalso();
+    (ctx.decodeAudioData as unknown) = vi.fn(async () => bufferFalso([new Float32Array(10)]));
+    const chart = chartCon([{ tiempo: 2, archivo: 'a.ogg', volumen: 100 }]);
+    const { faltantes } = await renderizarAudioVirtual({
+      chart,
+      leerMuestra: lector({ 'a.ogg': [1] }),
+      ctx,
+    });
+    expect(faltantes).toEqual([]);
+  });
+
+  it('cede el hilo tambien dentro de una muestra con muchos eventos', async () => {
+    const { ctx } = crearContextoFalso();
+    // 100 000 frames y 2 canales: 20 eventos por tanda, 100 eventos = 5 tandas.
+    (ctx.decodeAudioData as unknown) = vi.fn(async () =>
+      bufferFalso([new Float32Array(100_000).fill(0.001)]),
+    );
+    const eventos = Array.from({ length: 100 }, (_, i) => ({
+      tiempo: i * 10,
+      archivo: 'larga.ogg',
+      volumen: 100,
+    }));
+    const ceder = vi.fn(async () => undefined);
+    await renderizarAudioVirtual({
+      chart: chartCon(eventos),
+      leerMuestra: lector({ 'larga.ogg': [1] }),
+      ctx,
+      ceder,
+    });
+    expect(ceder.mock.calls.length).toBeGreaterThanOrEqual(5);
+  });
+
+  it('lee y decodifica las muestras siguientes antes de terminar de mezclar la actual', async () => {
+    const { ctx } = crearContextoFalso();
+    const pedidas: string[] = [];
+    const leerMuestra = vi.fn(async (archivo: string) => {
+      pedidas.push(archivo);
+      return Uint8Array.from([10]).buffer;
+    });
+    let cedidas = 0;
+    const eventos = ['a', 'b', 'c', 'd'].map((n, i) => ({
+      tiempo: i,
+      archivo: `${n}.ogg`,
+      volumen: 100,
+    }));
+    await renderizarAudioVirtual({
+      chart: chartCon(eventos),
+      leerMuestra,
+      ctx,
+      ceder: async () => {
+        cedidas++;
+        // Al ceder tras la primera muestra, las dos siguientes ya fueron pedidas.
+        if (cedidas === 1) expect(pedidas.slice(0, 3)).toEqual(['a.ogg', 'b.ogg', 'c.ogg']);
+      },
+    });
+    expect(pedidas).toEqual(['a.ogg', 'b.ogg', 'c.ogg', 'd.ogg']);
+  });
 });
