@@ -18,7 +18,7 @@
 
 import { unzipSync, type Unzipped } from 'fflate';
 import type { Chart, Ms } from '@tetra/core';
-import { leerCabeceraOsu, parseOsu } from '@tetra/core';
+import { agruparEnCanciones, leerCabeceraOsu, parseOsu } from '@tetra/core';
 import { ErrorDeImportacion } from './errores.js';
 
 const decodificadorUtf8 = new TextDecoder('utf-8');
@@ -177,6 +177,8 @@ export async function extraerMapaDeOsz(archivo: Blob): Promise<MapaImportado> {
 export interface CancionImportada {
   titulo: string;
   artista: string;
+  /** Title del set, solo si `titulo` es una pieza del set (T-066, D5). */
+  conjunto?: string;
   audio: Blob;
   background?: Blob;
   /** Solo si el .osz trae un video reproducible (mp4, m4v, webm) que alguna dificultad declara. */
@@ -197,9 +199,16 @@ export interface Omitidas {
   invalidas: number;
 }
 
-/** Resultado de analizar un .osz: la cancion lista para guardar, lo omitido y los avisos ya redactados. */
+/**
+ * Resultado de analizar un .osz: las canciones listas para guardar (una por
+ * grupo, en el orden de `agruparEnCanciones`), el Title del set, lo omitido y
+ * los avisos ya redactados.
+ */
 export interface AnalisisOsz {
-  cancion: CancionImportada;
+  /** Nunca vacio: si no queda ninguna cancion, `analizarOsz` lanza. */
+  canciones: CancionImportada[];
+  /** Title del set (el de la primera dificultad valida). */
+  titulo: string;
   omitidas: Omitidas;
   avisos: string[];
 }
@@ -270,14 +279,17 @@ function nombreDeArchivo(archivo: Blob): string | undefined {
  * mania, sin 4K, ninguna legible, audio. Asi el mensaje siempre describe lo
  * mas cercano a jugable.
  *
- * Importa TODAS las dificultades de mania 4K validas (T-011). El audio se
- * resuelve una sola vez por cancion: se prueba el de cada dificultad en
- * orden y se queda el primero que exista en el zip (T-054). Una dificultad
- * de audio virtual (`AudioFilename:virtual`) no tiene pista: si hay otras
- * con audio real se omite con aviso; si todas son virtuales, falla con
- * `audio-virtual` (el paso 3 de T-066 las va a soportar). El fondo y el
- * video salen de la primera dificultad que declare uno que exista en el zip
- * (T-049); un video que el navegador no reproduce se ignora en silencio.
+ * Importa TODAS las dificultades de mania 4K validas (T-011) y las agrupa en
+ * canciones (T-066, D5: `agruparEnCanciones`; un .osz comun da una sola). El
+ * audio se resuelve una vez por cancion: se prueba el de cada dificultad del
+ * grupo en orden y se queda el primero que exista en el zip (T-054). Un grupo
+ * cuyo audio falta se omite con aviso si otro grupo entra; si no entra
+ * ninguno, falla con `audio-faltante`. Un grupo de audio virtual
+ * (`AudioFilename:virtual`) no tiene pista: se omite con aviso, y si todos
+ * son virtuales falla con `audio-virtual` (el paso 3 de T-066 los va a
+ * soportar). El fondo y el video de cada cancion salen de la primera
+ * dificultad de su grupo que declare uno que exista en el zip (T-049); un
+ * video que el navegador no reproduce se ignora en silencio.
  *
  * @throws {ErrorDeImportacion} siempre que no se puede importar.
  */
@@ -378,69 +390,89 @@ export async function analizarOsz(archivo: Blob): Promise<AnalisisOsz> {
 
   const avisos = avisosDeOmitidas(omitidas);
 
-  // T-054: el audio es el de la primera dificultad (en orden) cuyo
-  // `AudioFilename` exista en el zip. Hay sets reales donde la primera declara
-  // un archivo que no vino y las demas si lo traen: no tiene que fallar por eso.
-  const reales = dificultades.filter((c) => !esAudioVirtual(c.metadata.audioFile));
-  if (reales.length === 0) {
-    throw new ErrorDeImportacion(
-      'audio-virtual',
-      'Este .osz no trae pista de música: usa audio virtual (el sonido sale de muestras por nota) y Tetra todavía no lo soporta.',
-    );
+  // T-066 (D5): un .osz puede dar varias canciones. Cada grupo se resuelve por
+  // separado: su audio, su fondo y su video salen de sus propias dificultades.
+  const grupos = agruparEnCanciones(dificultades);
+  const canciones: CancionImportada[] = [];
+  let hayGruposReales = false;
+  let primerAudioFaltante: string | undefined;
+  for (const grupo of grupos) {
+    const charts = grupo.indices.map((i) => dificultades[i]!);
+
+    if (esAudioVirtual(charts[0]!.metadata.audioFile)) {
+      // Paso 3 de T-066: el audio virtual todavia no se soporta.
+      avisos.push(`Se omitió "${grupo.titulo}": usa audio virtual, que Tetra todavía no soporta.`);
+      continue;
+    }
+    hayGruposReales = true;
+
+    // T-054: el audio es el de la primera dificultad (en orden) del grupo cuyo
+    // `AudioFilename` exista en el zip (dentro de un grupo declaran la misma pista,
+    // pero puede venir escrita distinto).
+    let audio: Blob | undefined;
+    for (const chart of charts) {
+      const bytesAudio = buscarEnZip(zip, chart.metadata.audioFile);
+      if (bytesAudio === undefined) continue;
+      audio = new Blob([bytesAudio], { type: mimeDesdeNombre(chart.metadata.audioFile) });
+      break;
+    }
+    if (audio === undefined) {
+      const pedido = charts[0]!.metadata.audioFile;
+      primerAudioFaltante ??= pedido;
+      avisos.push(`Se omitió "${grupo.titulo}": falta el audio "${pedido}".`);
+      continue;
+    }
+
+    const cancion: CancionImportada = {
+      titulo: grupo.titulo,
+      artista: grupo.artista,
+      ...(grupo.conjunto !== undefined && { conjunto: grupo.conjunto }),
+      audio,
+      dificultades: charts,
+    };
+
+    for (const chart of charts) {
+      const nombreFondo = chart.metadata.backgroundFile;
+      if (nombreFondo === undefined) continue;
+      const bytesFondo = buscarEnZip(zip, nombreFondo);
+      if (bytesFondo === undefined) continue;
+      cancion.background = new Blob([bytesFondo], { type: mimeDesdeNombre(nombreFondo) });
+      break;
+    }
+
+    for (const chart of charts) {
+      const nombreVideo = chart.metadata.videoFile;
+      if (nombreVideo === undefined || !esVideoReproducible(nombreVideo)) continue;
+      const bytesVideo = buscarEnZip(zip, nombreVideo);
+      if (bytesVideo === undefined) continue;
+      cancion.video = new Blob([bytesVideo], { type: mimeDesdeNombre(nombreVideo) });
+      cancion.videoOffset = chart.metadata.videoOffset ?? 0;
+      break;
+    }
+
+    canciones.push(cancion);
   }
-  let audio: Blob | undefined;
-  for (const chart of reales) {
-    const bytesAudio = buscarEnZip(zip, chart.metadata.audioFile);
-    if (bytesAudio === undefined) continue;
-    audio = new Blob([bytesAudio], { type: mimeDesdeNombre(chart.metadata.audioFile) });
-    break;
-  }
-  if (audio === undefined) {
+
+  if (canciones.length === 0) {
+    if (!hayGruposReales) {
+      throw new ErrorDeImportacion(
+        'audio-virtual',
+        'Este .osz no trae pista de música: usa audio virtual (el sonido sale de muestras por nota) y Tetra todavía no lo soporta.',
+      );
+    }
     throw new ErrorDeImportacion(
       'audio-faltante',
-      `Falta el audio: el mapa pide "${reales[0]!.metadata.audioFile}" y el .osz no lo trae.`,
+      `Falta el audio: el mapa pide "${primerAudioFaltante ?? ''}" y el .osz no lo trae.`,
     );
   }
-  if (reales.length < dificultades.length) {
-    // Set mixto: las de audio virtual no tienen pista y no pueden compartir la de las demas.
-    const titulo = dificultades.find((c) => esAudioVirtual(c.metadata.audioFile))!.metadata.title;
-    avisos.push(`Se omitió "${titulo}": usa audio virtual, que Tetra todavía no soporta.`);
-  }
 
-  const primera = reales[0]!;
-  const cancion: CancionImportada = {
-    titulo: primera.metadata.title,
-    artista: primera.metadata.artist,
-    audio,
-    dificultades: reales,
-  };
-
-  for (const chart of reales) {
-    const nombreFondo = chart.metadata.backgroundFile;
-    if (nombreFondo === undefined) continue;
-    const bytesFondo = buscarEnZip(zip, nombreFondo);
-    if (bytesFondo === undefined) continue;
-    cancion.background = new Blob([bytesFondo], { type: mimeDesdeNombre(nombreFondo) });
-    break;
-  }
-
-  for (const chart of reales) {
-    const nombreVideo = chart.metadata.videoFile;
-    if (nombreVideo === undefined || !esVideoReproducible(nombreVideo)) continue;
-    const bytesVideo = buscarEnZip(zip, nombreVideo);
-    if (bytesVideo === undefined) continue;
-    cancion.video = new Blob([bytesVideo], { type: mimeDesdeNombre(nombreVideo) });
-    cancion.videoOffset = chart.metadata.videoOffset ?? 0;
-    break;
-  }
-
-  return { cancion, omitidas, avisos };
+  return { canciones, titulo: dificultades[0]!.metadata.title, omitidas, avisos };
 }
 
 /**
- * Como `analizarOsz` pero devolviendo solo la cancion (T-011). Lanza
+ * Como `analizarOsz` pero devolviendo solo la primera cancion (T-011). Lanza
  * `ErrorDeImportacion` si el .osz no se puede importar.
  */
 export async function extraerCancionDeOsz(archivo: Blob): Promise<CancionImportada> {
-  return (await analizarOsz(archivo)).cancion;
+  return (await analizarOsz(archivo)).canciones[0]!;
 }

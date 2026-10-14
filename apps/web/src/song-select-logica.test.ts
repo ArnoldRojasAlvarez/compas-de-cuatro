@@ -247,6 +247,16 @@ describe('filtrarCanciones', () => {
     expect(resultado.map((c) => c.id)).toEqual(['1']);
   });
 
+  it('filtra por conjunto (T-066 paso 2): buscar el set encuentra todas sus piezas', () => {
+    const piezas = [
+      cancion({ id: 'c', titulo: 'Canon', artista: 'Collection', conjunto: 'Piano Beatmap Set' }),
+      cancion({ id: 'l', titulo: 'La Campanella', artista: 'Collection', conjunto: 'Piano Beatmap Set' }),
+      cancion({ id: 'o', titulo: 'Otra', artista: 'xi' }),
+    ];
+    expect(filtrarCanciones(piezas, 'PIANO').map((c) => c.id)).toEqual(['c', 'l']);
+    expect(filtrarCanciones(piezas, 'beatmap set').map((c) => c.id)).toEqual(['c', 'l']);
+  });
+
   it('filtra por artista tambien, no solo por titulo', () => {
     // Si la implementacion solo mirara el titulo, esto daria 0 resultados.
     const resultado = filtrarCanciones(lista, 'yuyoyuppe');

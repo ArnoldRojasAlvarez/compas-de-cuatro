@@ -358,7 +358,9 @@ export function filtrarPorRangoDeEstrellas(
 }
 
 /**
- * Filtra por titulo o artista, sin distinguir mayusculas/minusculas. La
+ * Filtra por titulo, artista o conjunto (el Title del set, T-066 paso 2: buscar
+ * "piano" encuentra todas las piezas de "Piano Beatmap Set"), sin distinguir
+ * mayusculas/minusculas. La
  * consulta vacia (o solo espacios) devuelve la lista completa, sin filtrar:
  * es el estado inicial del buscador, no "ninguna coincidencia".
  */
@@ -371,7 +373,8 @@ export function filtrarCanciones(
   return canciones.filter(
     (cancion) =>
       cancion.titulo.toLowerCase().includes(normalizada) ||
-      cancion.artista.toLowerCase().includes(normalizada),
+      cancion.artista.toLowerCase().includes(normalizada) ||
+      (cancion.conjunto?.toLowerCase().includes(normalizada) ?? false),
   );
 }
 

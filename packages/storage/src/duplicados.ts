@@ -201,8 +201,8 @@ function crearUnion(n: number): { buscar: (i: number) => number; unir: (a: numbe
  * - Se le suman las dificultades de las absorbidas (de la mas vieja a la mas
  *   nueva) que no comparten identidad con las que ya tiene, con la regla de
  *   nombres de D3.
- * - Fondo y video (con su offset): los de la sobreviviente; si no tiene, los
- *   de la primera absorbida que los tenga.
+ * - Fondo, video (con su offset) y `conjunto` (T-066, paso 2): los de la
+ *   sobreviviente; si no tiene, los de la primera absorbida que los tenga.
  *
  * Idempotente: sobre el resultado, una segunda corrida no devuelve planes.
  */
@@ -242,6 +242,9 @@ export function planearFusiones(canciones: readonly CancionGuardada[]): PlanDeFu
         const usados = new Set(dificultades.map((d) => d.metadata.difficultyName));
         dificultades.push(conNombre(chart, nombreLibre(chart.metadata.difficultyName, usados)));
         for (const k of suyas) claves.add(k);
+      }
+      if (resultado.conjunto === undefined && absorbida.conjunto !== undefined) {
+        resultado = { ...resultado, conjunto: absorbida.conjunto };
       }
       if (resultado.background === undefined && absorbida.background !== undefined) {
         resultado = { ...resultado, background: absorbida.background };

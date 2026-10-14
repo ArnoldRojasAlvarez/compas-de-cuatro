@@ -120,6 +120,11 @@ export interface CancionGuardada {
   id: SongId;
   titulo: string;
   artista: string;
+  /**
+   * Title del set de donde salio la cancion, solo si `titulo` es una pieza de
+   * un set con varias (T-066, D5). Entra en la busqueda del song select.
+   */
+  conjunto?: string;
   audio: Blob;
   background?: Blob;
   /** Solo si el .osz trae un video que el navegador puede reproducir (mp4, m4v, webm). */

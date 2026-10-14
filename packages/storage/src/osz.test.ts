@@ -248,16 +248,32 @@ describe('extraerCancionDeOsz: audio ausente en la primera dificultad (T-054)', 
     return new TextEncoder().encode(texto);
   }
 
-  it('si la primera declara un audio que no esta, usa el de la siguiente que si lo tiene', async () => {
+  it('si la primera declara un audio que no esta, ese grupo se omite con aviso y entra el de la siguiente (T-066 paso 2)', async () => {
+    // Antes (T-054) las dos dificultades compartian la pista de la segunda; con
+    // la agrupacion por audio de T-066 son dos canciones distintas.
     const osz = armarOsz({
       'A.osu': osuConAudio('A', 'falta.mp3'),
       'B.osu': osuConAudio('B', 'real.ogg'),
       'real.ogg': new Uint8Array([9, 9, 9]),
     });
-    const r = await extraerCancionDeOsz(osz);
+    const analisis = await analizarOsz(osz);
+    expect(analisis.canciones).toHaveLength(1);
+    const r = analisis.canciones[0]!;
     expect(r.audio.size).toBe(3);
     expect(r.audio.type).toBe('audio/ogg');
-    // Las dos dificultades se importan igual.
+    expect(r.dificultades.map((d) => d.metadata.difficultyName)).toEqual(['B']);
+    expect(analisis.avisos).toEqual([
+      expect.stringContaining('falta el audio "falta.mp3"'),
+    ]);
+  });
+
+  it('dos dificultades que declaran la misma pista (escrita distinto) son una sola cancion', async () => {
+    const osz = armarOsz({
+      'A.osu': osuConAudio('A', 'Real.OGG'),
+      'B.osu': osuConAudio('B', './real.ogg'),
+      'real.ogg': new Uint8Array([9, 9, 9]),
+    });
+    const r = await extraerCancionDeOsz(osz);
     expect(r.dificultades.map((d) => d.metadata.difficultyName)).toEqual(['A', 'B']);
   });
 
@@ -619,7 +635,7 @@ describe('analizarOsz: avisos de lo omitido (T-066)', () => {
         AUDIO,
       ),
     );
-    expect(r.cancion.dificultades).toHaveLength(1);
+    expect(r.canciones[0]!.dificultades).toHaveLength(1);
     expect(r.omitidas).toEqual({ otroModo: 1, otrasTeclas: { 5: 1, 7: 2 }, invalidas: 1 });
     expect(r.avisos).toEqual([
       'Se omitieron 3 dificultades de otras teclas: 5K (1) y 7K (2).',
@@ -659,9 +675,102 @@ describe('analizarOsz: avisos de lo omitido (T-066)', () => {
     const r = await analizarOsz(
       oszCon({ '1.osu': osuCon({}), '2.osu': osuCon({ audio: 'virtual', version: 'V' }) }, AUDIO),
     );
-    expect(r.cancion.dificultades.map((d) => d.metadata.difficultyName)).toEqual(['Normal']);
+    expect(r.canciones[0]!.dificultades.map((d) => d.metadata.difficultyName)).toEqual(['Normal']);
     expect(r.avisos).toEqual([
       'Se omitió "Cancion de prueba": usa audio virtual, que Tetra todavía no soporta.',
     ]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// T-066 paso 2: un .osz puede dar varias canciones
+// ---------------------------------------------------------------------------
+
+describe('analizarOsz: agrupacion en canciones (T-066 paso 2)', () => {
+  const NOTAS_OTRAS = ['448,192,0,1,0,0:0:0:0:', '320,192,300,1,0,0:0:0:0:'];
+
+  it('dos pistas distintas dan dos canciones, cada una con su audio y sus dificultades', async () => {
+    const r = await analizarOsz(
+      oszCon(
+        {
+          'a.osu': osuCon({ audio: 'uno.mp3', version: 'Easy' }),
+          'b.osu': osuCon({ audio: 'dos.ogg', version: 'Normal', notas: NOTAS_OTRAS }),
+          'c.osu': osuCon({ audio: 'uno.mp3', version: 'Hard', notas: NOTAS_OTRAS }),
+        },
+        { 'uno.mp3': new Uint8Array([1]), 'dos.ogg': new Uint8Array([2, 2]) },
+      ),
+    );
+    expect(r.canciones).toHaveLength(2);
+    expect(r.canciones.map((c) => c.audio.size)).toEqual([1, 2]);
+    expect(r.canciones.map((c) => c.dificultades.map((d) => d.metadata.difficultyName))).toEqual([
+      ['Easy', 'Hard'],
+      ['Normal'],
+    ]);
+    // Comparten Title: el sufijo con el audio las distingue.
+    expect(r.canciones.map((c) => c.titulo)).toEqual([
+      'Cancion de prueba (uno)',
+      'Cancion de prueba (dos)',
+    ]);
+    expect(r.titulo).toBe('Cancion de prueba');
+    expect(r.avisos).toEqual([]);
+  });
+
+  it('un grupo sin audio se omite con aviso si otro entra', async () => {
+    const r = await analizarOsz(
+      oszCon(
+        {
+          'a.osu': osuCon({ audio: 'falta.mp3', version: 'A' }),
+          'b.osu': osuCon({ audio: 'dos.ogg', version: 'B', notas: NOTAS_OTRAS }),
+        },
+        { 'dos.ogg': new Uint8Array([2, 2]) },
+      ),
+    );
+    expect(r.canciones).toHaveLength(1);
+    expect(r.canciones[0]!.dificultades.map((d) => d.metadata.difficultyName)).toEqual(['B']);
+    expect(r.avisos).toEqual(['Se omitió "Cancion de prueba (falta)": falta el audio "falta.mp3".']);
+  });
+
+  it('si ningun grupo tiene su audio, falla con audio-faltante', async () => {
+    const e = await errorDe(
+      oszCon({
+        'a.osu': osuCon({ audio: 'falta1.mp3', version: 'A' }),
+        'b.osu': osuCon({ audio: 'falta2.mp3', version: 'B', notas: NOTAS_OTRAS }),
+      }),
+    );
+    expect(e.codigo).toBe('audio-faltante');
+    expect(e.message).toBe('Falta el audio: el mapa pide "falta1.mp3" y el .osz no lo trae.');
+  });
+
+  it('los grupos virtuales se omiten con aviso por pieza y el audio real entra', async () => {
+    const r = await analizarOsz(
+      oszCon(
+        {
+          'a.osu': osuCon({ audio: 'virtual', version: 'Canon - 4K EX', notas: NOTAS_OTRAS }),
+          'b.osu': osuCon({ audio: 'virtual', version: 'La Campanella - 4K Full' }),
+          'c.osu': osuCon({ version: 'Real' }),
+        },
+        AUDIO,
+      ),
+    );
+    expect(r.canciones).toHaveLength(1);
+    expect(r.canciones[0]!.titulo).toBe('Cancion de prueba');
+    expect(r.avisos).toEqual([
+      'Se omitió "Canon": usa audio virtual, que Tetra todavía no soporta.',
+      'Se omitió "La Campanella": usa audio virtual, que Tetra todavía no soporta.',
+    ]);
+  });
+
+  it('un set virtual de varias piezas sigue fallando con audio-virtual', async () => {
+    const e = await errorDe(
+      oszCon({
+        'a.osu': osuCon({ audio: 'virtual', version: 'Canon - 4K EX' }),
+        'b.osu': osuCon({
+          audio: 'virtual',
+          version: 'La Campanella - 4K Full',
+          notas: NOTAS_OTRAS,
+        }),
+      }),
+    );
+    expect(e.codigo).toBe('audio-virtual');
   });
 });

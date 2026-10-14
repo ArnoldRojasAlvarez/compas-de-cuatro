@@ -10,6 +10,8 @@ export { parseOsu } from './chart/osu.js';
 export type { CabeceraOsu } from './chart/cabecera.js';
 export { leerCabeceraOsu } from './chart/cabecera.js';
 export { clavesDeIdentidad } from './chart/identidad.js';
+export type { GrupoDeCancion } from './chart/agrupar.js';
+export { agruparEnCanciones, piezaDeVersion } from './chart/agrupar.js';
 
 export {
   construirFilas,

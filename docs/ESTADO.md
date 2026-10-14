@@ -1,6 +1,6 @@
 # Estado del proyecto
 
-Ultima actualizacion: 14 de octubre de 2026 (T-066 paso 1).
+Ultima actualizacion: 14 de octubre de 2026 (T-066 paso 2).
 
 Estado corto y siempre al dia. **Si sos una sesion NUEVA, empeza por
 `docs/HANDOFF.md`** (metodo de trabajo, reglas, lecciones), despues
@@ -8,7 +8,7 @@ Estado corto y siempre al dia. **Si sos una sesion NUEVA, empeza por
 
 ## Donde esta todo
 
-- `main`: limpio, verde, 1626 tests + 72 e2e (ver nota de T-061 abajo; el e2e se verifica con `--workers=1`, ver T-063).
+- `main`: limpio, verde, 1659 tests + 73 e2e (ver nota de T-061 abajo; el e2e se verifica con `--workers=1`, ver T-063).
 - Estado demo: menu con musica de la biblioteca, song select sobre la escena, partida con fondo y video, cuatro skins propias, cancion demo sembrada.
 - En curso: nada.
 
@@ -71,6 +71,7 @@ Estado corto y siempre al dia. **Si sos una sesion NUEVA, empeza por
 | T-064 | Bloqueo de atajos del navegador en partida: preventDefault de todo lo que el juego no usa (Alt+numpad, Alt solo, Ctrl+W/P/R, F1, F5; decisión pura `debeBloquearTecla`), Keyboard Lock en pantalla completa en Chromium (Ctrl+W/T/N/Tab, Escape sigue pausando), `beforeunload` solo con partida, y una nota en "Antes de presentar". Alt+Tab, la tecla Windows y Alt+F4 no se pueden bloquear desde una página. Falta la prueba real en Opera con pantalla completa (el e2e usa dobles) |
 | T-065 | Replays de las partidas recientes: toda partida completada guarda su replay 7 días (tienda `recientes`, base v8, purga al abrir la app: más de 7 días y tope de 200, el replay de la mejor partida siempre se conserva); "Conservar" fija una; en el song select, lista "Partidas recientes" de la dificultad con "Ver replay" y "Conservar"; en resultados, "Ver replay" de la partida recién jugada (mismo audio, fondo, skin, HUD y modo presentación); el respaldo lleva solo las recientes fijadas; test de determinismo de un replay guardado como reciente |
 | T-066 (paso 1) | Importación con errores claros y sin duplicados: `ErrorDeImportacion` con código y mensaje exacto por causa (skin, no es .osz, muy grande, zip dañado, sin mapas, sin mania, sin 4K con la lista de teclas, ilegible, audio faltante, audio virtual) visible en el banner (hasta tres líneas); `BeatmapID`/`BeatmapSetID` en `parseOsu` y `escribirOsu`; `leerCabeceraOsu` y `clavesDeIdentidad` en `core`; `importarArchivoOsz` deduplica por identidad (reimportar = `ya-estaba` o `actualizada`, conserva id, records, replays, recientes y offset; completa fondo y video); `fusionarDuplicados()` al abrir la app y tras restaurar un respaldo (migra el offset por canción); avisos de lo omitido. Sin cambio de base (sigue en v8). El set de piano sigue fallando, ahora con el mensaje del audio virtual |
+| T-066 (paso 2) | Un `.osz` puede dar varias canciones: `agruparEnCanciones` y `piezaDeVersion` en `core` (audio real: una canción por archivo de audio; audio virtual: una por pieza, lo que está antes del último " - " del `Version`, y las versiones sin separador van al grupo del set); `CancionGuardada.conjunto` (Title del set cuando el título es una pieza), que entra en la búsqueda del song select y en el respaldo; `analizarOsz` devuelve `canciones[]` y cada grupo pasa por la dedupe por separado (un grupo sin audio se omite con aviso si otro entra; los virtuales se omiten con aviso, y si solo hay virtuales sigue el error de audio virtual); banner "<set>: 2 canciones nuevas." / "2 ya estaban." Sin cambio de base |
 
 La prueba de feel de Arnold ya se hizo: en una cancion real sus golpes salieron
 centrados en cero. El motor esta bien sincronizado.
@@ -78,7 +79,7 @@ centrados en cero. El motor esta bien sincronizado.
 ## En curso
 
 - **T-061, nota:** el e2e `diagnostico-tirones.spec.ts` fallo 1 vez de 28 sin poder ver el error (la primera corrida tras un build en frio, con otro agente corriendo su e2e en el mismo puerto 4173). Sospecha: la linea de resultados formatea un "peor" de mas de 999 ms con separador de miles y la regex del test espera `\d+ ms`. Revisar antes de dar el test por estable.
-- **T-066 (importación de sets con keysounds):** paso 1 hecho. Pendientes el paso 2 (un `.osz` puede dar varias canciones, agrupadas por audio o por pieza) y el paso 3 (audio virtual: keysounds y samples del storyboard, base v9). Hasta el paso 3 el set de piano de Arnold no entra.
+- **T-066 (importación de sets con keysounds):** pasos 1 y 2 hechos. Pendiente el paso 3 (audio virtual: keysounds y samples del storyboard, base v9). Hasta el paso 3 el set de piano de Arnold no entra. Desvío del paso 2: como las dificultades de un `.osz` que declaran audios distintos ahora son canciones distintas, ya no se comparte la pista de la primera dificultad que tenga audio (T-054); si el audio de un grupo falta, ese grupo se omite con aviso.
 - **T-062 (modo practica):** escrito, listo para despachar (T-060 y T-061 ya entraron).
 
 

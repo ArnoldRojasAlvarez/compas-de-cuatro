@@ -118,7 +118,7 @@ export interface CancionImportadaResumen {
 }
 
 export interface ResultadoImportacion {
-  /** En el orden de los grupos (paso 1: siempre una). Nunca vacio: si no hay nada que importar, se lanza. */
+  /** En el orden de los grupos de agruparEnCanciones (un .osz comun da una). Nunca vacio: si no hay nada que importar, se lanza. */
   canciones: CancionImportadaResumen[];
   /** Title del set (el de la primera dificultad valida). */
   titulo: string;
@@ -156,10 +156,11 @@ function aErrorDeImportacion(error: unknown): ErrorDeImportacion {
 
 /**
  * Importa un archivo .osz con deduplicacion (T-066, D3): lo descomprime,
- * parsea todas las dificultades de mania 4K y, si la cancion ya esta en la
- * biblioteca (comparte alguna clave de identidad con una existente), la
- * combina con esa en vez de duplicarla: conserva el id, agrega o actualiza
- * dificultades y completa fondo o video. Si no, crea una cancion nueva.
+ * parsea todas las dificultades de mania 4K, las agrupa en canciones (un .osz
+ * puede dar varias, T-066 D5) y, por cada una, si ya esta en la biblioteca
+ * (comparte alguna clave de identidad con una existente) la combina con esa
+ * en vez de duplicarla: conserva el id, agrega o actualiza dificultades y
+ * completa fondo o video. Si no, crea una cancion nueva.
  *
  * Lanza `ErrorDeImportacion` si no queda ninguna cancion para importar;
  * nunca lanza otro tipo de error (cualquier otro se envuelve como `base`, o
@@ -168,46 +169,55 @@ function aErrorDeImportacion(error: unknown): ErrorDeImportacion {
  */
 export async function importarArchivoOsz(archivo: Blob): Promise<ResultadoImportacion> {
   try {
-    const { cancion: extraido, omitidas, avisos } = await analizarOsz(archivo);
-    const existentes = await listarCancionesDeLaBase();
-    const coincide = coincidenciaEnBiblioteca(extraido.dificultades, existentes);
+    const { canciones: extraidas, titulo, omitidas, avisos } = await analizarOsz(archivo);
+    // Se actualiza a medida que se guarda: dos grupos del mismo .osz no se
+    // duplican entre si aunque compartan alguna dificultad.
+    const biblioteca = await listarCancionesDeLaBase();
+    const resumenes: CancionImportadaResumen[] = [];
 
-    let resumen: CancionImportadaResumen;
-    if (coincide === undefined) {
-      const id = crearId();
-      const nueva: CancionGuardada = {
-        id,
-        titulo: extraido.titulo,
-        artista: extraido.artista,
-        audio: extraido.audio,
-        // Los opcionales solo se agregan si existen: nada de claves en undefined.
-        ...(extraido.background !== undefined && { background: extraido.background }),
-        ...(extraido.video !== undefined && {
-          video: extraido.video,
-          videoOffset: extraido.videoOffset ?? 0,
-        }),
-        importadaEn: Date.now(),
-        dificultades: extraido.dificultades,
-      };
-      await guardarCancion(nueva);
-      resumen = {
-        id,
-        titulo: extraido.titulo,
-        estado: 'nueva',
-        dificultadesAgregadas: 0,
-        dificultadesActualizadas: 0,
-        archivosCompletados: false,
-      };
-    } else {
-      const { cancion, resumen: cambios } = combinarConExistente(coincide, extraido);
-      if (cambios.estado === 'actualizada') await guardarCancion(cancion);
-      resumen = { id: coincide.id, titulo: coincide.titulo, ...cambios };
+    for (const extraido of extraidas) {
+      const coincide = coincidenciaEnBiblioteca(extraido.dificultades, biblioteca);
+      if (coincide === undefined) {
+        const id = crearId();
+        const nueva: CancionGuardada = {
+          id,
+          titulo: extraido.titulo,
+          artista: extraido.artista,
+          ...(extraido.conjunto !== undefined && { conjunto: extraido.conjunto }),
+          audio: extraido.audio,
+          // Los opcionales solo se agregan si existen: nada de claves en undefined.
+          ...(extraido.background !== undefined && { background: extraido.background }),
+          ...(extraido.video !== undefined && {
+            video: extraido.video,
+            videoOffset: extraido.videoOffset ?? 0,
+          }),
+          importadaEn: Date.now(),
+          dificultades: extraido.dificultades,
+        };
+        await guardarCancion(nueva);
+        biblioteca.push(nueva);
+        resumenes.push({
+          id,
+          titulo: extraido.titulo,
+          estado: 'nueva',
+          dificultadesAgregadas: 0,
+          dificultadesActualizadas: 0,
+          archivosCompletados: false,
+        });
+      } else {
+        const { cancion, resumen: cambios } = combinarConExistente(coincide, extraido);
+        if (cambios.estado === 'actualizada') {
+          await guardarCancion(cancion);
+          biblioteca[biblioteca.indexOf(coincide)] = cancion;
+        }
+        resumenes.push({ id: coincide.id, titulo: coincide.titulo, ...cambios });
+      }
     }
 
     // Pedir que el navegador no desaloje la biblioteca: no se espera ni se usa
     // el resultado (pedirAlmacenamientoPersistente nunca lanza).
     void pedirAlmacenamientoPersistente();
-    return { canciones: [resumen], titulo: extraido.titulo, omitidas, avisos };
+    return { canciones: resumenes, titulo, omitidas, avisos };
   } catch (error) {
     throw aErrorDeImportacion(error);
   }

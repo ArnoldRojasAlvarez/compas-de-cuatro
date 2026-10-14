@@ -215,6 +215,21 @@ describe('planearFusiones (D4)', () => {
     expect(plan!.resultado.videoOffset).toBe(12);
   });
 
+  it('el conjunto es el de la sobreviviente; si no tiene, el de la primera absorbida que lo tenga (T-066 paso 2)', () => {
+    const [propio] = planearFusiones([
+      cancion('a', [chart('N', 1)], { importadaEn: 1, conjunto: 'Mio' }),
+      cancion('b', [chart('N', 1)], { importadaEn: 2, conjunto: 'Otro' }),
+    ]);
+    expect(propio!.resultado.conjunto).toBe('Mio');
+
+    const [heredado] = planearFusiones([
+      cancion('a', [chart('N', 1)], { importadaEn: 1 }),
+      cancion('b', [chart('N', 1)], { importadaEn: 2 }),
+      cancion('c', [chart('N', 1)], { importadaEn: 3, conjunto: 'Set' }),
+    ]);
+    expect(heredado!.resultado.conjunto).toBe('Set');
+  });
+
   it('el fondo de la sobreviviente se respeta', () => {
     const propio = new Blob(['propio']);
     const [plan] = planearFusiones([

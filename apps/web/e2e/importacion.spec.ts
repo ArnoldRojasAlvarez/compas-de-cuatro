@@ -160,3 +160,34 @@ test('al abrir la app, dos canciones duplicadas se fusionan y el offset pasa a l
     .toBe('25');
   expect(await page.evaluate(() => localStorage.getItem('tetra:offset-local:copia-e2e'))).toBeNull();
 });
+
+// T-066 (paso 2): un .osz con dos pistas distintas da dos canciones; el banner
+// lo dice y reimportarlo no duplica ninguna.
+function crearOszDeDosPistas(titulo: string): Buffer {
+  const audio = new Uint8Array(readFileSync(AUDIO_DE_PRUEBA));
+  const zip = zipSync({
+    'a-uno.osu': strToU8(osuDe(titulo, { audio: 'uno.wav' })),
+    // Otras notas: sin esto las dos serian la misma dificultad (misma identidad).
+    'b-dos.osu': strToU8(osuDe(titulo, { audio: 'dos.wav' }).replace(/2000,1/g, '2250,1')),
+    'uno.wav': audio,
+    'dos.wav': audio,
+  });
+  return Buffer.from(zip);
+}
+
+test('un .osz con dos pistas da dos canciones y reimportarlo no duplica ninguna', async ({
+  page,
+}) => {
+  await irASongSelect(page);
+  const titulo = 'Set de dos pistas';
+
+  await importar(page, `${titulo}.osz`, crearOszDeDosPistas(titulo));
+  await expect(page.locator('.tetra-song-item')).toHaveCount(2);
+  const banner = page.locator('.tetra-song-select-error');
+  await expect(banner).toBeVisible();
+  await expect(banner).toContainText(`${titulo}: 2 canciones nuevas.`);
+
+  await importar(page, `${titulo}.osz`, crearOszDeDosPistas(titulo));
+  await expect(banner).toContainText(`${titulo}: 2 ya estaban.`);
+  await expect(page.locator('.tetra-song-item')).toHaveCount(2);
+});

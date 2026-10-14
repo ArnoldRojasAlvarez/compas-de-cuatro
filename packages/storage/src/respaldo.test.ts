@@ -161,6 +161,10 @@ async function armarBiblioteca(): Promise<{ hashes: string[] }> {
   await importarCancion('Con multimedia', true);
   await importarCancion('Solo audio', false);
   await importarSkin();
+  // T-066 paso 2: una cancion que es pieza de un set lleva su `conjunto` en el respaldo.
+  const pieza = (await listarCanciones()).find((c) => c.titulo === 'Solo audio')!;
+  const { guardarCancion } = await import('./db.js');
+  await guardarCancion({ ...pieza, conjunto: 'Set de prueba' });
   const cancion = (await listarCanciones()).find((c) => c.titulo === 'Con multimedia')!;
   const hashes = cancion.dificultades.map((d) => String(hashMapa(d)));
   await guardarPartida(hashes[0]!, partida(900_000, '2026-10-01T10:00:00.000Z'));
@@ -234,6 +238,7 @@ describe('respaldo: ida y vuelta', () => {
       // Mismos ids, mismas notas (la dificultad entera), mismos metadatos.
       expect(copia.titulo).toBe(original.titulo);
       expect(copia.artista).toBe(original.artista);
+      expect(copia.conjunto).toBe(original.conjunto);
       expect(copia.dificultades).toEqual(original.dificultades);
       expect(copia.importadaEn).toBe(original.importadaEn);
       expect(copia.videoOffset).toBe(original.videoOffset);
@@ -251,6 +256,8 @@ describe('respaldo: ida y vuelta', () => {
     const soloAudio = despues.find((c) => c.titulo === 'Solo audio')!;
     expect('background' in soloAudio).toBe(false);
     expect('video' in soloAudio).toBe(false);
+    expect(soloAudio.conjunto).toBe('Set de prueba');
+    expect('conjunto' in conMultimedia).toBe(false);
 
     const skins = await listarSkins();
     expect(skins).toHaveLength(1);

@@ -112,6 +112,7 @@ interface CancionManifest {
   id: string;
   titulo: string;
   artista: string;
+  conjunto?: string;
   videoOffset?: number;
   importadaEn?: number;
   dificultades: Chart[];
@@ -181,6 +182,7 @@ export async function exportarRespaldo(c: ContenidoRespaldo): Promise<Blob> {
       id: cancion.id,
       titulo: cancion.titulo,
       artista: cancion.artista,
+      ...(cancion.conjunto !== undefined && { conjunto: cancion.conjunto }),
       ...(cancion.videoOffset !== undefined && { videoOffset: cancion.videoOffset }),
       ...(cancion.importadaEn !== undefined && { importadaEn: cancion.importadaEn }),
       dificultades: cancion.dificultades,
@@ -298,10 +300,12 @@ function leerCancion(archivos: Unzipped, crudo: unknown, indice: number): Cancio
   }
   const videoOffset = crudo['videoOffset'];
   const importadaEn = crudo['importadaEn'];
+  const conjunto = crudo['conjunto'];
   return {
     id,
     titulo,
     artista,
+    ...(esTexto(conjunto) && conjunto !== '' && { conjunto }),
     audio: blobDeReferencia(archivos, crudo['audio'], `audio de ${nombre}`),
     ...(crudo['fondo'] !== undefined && {
       background: blobDeReferencia(archivos, crudo['fondo'], `fondo de ${nombre}`),
