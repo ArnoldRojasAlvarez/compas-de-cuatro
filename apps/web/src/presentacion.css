@@ -49,3 +49,10 @@ body.tetra-sin-cursor * {
 .tetra-presentacion-lista input {
   accent-color: var(--acento);
 }
+
+/* T-064: la nota del final, sin casilla. */
+.tetra-presentacion-nota {
+  font-size: var(--tipo-sm);
+  color: var(--tinta-3);
+  line-height: 1.4;
+}

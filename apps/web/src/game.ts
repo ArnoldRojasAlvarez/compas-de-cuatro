@@ -79,6 +79,7 @@ import {
   motivoDeRechazoDelReplay,
   type ModoReproduccion,
 } from './replay-logica.js';
+import { iniciarBloqueoDeAtajos } from './bloqueo-atajos.js';
 import { numeroDeCuenta, transicionPausa, type FasePausa } from './pausa-logica.js';
 import { crearMedidorDeFps, formatearLecturaFps, type MedidorDeFps } from './fps-logica.js';
 import { crearDiagnostico } from './diagnostico-tirones.js';
@@ -706,8 +707,13 @@ export function runGame(
     // encargar solo (ver el `if (detenido)` dentro de app.init().then()).
     let appInicializada = false;
 
+    // T-064: apaga el bloqueo de atajos del navegador (lo asigna mas abajo).
+    let detenerBloqueoDeAtajos: (() => void) | null = null;
+
     function limpiar(): void {
       detenido = true;
+      detenerBloqueoDeAtajos?.();
+      detenerBloqueoDeAtajos = null;
       if (rafId !== 0) {
         cancelAnimationFrame(rafId);
       }
@@ -943,6 +949,14 @@ export function runGame(
     // Escuchado desde ya, no solo despues de que arranque la partida: se
     // puede abortar incluso mientras app.init() todavia esta cargando.
     window.addEventListener('keydown', manejarEscape);
+
+    // T-064: mientras dure la partida (y su pausa) el navegador no recibe los
+    // atajos que el juego no usa. Solo hace preventDefault: no corta ni reordena
+    // la entrada. Se apaga en limpiar().
+    detenerBloqueoDeAtajos = iniciarBloqueoDeAtajos(() => ({
+      carriles: keyMap,
+      enPausa: fase !== 'jugando',
+    }));
 
     // T-056: atajos. Mantener ` (Backquote) 0,5 s reintenta; Espacio salta la
     // intro. Nada de temporizadores: el keydown se fecha con `event.timeStamp`

@@ -44,6 +44,13 @@ export const PASOS_PREVIOS = [
   { id: 'volumen', texto: 'Comprobar el volumen' },
 ] as const;
 
+/**
+ * T-064: nota al final de la lista (no es un paso que se marque). Jugar en
+ * pantalla completa activa el Keyboard Lock; lo que toma el sistema no se bloquea.
+ */
+export const NOTA_PANTALLA_COMPLETA =
+  'Jugar en pantalla completa para que el bloqueo de atajos sea total. Alt+Tab, la tecla Windows y Alt+F4 fuera de pantalla completa no se pueden bloquear desde una página.';
+
 export type PasoPrevio = (typeof PASOS_PREVIOS)[number]['id'];
 export type ChecklistPresentacion = Readonly<Record<PasoPrevio, boolean>>;
 
