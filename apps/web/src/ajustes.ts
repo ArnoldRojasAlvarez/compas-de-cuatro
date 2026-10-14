@@ -105,6 +105,7 @@ import {
   alternarPresentacion,
   guardarChecklist,
   leerChecklist,
+  NOTA_PANTALLA_COMPLETA,
   presentacionActiva,
   type PasoPrevio,
 } from './presentacion.js';
@@ -837,6 +838,12 @@ function crearControlDePresentacion(aCalibrar: () => void): HTMLElement {
     }
     lista.appendChild(item);
   }
+
+  // T-064: una nota, no un paso: no se marca.
+  const nota = document.createElement('li');
+  nota.className = 'tetra-presentacion-nota';
+  nota.textContent = NOTA_PANTALLA_COMPLETA;
+  lista.appendChild(nota);
 
   const fila = crearFila({
     nombre: 'Presentación',

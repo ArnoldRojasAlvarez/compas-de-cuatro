@@ -3,6 +3,7 @@
 
 import { describe, expect, it } from 'vitest';
 import {
+  NOTA_PANTALLA_COMPLETA,
   PASOS_PREVIOS,
   guardarChecklist,
   guardarPresentacion,
@@ -88,5 +89,12 @@ describe('lista "Antes de presentar"', () => {
     const raro = crearStorageFalso({ 'tetra:checklist-presentacion': '{"offset":"si","volumen":true}' });
     // "si" no es true: solo el booleano verdadero marca el paso.
     expect(leerChecklist(raro)).toEqual({ offset: false, cancion: false, volumen: true });
+  });
+
+  it('T-064: la nota avisa lo que no se puede bloquear y no es un paso que se marque', () => {
+    expect(NOTA_PANTALLA_COMPLETA).toContain('pantalla completa');
+    expect(NOTA_PANTALLA_COMPLETA).toContain('Alt+Tab');
+    expect(NOTA_PANTALLA_COMPLETA).toContain('Alt+F4');
+    expect(PASOS_PREVIOS.map((p) => p.id)).toEqual(['offset', 'cancion', 'volumen']);
   });
 });
