@@ -506,3 +506,31 @@ OverallDifficulty:5
     });
   });
 });
+
+describe('parseOsu: BeatmapID y BeatmapSetID (T-066)', () => {
+  const conIds = (ids: string): string =>
+    OSU_BASICO.replace('Version:Normal', `Version:Normal\n${ids}`);
+
+  it('los lee de [Metadata] cuando son mayores que 0', () => {
+    const r = parseOsu(conIds('BeatmapID:123456\nBeatmapSetID:332673'));
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.chart.metadata.beatmapId).toBe(123456);
+    expect(r.chart.metadata.beatmapSetId).toBe(332673);
+  });
+
+  it('0, -1 o basura se ignoran (el campo queda ausente, sin clave en undefined)', () => {
+    for (const ids of ['BeatmapID:0\nBeatmapSetID:-1', 'BeatmapID:abc\nBeatmapSetID:']) {
+      const r = parseOsu(conIds(ids));
+      expect(r.ok).toBe(true);
+      if (!r.ok) return;
+      expect('beatmapId' in r.chart.metadata).toBe(false);
+      expect('beatmapSetId' in r.chart.metadata).toBe(false);
+    }
+  });
+
+  it('sin los campos no cambia nada', () => {
+    const r = parseOsu(OSU_BASICO);
+    expect(r.ok && r.chart.metadata.beatmapId).toBeUndefined();
+  });
+});

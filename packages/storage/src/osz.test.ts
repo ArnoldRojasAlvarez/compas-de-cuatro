@@ -7,11 +7,13 @@
 // en sentido inverso) para no depender de ningun archivo en disco.
 
 import { describe, expect, it } from 'vitest';
+import { ErrorDeImportacion } from './errores.js';
 import { zipSync } from 'fflate';
 import {
   buscarEnZip,
   elegirArchivoOsu,
   elegirArchivosOsu,
+  analizarOsz,
   extraerCancionDeOsz,
   extraerMapaDeOsz,
   mimeDesdeNombre,
@@ -441,5 +443,225 @@ describe('extraerCancionDeOsz: fondo y video (T-049)', () => {
       'audio.wav': new Uint8Array([1]),
     });
     expect((await extraerCancionDeOsz(osz)).video).toBeUndefined();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// T-066: errores con causa (tabla "Errores" del ticket) y avisos de lo omitido
+// ---------------------------------------------------------------------------
+
+/** Un .osu con `Mode`, teclas, audio y version a gusto; el resto igual al de prueba. */
+function osuCon(opciones: {
+  modo?: number;
+  teclas?: number;
+  audio?: string;
+  version?: string;
+  notas?: string[];
+  sinHp?: boolean;
+}): string {
+  const { modo = 3, teclas = 4, audio = 'audio.wav', version = 'Normal' } = opciones;
+  const notas = opciones.notas ?? ['64,192,0,1,0,0:0:0:0:', '192,192,500,1,0,0:0:0:0:'];
+  let texto = OSU_DE_PRUEBA.replace('AudioFilename: audio.wav', `AudioFilename: ${audio}`)
+    .replace('Mode: 3', `Mode: ${modo}`)
+    .replace('Version:Normal', `Version:${version}`)
+    .replace('CircleSize:4', `CircleSize:${teclas}`)
+    .replace(/\[HitObjects\][\s\S]*$/, `[HitObjects]\n${notas.join('\n')}\n`);
+  if (opciones.sinHp === true) texto = texto.replace('HPDrainRate:5\n', '');
+  return texto;
+}
+
+function oszCon(osus: Record<string, string>, extra: Record<string, Uint8Array> = {}): Blob {
+  const entradas: Record<string, Uint8Array> = { ...extra };
+  for (const [nombre, texto] of Object.entries(osus)) {
+    entradas[nombre] = new TextEncoder().encode(texto);
+  }
+  return armarOsz(entradas);
+}
+
+const AUDIO = { 'audio.wav': new Uint8Array([1, 2, 3]) };
+
+async function errorDe(archivo: Blob): Promise<ErrorDeImportacion> {
+  try {
+    await analizarOsz(archivo);
+  } catch (error) {
+    expect(error).toBeInstanceOf(ErrorDeImportacion);
+    return error as ErrorDeImportacion;
+  }
+  throw new Error('Se esperaba que analizarOsz lanzara.');
+}
+
+describe('analizarOsz: errores con causa (T-066)', () => {
+  it('es-skin: un .osk por nombre', async () => {
+    const e = await errorDe(new File([new Uint8Array([1])], 'skin.osk'));
+    expect(e.codigo).toBe('es-skin');
+    expect(e.message).toBe('Es una skin (.osk): se carga desde Ajustes, en Skin.');
+  });
+
+  it('no-es-osz: otra extension (un .osz o un .zip pasan)', async () => {
+    const e = await errorDe(new File([new Uint8Array([1])], 'foto.png'));
+    expect(e.codigo).toBe('no-es-osz');
+    expect(e.message).toBe('No es un mapa de osu!: Tetra importa archivos .osz.');
+    const zip = oszCon({ 'a.osu': osuCon({}) }, AUDIO);
+    const bytes = new Uint8Array(await zip.arrayBuffer());
+    for (const nombre of ['a.osz', 'A.ZIP']) {
+      await expect(analizarOsz(new File([bytes], nombre))).resolves.toBeDefined();
+    }
+  });
+
+  it('muy-grande: mas de 300 MB, redondeado hacia arriba, sin leer el archivo', async () => {
+    const falso = {
+      size: 301 * 1024 * 1024 + 1,
+      arrayBuffer: () => Promise.reject(new Error('no')),
+    };
+    const e = await errorDe(falso as unknown as Blob);
+    expect(e.codigo).toBe('muy-grande');
+    expect(e.message).toBe('El archivo pesa 302 MB y el máximo es 300 MB.');
+  });
+
+  it('lectura: el archivo no se puede leer', async () => {
+    const falso = { size: 10, arrayBuffer: () => Promise.reject(new Error('NotReadableError')) };
+    const e = await errorDe(falso as unknown as Blob);
+    expect(e.codigo).toBe('lectura');
+    expect(e.message).toBe(
+      'No se pudo leer el archivo. Puede que se haya movido o borrado mientras se importaba.',
+    );
+  });
+
+  it('zip-danado: bytes basura', async () => {
+    const e = await errorDe(new Blob([new Uint8Array([1, 2, 3, 4, 5, 6, 7, 8])]));
+    expect(e.codigo).toBe('zip-danado');
+    expect(e.message).toBe('El archivo está dañado o no es un .osz: no se pudo abrir como zip.');
+    expect(e.cause).toBeDefined();
+  });
+
+  it('sin-osu: un zip sin ningun .osu', async () => {
+    const e = await errorDe(armarOsz({ 'audio.wav': new Uint8Array([1]) }));
+    expect(e.codigo).toBe('sin-osu');
+    expect(e.message).toBe('El .osz no trae ningún mapa (.osu).');
+  });
+
+  it('sin-mania: solo Mode 0', async () => {
+    const e = await errorDe(oszCon({ 'a.osu': osuCon({ modo: 0 }) }, AUDIO));
+    expect(e.codigo).toBe('sin-mania');
+    expect(e.message).toBe(
+      'Ninguna dificultad es de osu!mania: el .osz es de otro modo de juego (osu!, taiko o catch).',
+    );
+  });
+
+  it('sin-4k: solo 7K, con la cantidad siempre', async () => {
+    const e = await errorDe(oszCon({ 'a.osu': osuCon({ teclas: 7 }) }, AUDIO));
+    expect(e.codigo).toBe('sin-4k');
+    expect(e.message).toBe('Ninguna dificultad es de 4 teclas: el .osz trae solo mapas de 7K (1).');
+  });
+
+  it('sin-4k: 5K, 7K y 10K en orden ascendente y con " y " al final', async () => {
+    const osus: Record<string, string> = {};
+    for (let i = 0; i < 15; i++) osus[`5k${i}.osu`] = osuCon({ teclas: 5, version: `v${i}` });
+    for (let i = 0; i < 15; i++) osus[`7k${i}.osu`] = osuCon({ teclas: 7, version: `w${i}` });
+    for (let i = 0; i < 69; i++) osus[`10k${i}.osu`] = osuCon({ teclas: 10, version: `x${i}` });
+    const e = await errorDe(oszCon(osus, AUDIO));
+    expect(e.codigo).toBe('sin-4k');
+    expect(e.message).toBe(
+      'Ninguna dificultad es de 4 teclas: el .osz trae solo mapas de 5K (15), 7K (15) y 10K (69).',
+    );
+  });
+
+  it('osu-invalido: 4K que no parsea, con el error del parser de la primera', async () => {
+    const e = await errorDe(oszCon({ 'a.osu': osuCon({ sinHp: true }) }, AUDIO));
+    expect(e.codigo).toBe('osu-invalido');
+    expect(e.message).toBe(
+      'Ninguna dificultad de 4 teclas se pudo leer. Falta el campo HPDrainRate en [Difficulty].',
+    );
+  });
+
+  it('audio-faltante: 4K sin el audio que pide', async () => {
+    const e = await errorDe(oszCon({ 'a.osu': osuCon({ audio: 'musica.mp3' }) }));
+    expect(e.codigo).toBe('audio-faltante');
+    expect(e.message).toBe('Falta el audio: el mapa pide "musica.mp3" y el .osz no lo trae.');
+  });
+
+  it('audio-faltante gana sobre sin-4k cuando hay 7K y 4K sin audio', async () => {
+    const e = await errorDe(
+      oszCon({
+        'a.osu': osuCon({ teclas: 7, version: 'siete' }),
+        'b.osu': osuCon({ audio: 'x.mp3' }),
+      }),
+    );
+    expect(e.codigo).toBe('audio-faltante');
+  });
+
+  it('audio-virtual: AudioFilename virtual (el set de piano)', async () => {
+    const e = await errorDe(
+      oszCon({
+        'a.osu': osuCon({ audio: 'virtual' }),
+        'b.osu': osuCon({ audio: 'Virtual', version: 'B' }),
+      }),
+    );
+    expect(e.codigo).toBe('audio-virtual');
+    expect(e.message).toBe(
+      'Este .osz no trae pista de música: usa audio virtual (el sonido sale de muestras por nota) y Tetra todavía no lo soporta.',
+    );
+  });
+});
+
+describe('analizarOsz: avisos de lo omitido (T-066)', () => {
+  it('cuenta y redacta lo que se deja afuera', async () => {
+    const r = await analizarOsz(
+      oszCon(
+        {
+          '1.osu': osuCon({}),
+          '2.osu': osuCon({ teclas: 7, version: 'a' }),
+          '3.osu': osuCon({ teclas: 7, version: 'b' }),
+          '4.osu': osuCon({ teclas: 5, version: 'c' }),
+          '5.osu': osuCon({ modo: 0, version: 'd' }),
+          '6.osu': osuCon({ version: 'e', sinHp: true }),
+        },
+        AUDIO,
+      ),
+    );
+    expect(r.cancion.dificultades).toHaveLength(1);
+    expect(r.omitidas).toEqual({ otroModo: 1, otrasTeclas: { 5: 1, 7: 2 }, invalidas: 1 });
+    expect(r.avisos).toEqual([
+      'Se omitieron 3 dificultades de otras teclas: 5K (1) y 7K (2).',
+      'Se omitió 1 dificultad que no es de osu!mania.',
+      'Se omitió 1 dificultad que no se pudo leer.',
+    ]);
+  });
+
+  it('singular y plural de cada aviso', async () => {
+    const r = await analizarOsz(
+      oszCon(
+        {
+          '1.osu': osuCon({}),
+          '2.osu': osuCon({ teclas: 7, version: 'a' }),
+          '3.osu': osuCon({ modo: 1, version: 'b' }),
+          '4.osu': osuCon({ modo: 2, version: 'c' }),
+          '5.osu': osuCon({ version: 'd', sinHp: true }),
+          '6.osu': osuCon({ version: 'e', sinHp: true }),
+        },
+        AUDIO,
+      ),
+    );
+    expect(r.avisos).toEqual([
+      'Se omitió 1 dificultad de otras teclas: 7K (1).',
+      'Se omitieron 2 dificultades que no son de osu!mania.',
+      'Se omitieron 2 dificultades que no se pudieron leer.',
+    ]);
+  });
+
+  it('sin nada omitido no hay avisos', async () => {
+    const r = await analizarOsz(oszCon({ '1.osu': osuCon({}) }, AUDIO));
+    expect(r.avisos).toEqual([]);
+    expect(r.omitidas).toEqual({ otroModo: 0, otrasTeclas: {}, invalidas: 0 });
+  });
+
+  it('las dificultades virtuales se omiten con aviso si hay otras con audio real', async () => {
+    const r = await analizarOsz(
+      oszCon({ '1.osu': osuCon({}), '2.osu': osuCon({ audio: 'virtual', version: 'V' }) }, AUDIO),
+    );
+    expect(r.cancion.dificultades.map((d) => d.metadata.difficultyName)).toEqual(['Normal']);
+    expect(r.avisos).toEqual([
+      'Se omitió "Cancion de prueba": usa audio virtual, que Tetra todavía no soporta.',
+    ]);
   });
 });

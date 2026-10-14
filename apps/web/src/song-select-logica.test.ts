@@ -5,7 +5,12 @@
 
 import { describe, expect, it } from 'vitest';
 import type { Chart } from '@tetra/core';
-import type { CancionGuardada } from '@tetra/storage';
+import { ErrorDeImportacion } from '@tetra/storage';
+import type {
+  CancionGuardada,
+  CancionImportadaResumen,
+  ResultadoImportacion,
+} from '@tetra/storage';
 import {
   bpmPrincipal,
   calcularInfoDeDificultad,
@@ -22,6 +27,7 @@ import {
   nombreVisibleDeDificultad,
   ordenarCanciones,
   ordenarDificultades,
+  textoDeImportacion,
   textoDeImportacionFallida,
   type NivelEstrellas,
   type ObtenerEstrellas,
@@ -611,13 +617,177 @@ describe('conDificultadesOrdenadas', () => {
   });
 });
 
-describe('textoDeImportacionFallida', () => {
-  it('nombra el archivo que no se pudo importar', () => {
-    expect(textoDeImportacionFallida('mapa.osz')).toBe('No se pudo importar mapa.osz');
+describe('textoDeImportacionFallida (T-066)', () => {
+  it('con un ErrorDeImportacion pone su mensaje despues del nombre', () => {
+    const error = new ErrorDeImportacion(
+      'sin-4k',
+      'Ninguna dificultad es de 4 teclas: el .osz trae solo mapas de 7K (3).',
+    );
+    expect(textoDeImportacionFallida('mapa.osz', error)).toBe(
+      'No se pudo importar mapa.osz. Ninguna dificultad es de 4 teclas: el .osz trae solo mapas de 7K (3).',
+    );
   });
 
-  it('sin nombre de archivo no deja un espacio colgando', () => {
-    expect(textoDeImportacionFallida('  ')).toBe('No se pudo importar');
+  it('con cualquier otro error usa el mensaje de mensajeDeErrorDeCarga', () => {
+    expect(textoDeImportacionFallida('mapa.osz', new Error('algo raro'))).toBe(
+      'No se pudo importar mapa.osz. algo raro',
+    );
+    expect(textoDeImportacionFallida('mapa.osz', 42)).toBe(
+      'No se pudo importar mapa.osz. Error inesperado: 42',
+    );
+  });
+
+  it('sin nombre no deja un espacio colgando', () => {
+    expect(textoDeImportacionFallida('  ', new Error('x'))).toBe('No se pudo importar. x');
+  });
+
+  it('un nombre de 60 caracteres va entero y uno de 61 se recorta a 59 mas la elipsis', () => {
+    const de60 = 'a'.repeat(56) + '.osz';
+    const de61 = 'a'.repeat(57) + '.osz';
+    expect(de60).toHaveLength(60);
+    expect(textoDeImportacionFallida(de60, new Error('x'))).toBe(`No se pudo importar ${de60}. x`);
+    expect(textoDeImportacionFallida(de61, new Error('x'))).toBe(
+      `No se pudo importar ${'a'.repeat(57)}.o…. x`,
+    );
+  });
+});
+
+describe('textoDeImportacion (T-066)', () => {
+  function resumen(parcial: Partial<CancionImportadaResumen> = {}): CancionImportadaResumen {
+    return {
+      id: 'x',
+      titulo: 'Canon',
+      estado: 'nueva',
+      dificultadesAgregadas: 0,
+      dificultadesActualizadas: 0,
+      archivosCompletados: false,
+      ...parcial,
+    };
+  }
+  function resultado(
+    canciones: CancionImportadaResumen[],
+    avisos: string[] = [],
+    titulo = 'Set',
+  ): ResultadoImportacion {
+    return {
+      canciones,
+      titulo,
+      omitidas: { otroModo: 0, otrasTeclas: {}, invalidas: 0 },
+      avisos,
+    };
+  }
+
+  it('una cancion nueva y sin avisos no dice nada', () => {
+    expect(textoDeImportacion(resultado([resumen()]))).toBeNull();
+  });
+
+  it('una cancion nueva con avisos: frase principal y avisos separados por un espacio', () => {
+    expect(
+      textoDeImportacion(
+        resultado([resumen()], ['Se omitió 1 dificultad de otras teclas: 7K (1).']),
+      ),
+    ).toBe('"Canon" importada. Se omitió 1 dificultad de otras teclas: 7K (1).');
+  });
+
+  it('ya-estaba', () => {
+    expect(textoDeImportacion(resultado([resumen({ estado: 'ya-estaba' })]))).toBe(
+      '"Canon" ya estaba en la biblioteca.',
+    );
+  });
+
+  it('actualizada: singulares', () => {
+    expect(
+      textoDeImportacion(
+        resultado([resumen({ estado: 'actualizada', dificultadesAgregadas: 1 })]),
+      ),
+    ).toBe('"Canon" ya estaba en la biblioteca: se agregó 1 dificultad.');
+    expect(
+      textoDeImportacion(
+        resultado([resumen({ estado: 'actualizada', dificultadesActualizadas: 1 })]),
+      ),
+    ).toBe('"Canon" ya estaba en la biblioteca: se actualizó 1 dificultad.');
+    expect(
+      textoDeImportacion(
+        resultado([resumen({ estado: 'actualizada', archivosCompletados: true })]),
+      ),
+    ).toBe('"Canon" ya estaba en la biblioteca: se completó el fondo o el video.');
+  });
+
+  it('actualizada: plurales y union con coma y " y "', () => {
+    expect(
+      textoDeImportacion(
+        resultado([
+          resumen({
+            estado: 'actualizada',
+            dificultadesAgregadas: 2,
+            dificultadesActualizadas: 3,
+            archivosCompletados: true,
+          }),
+        ]),
+      ),
+    ).toBe(
+      '"Canon" ya estaba en la biblioteca: se agregaron 2 dificultades, se actualizaron 3 dificultades y se completó el fondo o el video.',
+    );
+    expect(
+      textoDeImportacion(
+        resultado([
+          resumen({ estado: 'actualizada', dificultadesAgregadas: 2, archivosCompletados: true }),
+        ]),
+      ),
+    ).toBe(
+      '"Canon" ya estaba en la biblioteca: se agregaron 2 dificultades y se completó el fondo o el video.',
+    );
+  });
+
+  it('los avisos van despues de la frase principal', () => {
+    expect(
+      textoDeImportacion(
+        resultado([resumen({ estado: 'ya-estaba' })], ['Aviso uno.', 'Aviso dos.']),
+      ),
+    ).toBe('"Canon" ya estaba en la biblioteca. Aviso uno. Aviso dos.');
+  });
+
+  it('varias canciones: partes en plural, singular y union', () => {
+    const quince = Array.from({ length: 15 }, () => resumen());
+    expect(
+      textoDeImportacion(
+        resultado(
+          quince,
+          ['Se omitieron 99 dificultades de otras teclas: 5K (15), 7K (15) y 10K (69).'],
+          'Piano Beatmap Set',
+        ),
+      ),
+    ).toBe(
+      'Piano Beatmap Set: 15 canciones nuevas. Se omitieron 99 dificultades de otras teclas: 5K (15), 7K (15) y 10K (69).',
+    );
+    expect(
+      textoDeImportacion(
+        resultado(
+          [resumen(), resumen({ estado: 'ya-estaba' }), resumen({ estado: 'actualizada' })],
+          [],
+          'Set',
+        ),
+      ),
+    ).toBe('Set: 1 canción nueva, 1 ya estaba y 1 actualizada.');
+    expect(
+      textoDeImportacion(
+        resultado([resumen({ estado: 'ya-estaba' }), resumen({ estado: 'ya-estaba' })], [], 'Set'),
+      ),
+    ).toBe('Set: 2 ya estaban.');
+    expect(
+      textoDeImportacion(
+        resultado(
+          [
+            resumen(),
+            resumen(),
+            resumen({ estado: 'actualizada' }),
+            resumen({ estado: 'actualizada' }),
+          ],
+          [],
+          'Set',
+        ),
+      ),
+    ).toBe('Set: 2 canciones nuevas y 2 actualizadas.');
   });
 });
 

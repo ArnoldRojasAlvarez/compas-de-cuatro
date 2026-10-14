@@ -44,6 +44,7 @@ import {
 } from '@tetra/engine';
 import { mensajeDeErrorDeCarga } from './cargador-logica.js';
 import { EVENTO_BIBLIOTECA_CAMBIO } from './musica-menu-logica.js';
+import { fusionarDuplicadosYMigrar } from './fusionar-duplicados.js';
 import {
   ajustesPisarianLocales,
   lineaDeAlmacenamiento,
@@ -972,6 +973,8 @@ function crearControlDeRespaldo(
           !ajustesPisarianLocales(respaldo.ajustes, leerAjustesLocales()) ||
           window.confirm('El respaldo trae ajustes distintos a los actuales. ¿Reemplazarlos?');
         const resumen = await restaurarRespaldo(respaldo, { sobrescribirAjustes });
+        // T-066: un respaldo de otra computadora puede traer la misma cancion con otro id.
+        await fusionarDuplicadosYMigrar();
         window.dispatchEvent(new CustomEvent(EVENTO_BIBLIOTECA_CAMBIO));
         const texto = lineaDeRestauracion(resumen);
         if (resumen.ajustesRestaurados > 0) {

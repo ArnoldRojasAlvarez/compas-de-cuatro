@@ -1,6 +1,6 @@
 # Estado del proyecto
 
-Ultima actualizacion: 13 de octubre de 2026 (T-065).
+Ultima actualizacion: 14 de octubre de 2026 (T-066 paso 1).
 
 Estado corto y siempre al dia. **Si sos una sesion NUEVA, empeza por
 `docs/HANDOFF.md`** (metodo de trabajo, reglas, lecciones), despues
@@ -8,7 +8,7 @@ Estado corto y siempre al dia. **Si sos una sesion NUEVA, empeza por
 
 ## Donde esta todo
 
-- `main`: limpio, verde, 1548 tests + 67 e2e (ver nota de T-061 abajo; el e2e se verifica con `--workers=1`, ver T-063).
+- `main`: limpio, verde, 1626 tests + 72 e2e (ver nota de T-061 abajo; el e2e se verifica con `--workers=1`, ver T-063).
 - Estado demo: menu con musica de la biblioteca, song select sobre la escena, partida con fondo y video, cuatro skins propias, cancion demo sembrada.
 - En curso: nada.
 
@@ -70,6 +70,7 @@ Estado corto y siempre al dia. **Si sos una sesion NUEVA, empeza por
 | T-063 | Reloj interpolado: `ctx.currentTime` avanza en rafagas de ~10 ms y cada pulsacion heredaba hasta un bloque de error (12 ms de rango medidos, std 2,9); ahora el reloj se ancla a `getOutputTimestamp()` e interpola con `performance.now()` (rango 0,2 ms, std 0,03), `clock.desdeTimeStamp(ts)` fecha la entrada, la pista se dibuja suave, y el interpolado nunca se aleja mas de 30 ms de la lectura cruda (el audio manda); `tools/medir-reloj.mjs` lo mide en Chromium real. Ojo: el e2e en paralelo (workers por defecto) falla por carga en la maquina de Arnold tambien en `main`; verificar con `--workers=1` |
 | T-064 | Bloqueo de atajos del navegador en partida: preventDefault de todo lo que el juego no usa (Alt+numpad, Alt solo, Ctrl+W/P/R, F1, F5; decisión pura `debeBloquearTecla`), Keyboard Lock en pantalla completa en Chromium (Ctrl+W/T/N/Tab, Escape sigue pausando), `beforeunload` solo con partida, y una nota en "Antes de presentar". Alt+Tab, la tecla Windows y Alt+F4 no se pueden bloquear desde una página. Falta la prueba real en Opera con pantalla completa (el e2e usa dobles) |
 | T-065 | Replays de las partidas recientes: toda partida completada guarda su replay 7 días (tienda `recientes`, base v8, purga al abrir la app: más de 7 días y tope de 200, el replay de la mejor partida siempre se conserva); "Conservar" fija una; en el song select, lista "Partidas recientes" de la dificultad con "Ver replay" y "Conservar"; en resultados, "Ver replay" de la partida recién jugada (mismo audio, fondo, skin, HUD y modo presentación); el respaldo lleva solo las recientes fijadas; test de determinismo de un replay guardado como reciente |
+| T-066 (paso 1) | Importación con errores claros y sin duplicados: `ErrorDeImportacion` con código y mensaje exacto por causa (skin, no es .osz, muy grande, zip dañado, sin mapas, sin mania, sin 4K con la lista de teclas, ilegible, audio faltante, audio virtual) visible en el banner (hasta tres líneas); `BeatmapID`/`BeatmapSetID` en `parseOsu` y `escribirOsu`; `leerCabeceraOsu` y `clavesDeIdentidad` en `core`; `importarArchivoOsz` deduplica por identidad (reimportar = `ya-estaba` o `actualizada`, conserva id, records, replays, recientes y offset; completa fondo y video); `fusionarDuplicados()` al abrir la app y tras restaurar un respaldo (migra el offset por canción); avisos de lo omitido. Sin cambio de base (sigue en v8). El set de piano sigue fallando, ahora con el mensaje del audio virtual |
 
 La prueba de feel de Arnold ya se hizo: en una cancion real sus golpes salieron
 centrados en cero. El motor esta bien sincronizado.
@@ -77,6 +78,7 @@ centrados en cero. El motor esta bien sincronizado.
 ## En curso
 
 - **T-061, nota:** el e2e `diagnostico-tirones.spec.ts` fallo 1 vez de 28 sin poder ver el error (la primera corrida tras un build en frio, con otro agente corriendo su e2e en el mismo puerto 4173). Sospecha: la linea de resultados formatea un "peor" de mas de 999 ms con separador de miles y la regex del test espera `\d+ ms`. Revisar antes de dar el test por estable.
+- **T-066 (importación de sets con keysounds):** paso 1 hecho. Pendientes el paso 2 (un `.osz` puede dar varias canciones, agrupadas por audio o por pieza) y el paso 3 (audio virtual: keysounds y samples del storyboard, base v9). Hasta el paso 3 el set de piano de Arnold no entra.
 - **T-062 (modo practica):** escrito, listo para despachar (T-060 y T-061 ya entraron).
 
 
@@ -148,7 +150,7 @@ centrados en cero. El motor esta bien sincronizado.
 - **Musica del menu:** suena la biblioteca (T-052). El logo y la musica
   arrancan con el primer clic o tecla (politica de autoplay del navegador).
 - **Canciones viejas sin fondo:** las importadas antes de T-049 no guardaron el
-  `.osz`; para ver su fondo hay que reimportarlas.
+  `.osz`; para ver su fondo hay que reimportarlas (desde T-066 reimportar completa el fondo en vez de duplicar la canción).
 - **Miss por tiempo 50 ms mas tarde:** desde T-044 la expiracion por frame va con margen (ver arriba). No cambia ningun juicio, solo cuando se ve el MISS.
 - **Sintesis de la demo:** 5 a 13 s en una maquina cargada (en segundo plano, no
   bloquea). Facil queda en 1.1 estrellas: con negras puras el modelo no llega a 1.5.
