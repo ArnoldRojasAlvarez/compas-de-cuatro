@@ -22,6 +22,7 @@ import {
   crearMediaMovil,
   pasoDeAlphaDeMarca,
   posicionEnBarra,
+  textoDeMediaViva,
   tramosDeBarra,
 } from './contadores-logica.js';
 import './contadores.css';
@@ -75,8 +76,19 @@ export interface Contadores {
   teclaArriba(columna: number): void;
   /** Suelta todas las cajitas (al reanudar la pausa). */
   soltarTeclas(): void;
-  /** Un golpe con su desviacion (ms, positivo tarde). Los miss no tienen una desviacion que mostrar: se ignoran. */
-  golpe(error: Ms, juicio: Judgement, t: Ms): void;
+  /**
+   * Un golpe con su desviacion (ms, positivo tarde) y el offset en vigor al
+   * golpear. Los miss no tienen una desviacion que mostrar: se ignoran.
+   */
+  golpe(error: Ms, juicio: Judgement, t: Ms, offset: Ms): void;
+  /**
+   * T-060: el offset cambio (teclas - y = de la partida o ajuste de la pausa). La
+   * media en vivo se recalcula al instante para el offset nuevo, sin esperar
+   * golpes: cada golpe guardado recuerda con que offset se midio.
+   */
+  cambiarOffset(offset: Ms): void;
+  /** T-060: borra la media en vivo (el ajuste de la pausa la deja en cero). */
+  reiniciarMedia(): void;
   /** Una vez por frame: contadores de juicio y desvanecido de las marcas. */
   actualizar(t: Ms, conteos: Readonly<Record<Judgement, number>>): void;
 }
@@ -156,8 +168,14 @@ export function crearContadores(
   for (let paso = 0; paso <= PASOS_DE_ALPHA; paso++)
     opacidades.push(String(paso / PASOS_DE_ALPHA));
   let siguienteMarca = 0;
+  // T-060: el anillo guarda `error + offset al golpear` (el desfase fisico del
+  // jugador, que no cambia cuando cambia el offset); lo que se muestra es esa
+  // media menos el offset de ahora. Con el offset fijo es la media de los errores.
   const media = crearMediaMovil();
+  let offsetActual: Ms = 0;
   let flecha: HTMLElement | null = null;
+  let textoMedia: HTMLElement | null = null;
+  let textoMediaEscrito = '';
   const ventanaMax = opciones.ventanas.bad;
   if (opciones.barraDeError) {
     const raiz = crear('div', 'tetra-error');
@@ -172,7 +190,39 @@ export function crearContadores(
     }
     flecha = crear('div', 'tetra-error-media');
     raiz.appendChild(flecha);
+    // T-060: la media de los ultimos golpes como numero, a la derecha de la barra.
+    textoMedia = crear('div', 'tetra-error-media-texto');
+    textoMedia.hidden = true;
+    textoMedia.title = 'Media de tus últimos golpes: positivo es tarde, negativo es temprano.';
+    raiz.appendChild(textoMedia);
     hud.appendChild(raiz);
+  }
+
+  /** Escribe la flecha y el numero con la media que corresponde al offset de ahora. */
+  function mostrarMedia(): void {
+    if (flecha === null || textoMedia === null) return;
+    const cantidad = media.cantidad();
+    if (cantidad === 0) {
+      flecha.style.opacity = '0';
+      if (!textoMedia.hidden) textoMedia.hidden = true;
+      textoMediaEscrito = '';
+      return;
+    }
+    const mediaActual = media.valor() - offsetActual;
+    // Desplazamiento desde el centro, en % del ancho de la barra (ver .tetra-error-media en contadores.css).
+    flecha.style.transform = `translateX(${(50 * posicionEnBarra(mediaActual, ventanaMax)).toFixed(2)}%)`;
+    flecha.style.opacity = '1';
+    const texto = textoDeMediaViva(mediaActual, cantidad);
+    if (texto === null) {
+      if (!textoMedia.hidden) textoMedia.hidden = true;
+      textoMediaEscrito = '';
+      return;
+    }
+    if (texto !== textoMediaEscrito) {
+      textoMediaEscrito = texto;
+      textoMedia.textContent = texto;
+    }
+    if (textoMedia.hidden) textoMedia.hidden = false;
   }
 
   return {
@@ -200,7 +250,7 @@ export function crearContadores(
       }
     },
 
-    golpe(error: Ms, juicio: Judgement, t: Ms): void {
+    golpe(error: Ms, juicio: Judgement, t: Ms, offset: Ms): void {
       if (flecha === null || juicio === 'miss') return;
       const posicion = posicionEnBarra(error, ventanaMax);
       const marca = marcas[siguienteMarca]!;
@@ -211,11 +261,20 @@ export function crearContadores(
       marca.style.left = `${(50 + 50 * posicion).toFixed(2)}%`;
       marca.dataset.juicio = juicio;
       marca.style.opacity = opacidades[PASOS_DE_ALPHA]!;
-      // La flechita sigue la media movil de los ultimos golpes.
-      media.agregar(error);
-      // Desplazamiento desde el centro, en % del ancho de la barra (ver .tetra-error-media en contadores.css).
-      flecha.style.transform = `translateX(${(50 * posicionEnBarra(media.valor(), ventanaMax)).toFixed(2)}%)`;
-      flecha.style.opacity = '1';
+      // La flechita y el numero siguen la media movil de los ultimos golpes.
+      offsetActual = offset;
+      media.agregar(error + offset);
+      mostrarMedia();
+    },
+
+    cambiarOffset(offset: Ms): void {
+      offsetActual = offset;
+      mostrarMedia();
+    },
+
+    reiniciarMedia(): void {
+      media.reiniciar();
+      mostrarMedia();
     },
 
     actualizar(t: Ms, conteos: Readonly<Record<Judgement, number>>): void {

@@ -1,0 +1,97 @@
+/* Barra de ajuste (T-058): offset, velocidad, volumen, efectos y atenuacion
+   comparten la misma cuadricula de cuatro columnas fijas (hueco del `-`, riel,
+   hueco del `+`, valor), asi el riel mide lo mismo y el valor cae en la misma
+   columna en todas, lleven botones o no. T-060: sale de ajustes.css para que
+   el song select use la misma barra (compacta) para el offset de la cancion. */
+.tetra-ajustes-barra {
+  --ancho-riel: 140px;
+  --ancho-paso: 28px;
+  --ancho-valor: 5.5rem;
+  --alto-barra: 28px;
+  display: grid;
+  grid-template-columns: var(--ancho-paso) var(--ancho-riel) var(--ancho-paso) var(--ancho-valor);
+  align-items: center;
+  column-gap: var(--espacio-1);
+}
+
+/* Version compacta (song select): riel mas corto, valor justo. */
+.tetra-ajustes-barra--compacta {
+  --ancho-riel: 96px;
+  --ancho-valor: 3.6rem;
+  --alto-barra: 24px;
+}
+
+.tetra-ajustes-barra > * {
+  grid-row: 1;
+}
+
+.tetra-ajustes-barra-menos {
+  grid-column: 1;
+}
+
+.tetra-ajustes-riel {
+  position: relative;
+  grid-column: 2;
+  min-width: 0;
+}
+
+.tetra-ajustes-barra-mas {
+  grid-column: 3;
+}
+
+/* Dato vivo junto a la barra ("7 · 514 ms", "80%"): mono tabular, tenue, en la columna del valor. */
+.tetra-ajustes-barra .tetra-ajustes-dato {
+  grid-column: 4;
+  padding-left: var(--espacio-2);
+  font-size: var(--tipo-xs);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  color: var(--tinta-2);
+}
+
+.tetra-ajustes-barra--compacta .tetra-ajustes-dato {
+  padding-left: var(--espacio-1);
+}
+
+/* El acento del navegador en teal; el riel ocupa toda su columna. */
+.tetra-ajustes-rango {
+  display: block;
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  height: var(--alto-barra);
+  margin: 0;
+  accent-color: var(--acento);
+  cursor: pointer;
+}
+
+/* El foco de style.css pinta un fondo opaco: aca taparia la marca del cero. */
+#app .tetra-ajustes-barra .tetra-ajustes-rango:focus-visible {
+  background: transparent;
+}
+
+/* El cero del offset: una rayita en el centro del riel, detras de la perilla. */
+.tetra-ajustes-riel-centro::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  z-index: 0;
+  width: 2px;
+  height: 20px;
+  background: var(--tinta-3);
+  border-radius: 1px;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+
+/* Botones - y + del offset: cuadrados chicos, mismo gris fantasma que los botones-icono. */
+#app .tetra-ajustes-barra .tetra-boton-icono {
+  width: var(--ancho-paso);
+  height: var(--ancho-paso);
+}
+
+#app .tetra-ajustes-barra .tetra-icono {
+  width: 16px;
+  height: 16px;
+}

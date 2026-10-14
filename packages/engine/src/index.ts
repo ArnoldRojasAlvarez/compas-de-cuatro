@@ -38,5 +38,6 @@ export {
   progresoAY,
   progresoEsVisible,
   receptorY,
+  tramoVisible,
   ventanaVacia,
 } from './position.js';

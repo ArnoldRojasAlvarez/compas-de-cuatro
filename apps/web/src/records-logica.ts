@@ -149,7 +149,8 @@ export function desviacionEsAlta(ms: number): boolean {
 
 /**
  * `title` de la desviacion media: "En promedio pegas tarde por 4 ms". Si es
- * alta, agrega la sugerencia de ajustar el offset de la cancion.
+ * alta, agrega la sugerencia de corregir el offset: el global si pasa en todas
+ * las canciones (T-060: es el del equipo), el de la cancion si solo en esta.
  */
 export function tituloDeDesviacion(ms: number): string {
   const entero = Number.isFinite(ms) ? enteroDeDesviacion(ms) : 0;
@@ -157,7 +158,9 @@ export function tituloDeDesviacion(ms: number): string {
     entero === 0
       ? 'En promedio pegas justo a tiempo'
       : `En promedio pegas ${entero > 0 ? 'tarde' : 'temprano'} por ${Math.abs(entero)} ms`;
-  return desviacionEsAlta(ms) ? `${base}. Prueba ajustar el offset de esta canción.` : base;
+  return desviacionEsAlta(ms)
+    ? `${base}. Si te pasa en todas las canciones, corrige el offset global (en los resultados o en ajustes); si solo en esta, el de la canción.`
+    : base;
 }
 
 /** Clase CSS del rango (el color lo pone song-select.css). */

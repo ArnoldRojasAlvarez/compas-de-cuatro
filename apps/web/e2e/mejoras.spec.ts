@@ -229,6 +229,23 @@ test('offset local: se ajusta en el song select y solo cambia el reloj de esa ca
   await page.keyboard.press('=');
   await expect(valor).toHaveText('+16 ms');
 
+  // T-060: la barra. Arrastrar (fill), rueda del mouse de a 1 ms y doble clic a 0.
+  const barra = page.locator('#tetra-ss-offset-barra');
+  await barra.fill('25');
+  await expect(valor).toHaveText('+25 ms');
+  await barra.hover();
+  await page.mouse.wheel(0, -100);
+  await expect(valor).toHaveText('+26 ms');
+  await page.mouse.wheel(0, 100);
+  await expect(valor).toHaveText('+25 ms');
+  await barra.dblclick();
+  await expect(valor).toHaveText('0 ms');
+  await expect(barra).toHaveValue('0');
+  await barra.fill('16');
+  await expect(valor).toHaveText('+16 ms');
+  await expect(barra).toHaveAttribute('min', '-150');
+  await expect(barra).toHaveAttribute('max', '150');
+
   // Con offset distinto de 0 el ajuste queda a la vista sin el mouse encima.
   await page.mouse.move(0, 0);
   await expect(page.locator('.tetra-ss-offset-ajuste')).toBeVisible();
@@ -282,29 +299,34 @@ test('resultados: Corregir offset ajusta el local de la cancion y el record mues
   // Hasta el final de la partida (la ultima nota cae a los 31,5 s).
   const corregir = page.locator('.tetra-resultados-corregir');
   await expect(corregir).toBeVisible({ timeout: 90_000 });
-  await expect(corregir).toHaveAttribute('title', /de esta canción/);
+  // T-060: el boton principal corrige el offset GLOBAL (el del equipo) y dice de
+  // cuanto a cuanto; "Solo esta canción" queda como opcion chica al lado.
+  await expect(corregir).toHaveAttribute('title', /offset global.*de \+10 ms pasa a \+\d+ ms/);
+  const soloEsta = page.locator('.tetra-resultados-corregir-local');
+  await expect(soloEsta).toHaveText('Solo esta canción');
+  await expect(soloEsta).toHaveAttribute('title', /solo el offset de esta canción.*de 0 ms pasa a \+\d+ ms/);
   await corregir.click();
   await expect(corregir).toBeDisabled();
+  await expect(soloEsta).toBeDisabled();
 
-  // Se corrigio el local de la cancion; el global sigue en 10.
-  const guardados = Object.values(await offsetsLocales(page));
-  expect(guardados).toHaveLength(1);
-  const local = Number(guardados[0]);
-  expect(local).toBeGreaterThan(30);
-  expect(local).toBeLessThan(120);
-  await expect(corregir).toHaveText(`Offset: ${local} ms`);
-  expect(await page.evaluate(() => localStorage.getItem('tetra:offset-usuario'))).toBe('10');
+  // Se corrigio el global: 10 mas la media (~+60 menos lo que descuenta el reloj); el local no existe.
+  const global = Number(await page.evaluate(() => localStorage.getItem('tetra:offset-usuario')));
+  expect(global).toBeGreaterThan(40);
+  expect(global).toBeLessThan(130);
+  await expect(corregir).toHaveText(`Offset global: +${global} ms`);
+  expect(Object.values(await offsetsLocales(page))).toEqual([]);
 
   // Volver al song select: el record trae la desviacion media (tarde, alta) y las pulsaciones.
   await page.getByRole('button', { name: 'Volver al song select' }).click();
   const desviacion = page.locator('.tetra-ss-record-desviacion');
   await expect(desviacion).toHaveText(/^\+\d+ ms$/);
   await expect(desviacion).toHaveClass(/tetra-ss-record-desviacion-alta/);
-  await expect(desviacion).toHaveAttribute('title', /pegas tarde por \d+ ms.*offset de esta canción/);
-  // Pasados +-8 ms el control de offset queda a la vista, con el local ya corregido.
+  await expect(desviacion).toHaveAttribute('title', /pegas tarde por \d+ ms.*offset global/);
+  // Pasados +-8 ms el control de offset de la cancion queda a la vista (sugerido), en 0:
+  // lo que se corrigio fue el global.
   await page.mouse.move(0, 0);
   await expect(page.locator('.tetra-ss-offset-ajuste')).toBeVisible();
-  await expect(page.locator('.tetra-ss-offset-valor')).toHaveText(`+${local} ms`);
+  await expect(page.locator('.tetra-ss-offset-valor')).toHaveText('0 ms');
   await expect(page.locator('.tetra-ss-record-intentos')).toHaveAttribute(
     'title',
     /D \d+ · F \d+ · J \d+ · K \d+/,

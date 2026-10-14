@@ -127,13 +127,13 @@ export async function alternarPresentacion(): Promise<void> {
   }
 }
 
-/** Atajo F: solo fuera de partida y de pantallas donde F es otra cosa (carril del mapeador, remapeo de teclas). */
+/** Atajo F: solo fuera de partida y de pantallas donde F es otra cosa (carril del mapeador, remapeo de teclas, calibrar offset). */
 function atajoValido(e: KeyboardEvent): boolean {
   if (e.code !== 'KeyF' || e.ctrlKey || e.metaKey || e.altKey || e.repeat) return false;
   const objetivo = e.target as HTMLElement | null;
   if (objetivo && ['INPUT', 'TEXTAREA', 'SELECT'].includes(objetivo.tagName)) return false;
   if (document.body.classList.contains('tetra-en-juego')) return false;
-  if (document.querySelector('.tetra-mapeador, .tetra-ajustes')) return false;
+  if (document.querySelector('.tetra-mapeador, .tetra-ajustes, .tetra-calibrar-offset')) return false;
   return true;
 }
 

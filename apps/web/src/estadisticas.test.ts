@@ -134,6 +134,24 @@ describe('calcularOffsetCorregido', () => {
     expect(calcularOffsetCorregido(10, -24)).toBe(-14);
   });
 
+  it('T-060, caso de Arnold: con +68 ya puesto y una media de +27, el nuevo es +95 y la siguiente partida queda en ~0 (no se pasa ni se acumula de mas)', () => {
+    // Partida 1 con offset 68: media +27 -> 95 (el boton muestra el total, no el delta).
+    const offset1 = 68;
+    const media1 = 27;
+    const offset2 = calcularOffsetCorregido(offset1, media1);
+    expect(offset2).toBe(95);
+    // El sesgo fisico del jugador (tiempo real) es constante: con la formula del
+    // reloj, error = sesgo - offset. Con 68 dio 27: sesgo = 95.
+    const sesgoFisico = media1 + offset1;
+    // Partida 2 con el offset nuevo: la media queda en 0.
+    const media2 = sesgoFisico - offset2;
+    expect(media2).toBe(0);
+    // Y volver a corregir con media 0 no mueve nada: no se acumula al repetir.
+    expect(calcularOffsetCorregido(offset2, media2)).toBe(95);
+    // Si una partida 3 diera -5 (pego un poco temprano ahora), baja 5, no 95 - 5 - 27.
+    expect(calcularOffsetCorregido(offset2, -5)).toBe(90);
+  });
+
   it('test de signo: aplicar la correccion sobre el mismo sesgo fisico deja el error en 0, no lo duplica', () => {
     // Modela un jugador con un sesgo fisico fijo (ver el JSDoc de
     // calcularOffsetCorregido): pulsa siempre "sesgoFisico" ms antes o

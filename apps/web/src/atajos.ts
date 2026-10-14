@@ -7,6 +7,8 @@
 //     intro este disponible.
 //   - T-057: "Velocidad 7 · 514 ms" (arriba al centro): aparece al cambiar la
 //     velocidad con F3/F4 y se desvanece solo.
+//   - T-060: "Offset de la canción +12 ms" (justo debajo): aparece al ajustar el
+//     offset con - y = y se desvanece solo.
 //
 // Aca no se mide tiempo: game.ts le pasa el progreso (de `clock.now()` y del
 // `event.timeStamp` del keydown) y si el salto esta disponible.
@@ -33,6 +35,8 @@ export interface AvisosDeAtajos {
    * `PASOS_DE_ALPHA_AVISO` (0 lo oculta). Solo escribe lo que cambia.
    */
   mostrarVelocidad(texto: string, paso: number): void;
+  /** T-060: el aviso del offset ("Offset de la canción +12 ms"), con la misma escala de opacidad que el de velocidad. */
+  mostrarOffset(texto: string, paso: number): void;
 }
 
 /** Crea los dos avisos como hijos de `hud` (la capa `.tetra-hud`). */
@@ -73,13 +77,21 @@ export function crearAvisosDeAtajos(hud: HTMLElement): AvisosDeAtajos {
   velocidad.hidden = true;
   velocidad.setAttribute('role', 'status');
 
-  hud.append(reintento, salto, velocidad);
+  // -- Aviso de offset (T-060) --
+  const offset = document.createElement('div');
+  offset.className = 'tetra-offset-aviso';
+  offset.hidden = true;
+  offset.setAttribute('role', 'status');
+
+  hud.append(reintento, salto, velocidad, offset);
 
   // Paso del aro (0 a PASOS_ARO).
   let paso = 0;
   let saltoVisible = false;
   let textoVelocidad = '';
   let pasoVelocidad = 0;
+  let textoOffset = '';
+  let pasoOffset = 0;
 
   return {
     mostrarReintento(progreso: number): void {
@@ -114,6 +126,18 @@ export function crearAvisosDeAtajos(hud: HTMLElement): AvisosDeAtajos {
       pasoVelocidad = nuevo;
       velocidad.hidden = nuevo === 0;
       velocidad.style.opacity = String(nuevo / PASOS_DE_ALPHA_AVISO);
+    },
+
+    mostrarOffset(texto: string, paso: number): void {
+      const nuevo = Math.min(PASOS_DE_ALPHA_AVISO, Math.max(0, Math.round(paso)));
+      if (texto !== textoOffset) {
+        textoOffset = texto;
+        offset.textContent = texto;
+      }
+      if (nuevo === pasoOffset) return;
+      pasoOffset = nuevo;
+      offset.hidden = nuevo === 0;
+      offset.style.opacity = String(nuevo / PASOS_DE_ALPHA_AVISO);
     },
   };
 }

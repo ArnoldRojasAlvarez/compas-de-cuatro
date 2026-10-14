@@ -80,3 +80,31 @@ se mantiene.
 
 Suavizar el dibujo entre actualizaciones del reloj de audio (ticket aparte si
 hace falta, ver T-059). Cambiar las ventanas de juicio (son las de osu!mania).
+
+## Decisiones al fusionar (13 de octubre, sobre T-063)
+
+- **El offset que se ajusta en vivo es el GLOBAL**, no el de la cancion (cambio
+  de contrato respecto de la seccion 2, a pedido de Arnold): el retraso del
+  equipo (teclado, audio, pantalla) es uno solo y vale para todas las canciones,
+  como en osu! lazer. Las teclas `-`/`=`, el boton de la pausa y "Corregir
+  offset" de los resultados corrigen el global; en resultados queda "Solo esta
+  canción" como opcion chica para un mapa mal sincronizado. El aviso dice
+  `Offset +12 ms`. El offset por cancion se mueve en el song select.
+- **Los 95 ms de Xevel**: "Corregir offset" muestra el offset TOTAL que queda
+  (`actual + media`), no el delta. Con 68 ya puestos (de una partida anterior,
+  con render por software) y media +27, 95 es correcto; el test
+  "caso de Arnold" en estadisticas.test.ts lo fija y comprueba que no se
+  acumula al repetir. El boton ahora dice "de +68 ms pasa a +95 ms".
+- **Song select**: el control `- +68 ms +` se reemplaza por la barra de T-058
+  (barra.ts, compacta): -150 a +150, arrastre, rueda, flechas (Shift 5 ms),
+  doble clic a 0, teclas `-`/`=`; el titulo aclara que es el ajuste fino que
+  se suma al global.
+- **Calibrar** fecha cada golpe con el mapa de tiempo de T-063
+  (`crearMapaDeTiempo`), igual que la partida; ya no lee `performance.now()`.
+- **Cuerpo de LN**: `packages/engine/src/playfield-ln-larga.test.ts` reproduce
+  el reporte (LN mas larga que la pista, cabeza pasada del receptor y cola
+  arriba): falla en el codigo viejo y pasa con `tramoVisible`.
+- Criterios: una LN mas larga que la pista se ve entera (test); e2e de offset
+  en vivo y de la pausa sobre el global; calibracion con tolerancia por el
+  fechado de T-063 (la media sale hasta ~14 ms mas temprano que
+  `currentTime - outputLatency`); ajustes entra en 1280x800 (e2e de partida).

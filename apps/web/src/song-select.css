@@ -1048,13 +1048,13 @@
   color: var(--acento);
 }
 
+/* T-060: el ajuste es la misma barra de ajustes (barra.css), compacta: riel
+   con el cero marcado, - y + de 1 ms y el valor. Oculta hasta que hay offset,
+   se sugiere, o se pasa el mouse / enfoca el reloj. */
 .tetra-ss-offset-ajuste {
   display: none;
   align-items: center;
-  font-family: var(--fuente-datos);
-  font-size: var(--tipo-xs);
-  font-variant-numeric: tabular-nums;
-  color: var(--tinta-2);
+  margin-left: var(--espacio-1);
 }
 
 .tetra-ss-offset--activo .tetra-ss-offset-ajuste,
@@ -1065,12 +1065,19 @@
 }
 
 #app .tetra-ss-offset-paso {
-  width: 28px;
-  height: 28px;
+  width: 24px;
+  height: 24px;
+}
+
+.tetra-ss-offset .tetra-ajustes-barra--compacta {
+  --ancho-paso: 24px;
 }
 
 .tetra-ss-offset-valor {
-  min-width: 6ch;
-  text-align: center;
-  white-space: nowrap;
+  text-align: right;
+}
+
+/* Con offset puesto, el valor se ve en teal, como el reloj. */
+.tetra-ss-offset--activo .tetra-ss-offset-valor {
+  color: var(--acento);
 }

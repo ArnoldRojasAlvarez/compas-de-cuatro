@@ -273,9 +273,9 @@ describe('desviacion media del record (T-057)', () => {
   it('solo si es alta el title sugiere ajustar el offset de la cancion', () => {
     expect(tituloDeDesviacion(5)).not.toContain('offset');
     expect(tituloDeDesviacion(-8)).not.toContain('offset');
-    expect(tituloDeDesviacion(12)).toContain('offset de esta canción');
+    expect(tituloDeDesviacion(12)).toContain('offset global');
     expect(tituloDeDesviacion(-12)).toContain('temprano por 12 ms');
-    expect(tituloDeDesviacion(-12)).toContain('offset de esta canción');
+    expect(tituloDeDesviacion(-12)).toContain('offset global');
   });
 });
 

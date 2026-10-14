@@ -19,6 +19,7 @@ import {
 import { leerKeyMap } from './keymap.js';
 import { nombreLegibleDeCodigo } from './teclas.js';
 import { formatearPulsaciones, formatearUR, unstableRate } from './contadores-logica.js';
+import { formatearOffset } from './ajustes-barras-logica.js';
 import { colorConAlpha, fraccionesDeJuicio, rangoDePrecision } from './resultados-logica.js';
 import { agregarImagenDeFondo } from './escena.js';
 import { lineaDeAutoria, type EscenaPartida } from './escena-logica.js';
@@ -371,19 +372,27 @@ function crearFilaDeTeclasYUR(
  * game.ts decide cual y arma `guardar`.
  */
 export interface CorreccionDeOffset {
-  /** El offset que se corrige, tal como estaba al jugar. */
-  actual: Ms;
-  /** Guarda el offset nuevo y devuelve el que quedo guardado (el local se recorta a +-300). */
-  guardar(ms: Ms): Ms;
-  /** true si es el offset de la cancion, no el global (solo cambia el texto del boton). */
-  local: boolean;
+  /**
+   * T-060: el offset GLOBAL (el del equipo: teclado, audio y pantalla; vale para
+   * todas las canciones, como en osu!) que regia durante los golpes de esta
+   * partida, y como guardar el corregido. Es lo que corrige el boton principal.
+   */
+  global: { actual: Ms; guardar(ms: Ms): Ms };
+  /**
+   * Con una cancion de la biblioteca: su offset local (T-057, ajuste fino para
+   * un mapa mal sincronizado), para la opcion secundaria "Solo esta canción".
+   * `guardar` devuelve el valor que quedo (recortado a +-300).
+   */
+  local?: { actual: Ms; guardar(ms: Ms): Ms };
 }
 
 /**
- * Boton "corregir offset segun esta partida" (T-007, "Parte B"): aplica
- * `calcularOffsetCorregido` sobre la media de esta partida y guarda el
- * resultado con `correccion.guardar`, para que la proxima partida arranque
- * con el offset corregido (ver game.ts, donde se lee al construir el reloj).
+ * Botones "Corregir offset" (T-007, "Parte B"; T-060 lo pasa al global):
+ * aplican `calcularOffsetCorregido` sobre la media de esta partida y guardan el
+ * resultado, para que la proxima partida arranque con el offset corregido (ver
+ * game.ts, donde se lee al construir el reloj). El principal corrige el offset
+ * global; con una cancion de la biblioteca hay un segundo boton, chico, que
+ * corrige solo el de esa cancion. Al usar uno, los dos se apagan.
  *
  * No se muestra si no hubo golpes juzgados o si la media ya esta en 0:
  * no hay nada que corregir (T-007, criterios de aceptacion).
@@ -398,21 +407,44 @@ function crearBotonCorregirOffset(
     return null;
   }
 
+  const fila = document.createElement('div');
+  fila.className = 'tetra-resultados-corregir-fila';
+
+  const globalNuevo = Math.round(calcularOffsetCorregido(correccion.global.actual, mediaError));
   const boton = document.createElement('button');
   boton.type = 'button';
   boton.className = 'tetra-resultados-corregir';
   boton.textContent = 'Corregir offset';
-  boton.title = `Ajusta el offset según la media de esta partida (${formatearMedia(mediaError)}). Se aplica en la próxima${correccion.local ? ' de esta canción' : ''}.`;
+  boton.title = `Ajusta tu offset global (el de tu equipo, vale para todas las canciones) según la media de esta partida (${formatearMedia(mediaError)}): de ${formatearOffset(correccion.global.actual)} pasa a ${formatearOffset(globalNuevo)}. Se aplica en la próxima partida.`;
+  fila.appendChild(boton);
+
+  const local = correccion.local;
+  const botonLocal = document.createElement('button');
+  if (local !== undefined) {
+    const localNuevo = Math.round(calcularOffsetCorregido(local.actual, mediaError));
+    botonLocal.type = 'button';
+    botonLocal.className = 'tetra-resultados-corregir-local';
+    botonLocal.textContent = 'Solo esta canción';
+    botonLocal.title = `Corrige solo el offset de esta canción (ajuste fino para un mapa mal sincronizado): de ${formatearOffset(local.actual)} pasa a ${formatearOffset(localNuevo)}. El global no cambia.`;
+    fila.appendChild(botonLocal);
+  }
 
   boton.addEventListener('click', () => {
-    const offsetNuevo = correccion.guardar(
-      Math.round(calcularOffsetCorregido(correccion.actual, mediaError)),
-    );
+    const offsetNuevo = correccion.global.guardar(globalNuevo);
     boton.disabled = true;
-    boton.textContent = `Offset: ${offsetNuevo} ms`;
+    botonLocal.disabled = true;
+    boton.textContent = `Offset global: ${formatearOffset(offsetNuevo)}`;
   });
+  if (local !== undefined) {
+    botonLocal.addEventListener('click', () => {
+      const offsetNuevo = local.guardar(Math.round(calcularOffsetCorregido(local.actual, mediaError)));
+      boton.disabled = true;
+      botonLocal.disabled = true;
+      botonLocal.textContent = `Offset de la canción: ${formatearOffset(offsetNuevo)}`;
+    });
+  }
 
-  return boton;
+  return fila;
 }
 
 /** Bloque principal: letra de rango a la izquierda, precision, score y combo a la derecha. */

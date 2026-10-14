@@ -327,6 +327,28 @@
   align-self: flex-start;
 }
 
+/* T-060: "Corregir offset" (global) y, con una cancion de la biblioteca, la
+   opcion chica "Solo esta canción" al lado. */
+.tetra-resultados-corregir-fila {
+  display: flex;
+  align-items: center;
+  gap: var(--espacio-2);
+  align-self: flex-start;
+}
+
+#app .tetra-resultados-corregir-local {
+  padding: 0 var(--espacio-2);
+  min-height: 28px;
+  font-size: var(--tipo-xs);
+  color: var(--tinta-2);
+  background: transparent;
+  border: 1px solid var(--linea);
+}
+
+#app .tetra-resultados-corregir-local:disabled {
+  opacity: 0.6;
+}
+
 /* T-061: tirones de la partida, una linea chica en mono con el boton-icono que
    copia el diagnostico. Solo existe si hubo tirones. */
 .tetra-resultados-tirones {

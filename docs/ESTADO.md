@@ -8,7 +8,7 @@ Estado corto y siempre al dia. **Si sos una sesion NUEVA, empeza por
 
 ## Donde esta todo
 
-- `main`: limpio, verde, 1447 tests + 53 e2e (ver nota de T-061 abajo).
+- `main`: limpio, verde, 1501 tests + 59 e2e (ver nota de T-061 abajo; el e2e se verifica con `--workers=1`, ver T-063).
 - Estado demo: menu con musica de la biblioteca, song select sobre la escena, partida con fondo y video, cuatro skins propias, cancion demo sembrada.
 - En curso: nada.
 
@@ -66,6 +66,7 @@ Estado corto y siempre al dia. **Si sos una sesion NUEVA, empeza por
 | T-042 | Respaldo de la biblioteca en zip (canciones con audio, fondo y video, skins, records, ajustes), restaurar sin pisar ni duplicar, tarjeta "05 Biblioteca" en ajustes con uso de almacenamiento |
 | T-056 | Partida: cajitas con pulsaciones por tecla, contador de juicios en vivo, barra de error con media movil, reintento manteniendo ` 0,5 s, saltar intro con Espacio; resultados con pulsaciones y UR; el record guarda pulsaciones y desviacion media |
 | T-054 | Pulido: legibilidad sobre portadas, dificultades de facil a dificil, audio de cualquier dificultad, errores cerrables, fondo del menu inmediato |
+| T-060 | LN que desaparecian: el cuerpo se dibuja si el tramo entero toca la pista (test que falla en el codigo viejo); offset GLOBAL por defecto (es el del equipo, como en osu!): teclas `-`/`=` en partida, "Ajustar offset" en la pausa y "Corregir offset" en resultados lo corrigen, con "Solo esta canción" como opcion chica; media en vivo junto a la barra de error; "Calibrar" en ajustes (metronomo a 120 BPM, fechado con el mapa de tiempo de T-063); el offset por cancion es una barra compacta (la de T-058) en el song select con arrastre, rueda, flechas, doble clic a 0 y teclas `-`/`=`. Los 95 ms de Xevel eran el total (68 previos + 27): la cuenta es correcta, el boton ahora dice de cuanto a cuanto |
 | T-063 | Reloj interpolado: `ctx.currentTime` avanza en rafagas de ~10 ms y cada pulsacion heredaba hasta un bloque de error (12 ms de rango medidos, std 2,9); ahora el reloj se ancla a `getOutputTimestamp()` e interpola con `performance.now()` (rango 0,2 ms, std 0,03), `clock.desdeTimeStamp(ts)` fecha la entrada, la pista se dibuja suave, y el interpolado nunca se aleja mas de 30 ms de la lectura cruda (el audio manda); `tools/medir-reloj.mjs` lo mide en Chromium real. Ojo: el e2e en paralelo (workers por defecto) falla por carga en la maquina de Arnold tambien en `main`; verificar con `--workers=1` |
 
 La prueba de feel de Arnold ya se hizo: en una cancion real sus golpes salieron
@@ -73,9 +74,8 @@ centrados en cero. El motor esta bien sincronizado.
 
 ## En curso
 
-- **T-060 (LN que desaparecen y offset en vivo):** detenido a pedido de Arnold el 8 de octubre, SIN REVISAR. Rama `fix/ln-y-offset` (worktree `.claude/worktrees/agent-adfebc9a3b6dbe7b4`), cuatro commits: cuerpo de LN, media en vivo y `-`/`=` en partida, "Ajustar offset" en la pausa, "Calibrar" en ajustes. Le faltaba el build y el e2e completos. Al retomar: checks y e2e en la rama, revisar el signo del offset con su e2e, fusionar (choca poco con T-061 en `game.ts`).
 - **T-061, nota:** el e2e `diagnostico-tirones.spec.ts` fallo 1 vez de 28 sin poder ver el error (la primera corrida tras un build en frio, con otro agente corriendo su e2e en el mismo puerto 4173). Sospecha: la linea de resultados formatea un "peor" de mas de 999 ms con separador de miles y la regex del test espera `\d+ ms`. Revisar antes de dar el test por estable.
-- **T-062 (modo practica):** escrito, se despacha cuando entren T-060 y T-061 (mismo bucle de juego).
+- **T-062 (modo practica):** escrito, listo para despachar (T-060 y T-061 ya entraron).
 
 
 

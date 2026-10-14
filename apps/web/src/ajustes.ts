@@ -66,6 +66,7 @@ import {
   pasoDeOffset,
 } from './ajustes-barras-logica.js';
 import { crearBotonIcono } from './iconos.js';
+import { crearBarra, sentidoDeFlecha } from './barra.js';
 import {
   gananciaDeVolumen,
   guardarVolumen,
@@ -198,72 +199,8 @@ function agruparEnFila(...filas: HTMLElement[]): HTMLElement {
   return grupo;
 }
 
-/** Dato vivo en mono, junto a un control ("1200 ms", "80%"). */
-function crearDatoVivo(texto: string): HTMLElement {
-  const dato = document.createElement('span');
-  dato.className = 'tetra-ajustes-valor tetra-ajustes-dato';
-  dato.textContent = texto;
-  return dato;
-}
-
-interface OpcionesBarra {
-  id: string;
-  min: number;
-  max: number;
-  paso: number;
-  /** Posicion inicial de la barra. */
-  valor: number;
-  /** Texto inicial del valor, a la derecha de la barra. */
-  texto: string;
-  /** Una rayita en el centro del riel (el cero del offset). */
-  marcaCentro?: boolean;
-  /** Botones a los costados de la barra (el offset). Sin ellos, el hueco queda vacio. */
-  menos?: HTMLElement;
-  mas?: HTMLElement;
-}
-
-/**
- * Barra de ajuste (T-058): el mismo componente para offset, velocidad,
- * volumen, efectos y atenuacion. Cuatro columnas fijas (hueco del `-`, riel,
- * hueco del `+`, valor), asi que todas las barras tienen el mismo largo de riel
- * y el valor cae en la misma columna, lleven botones o no.
- */
-function crearBarra(opciones: OpcionesBarra): {
-  entrada: HTMLInputElement;
-  dato: HTMLElement;
-  control: HTMLElement;
-} {
-  const entrada = document.createElement('input');
-  entrada.type = 'range';
-  entrada.id = opciones.id;
-  entrada.className = 'tetra-ajustes-rango';
-  entrada.min = String(opciones.min);
-  entrada.max = String(opciones.max);
-  entrada.step = String(opciones.paso);
-  entrada.value = String(opciones.valor);
-
-  const riel = document.createElement('div');
-  riel.className = opciones.marcaCentro
-    ? 'tetra-ajustes-riel tetra-ajustes-riel-centro'
-    : 'tetra-ajustes-riel';
-  riel.appendChild(entrada);
-
-  const dato = crearDatoVivo(opciones.texto);
-
-  const control = document.createElement('div');
-  control.className = 'tetra-ajustes-barra';
-  if (opciones.menos) {
-    opciones.menos.classList.add('tetra-ajustes-barra-menos');
-    control.appendChild(opciones.menos);
-  }
-  control.appendChild(riel);
-  if (opciones.mas) {
-    opciones.mas.classList.add('tetra-ajustes-barra-mas');
-    control.appendChild(opciones.mas);
-  }
-  control.appendChild(dato);
-  return { entrada, dato, control };
-}
+// T-060: `crearBarra` y `crearDatoVivo` viven en barra.ts (la misma barra la
+// usa el song select para el offset de la cancion).
 
 /** Barra 0 a 100 (en pasos de 1) con su valor en vivo; `alCambiar` recibe la fraccion 0 a 1. */
 function crearDeslizador(
@@ -305,7 +242,7 @@ function crearDeslizador(
  * boton "corregir offset" de la pantalla de resultados, que hace justo eso a
  * partir de la media medida.
  */
-function crearControlDeOffset(): HTMLElement {
+function crearControlDeOffset(aCalibrar: () => void): HTMLElement {
   let real = leerOffset();
 
   const botonMenos = crearBotonIcono('menos', 'Bajar el offset 1 ms');
@@ -337,12 +274,7 @@ function crearControlDeOffset(): HTMLElement {
   // Shift+flecha mueve 5 ms; sin Shift el input nativo ya mueve un paso (1 ms).
   entrada.addEventListener('keydown', (e) => {
     if (!e.shiftKey) return;
-    const sentido =
-      e.key === 'ArrowRight' || e.key === 'ArrowUp'
-        ? 1
-        : e.key === 'ArrowLeft' || e.key === 'ArrowDown'
-          ? -1
-          : null;
+    const sentido = sentidoDeFlecha(e.key);
     if (sentido === null) return;
     e.preventDefault();
     fijarOffset(pasoDeOffset(real, deltaDeOffset(sentido, true)));
@@ -354,13 +286,23 @@ function crearControlDeOffset(): HTMLElement {
     fijarOffset(pasoDeOffset(real, deltaDeOffset(1, e.shiftKey)));
   });
 
-  return crearFila({
+  const fila = crearFila({
     nombre: 'Offset',
     idControl: entrada.id,
     ayuda:
       'Offset en ms. Si en los resultados pegas temprano (puntos abajo), bajalo; si pegas tarde (arriba), subilo. Doble clic en la barra lo vuelve a 0.',
     controles: [control],
   });
+  // T-060: "Calibrar" mide el offset sin cancion. Va pegado al nombre y no en los
+  // controles, para que las cinco barras sigan midiendo y alineandose igual.
+  const calibrar = document.createElement('button');
+  calibrar.type = 'button';
+  calibrar.className = 'tetra-ajustes-calibrar';
+  calibrar.textContent = 'Calibrar';
+  calibrar.title = 'Mide tu offset con un metrónomo, sin necesitar una canción.';
+  calibrar.addEventListener('click', aCalibrar);
+  fila.querySelector('.tetra-ajustes-fila-nombre')?.after(calibrar);
+  return fila;
 }
 
 /**
@@ -858,7 +800,7 @@ function crearControlDeAtenuacion(): HTMLElement {
  * presentar", que solo recuerda y no bloquea nada. T-053: la lista va
  * plegada para no sumar texto a la pantalla.
  */
-function crearControlDePresentacion(): HTMLElement {
+function crearControlDePresentacion(aCalibrar: () => void): HTMLElement {
   const boton = document.createElement('button');
   boton.type = 'button';
   const pintar = (): void => {
@@ -884,6 +826,15 @@ function crearControlDePresentacion(): HTMLElement {
     });
     etiqueta.append(casilla, document.createTextNode(paso.texto));
     item.appendChild(etiqueta);
+    // T-060: el paso de calibrar el offset lleva a la pantalla que lo hace.
+    if (paso.id === 'offset') {
+      const ir = document.createElement('button');
+      ir.type = 'button';
+      ir.className = 'tetra-ajustes-calibrar';
+      ir.textContent = 'Calibrar';
+      ir.addEventListener('click', aCalibrar);
+      item.appendChild(ir);
+    }
     lista.appendChild(item);
   }
 
@@ -1048,6 +999,8 @@ function crearControlDeRespaldo(
 export interface OpcionesAjustes {
   /** Volver al menu. Es la unica salida de esta pantalla (ver el ticket, "Cada pantalla tiene como volver"). */
   aMenu: () => void;
+  /** T-060: abrir "Calibrar offset", que mide el offset global sin cancion y vuelve aca. */
+  aCalibrarOffset: () => void;
 }
 
 /**
@@ -1103,7 +1056,7 @@ export function mostrarAjustes(
       'juego',
       // T-058: las cuatro barras (mismo riel y misma columna de valor) y el
       // selector del golpe, una fila cada uno.
-      crearControlDeOffset(),
+      crearControlDeOffset(opciones.aCalibrarOffset),
       crearControlDeVelocidad(),
       crearControlDeVolumen(),
       crearControlDeEfectos(),
@@ -1160,7 +1113,12 @@ export function mostrarAjustes(
     ),
   );
   rejilla.appendChild(
-    crearSeccion(4, 'Presentación', 'presentacion', crearControlDePresentacion()),
+    crearSeccion(
+      4,
+      'Presentación',
+      'presentacion',
+      crearControlDePresentacion(opciones.aCalibrarOffset),
+    ),
   );
   rejilla.appendChild(
     crearSeccion(

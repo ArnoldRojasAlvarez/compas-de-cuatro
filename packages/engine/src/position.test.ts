@@ -27,6 +27,7 @@ import {
   progresoAY,
   progresoEsVisible,
   receptorY,
+  tramoVisible,
   ventanaVacia,
   type VentanaNotas,
 } from './position.js';
@@ -92,6 +93,46 @@ describe('progresoEsVisible', () => {
   it('0 y 1 (los casos centrales) son visibles', () => {
     expect(progresoEsVisible(0)).toBe(true);
     expect(progresoEsVisible(1)).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// tramoVisible (T-060)
+// ---------------------------------------------------------------------------
+
+describe('tramoVisible', () => {
+  it('una LN que cruza toda la pista con los dos extremos afuera es visible (el bug)', () => {
+    // Cabeza ya debajo del receptor (-0.5) y cola todavia arriba de la pantalla
+    // (3). Con la condicion vieja (cabeza o cola dentro del rango) daba false y
+    // el cuerpo desaparecia mientras se mantenia.
+    expect(progresoEsVisible(-0.5) || progresoEsVisible(3)).toBe(false);
+    expect(tramoVisible(-0.5, 3)).toBe(true);
+  });
+
+  it('un tramo entero arriba del rango no es visible', () => {
+    expect(tramoVisible(1.2, 2)).toBe(false);
+  });
+
+  it('un tramo entero debajo del rango no es visible', () => {
+    expect(tramoVisible(-2, -0.2)).toBe(false);
+  });
+
+  it('un tramo con un extremo adentro es visible', () => {
+    expect(tramoVisible(0.5, 5)).toBe(true);
+    expect(tramoVisible(-5, 0.5)).toBe(true);
+    expect(tramoVisible(0.2, 0.4)).toBe(true);
+  });
+
+  it('los bordes exactos cuentan como visibles y un pelo mas afuera no', () => {
+    expect(tramoVisible(PROGRESO_MAX_VISIBLE, 5)).toBe(true);
+    expect(tramoVisible(1.100001, 5)).toBe(false);
+    expect(tramoVisible(-5, PROGRESO_MIN_VISIBLE)).toBe(true);
+    expect(tramoVisible(-5, -0.100001)).toBe(false);
+  });
+
+  it('acepta los extremos en cualquier orden', () => {
+    expect(tramoVisible(3, -0.5)).toBe(true);
+    expect(tramoVisible(2, 1.2)).toBe(false);
   });
 });
 

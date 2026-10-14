@@ -7,6 +7,7 @@
 //   menu  ->  song-select  ->  juego  ->  resultados  ->  song-select
 //     |
 //     +----> ajustes  ->  menu
+//     |          +-----> calibrar offset (T-060)  ->  ajustes
 //     +----> mapeador ->  menu | song-select
 //     +----> estadisticas -> menu | song-select
 //
@@ -32,6 +33,7 @@
 import { mostrarMenu } from './menu.js';
 import { mostrarSongSelect } from './song-select.js';
 import { mostrarAjustes } from './ajustes.js';
+import { mostrarCalibrarOffset } from './calibrar-offset.js';
 import { mostrarCalibracion } from './calibracion.js';
 import { mostrarMapeador } from './mapeador.js';
 import { mostrarEstadisticasGlobales } from './estadisticas-globales.js';
@@ -76,7 +78,12 @@ export function iniciarRouter(contenedor: HTMLElement): void {
   }
   function aAjustes(): void {
     pantalla({ desdeElHeader: true });
-    mostrarAjustes(contenedor, { aMenu });
+    mostrarAjustes(contenedor, { aMenu, aCalibrarOffset });
+  }
+  // T-060: "Calibrar" de Ajustes. Mide el offset global sin cancion y vuelve a Ajustes.
+  function aCalibrarOffset(): void {
+    pantalla({ desdeElHeader: false });
+    mostrarCalibrarOffset(contenedor, { aAjustes });
   }
   function aMapeador(): void {
     pantalla({ desdeElHeader: false });

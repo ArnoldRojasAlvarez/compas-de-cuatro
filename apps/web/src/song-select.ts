@@ -45,6 +45,13 @@ import { fondoEscena } from './fondo-escena.js';
 import { leerKeyMap } from './keymap.js';
 import { nombreLegibleDeCodigo } from './teclas.js';
 import { formatearOffsetLocal, guardarOffsetLocal, leerOffsetLocal } from './offset-local.js';
+import { crearBarra, sentidoDeFlecha, sentidoDeRueda } from './barra.js';
+import {
+  OFFSET_BARRA_MAX,
+  OFFSET_BARRA_MIN,
+  deltaDeOffset,
+  offsetABarra,
+} from './ajustes-barras-logica.js';
 import { cambiarBotonIcono, crearBotonIcono, crearIcono } from './iconos.js';
 import { EVENTO_BIBLIOTECA_CAMBIO } from './musica-menu-logica.js';
 import { crearReproductorDePreview } from './preview.js';
@@ -846,29 +853,49 @@ export function mostrarSongSelect(contenedor: HTMLElement, opciones: OpcionesSon
   // mouse / enfocar). Las teclas - y = lo ajustan de a 1 ms. --
 
   /** El control de offset de la cancion enfocada que esta en pantalla (renderizarDetalle lo recrea), para actualizarlo en el lugar. */
-  let controlOffset: { raiz: HTMLElement; valor: HTMLElement } | null = null;
+  let controlOffset: ControlDeOffsetLocal | null = null;
 
-  /** Suma `delta` ms al offset local de la cancion enfocada, lo guarda y refresca el control sin reconstruir el detalle. */
-  function ajustarOffsetLocal(delta: number): void {
-    const cancion = cancionEnfocada();
-    if (!cancion || controlOffset === null) return;
-    const nuevo = guardarOffsetLocal(cancion.id, leerOffsetLocal(cancion.id) + delta);
-    pintarControlOffset(controlOffset, nuevo);
+  interface ControlDeOffsetLocal {
+    raiz: HTMLElement;
+    valor: HTMLElement;
+    entrada: HTMLInputElement;
   }
 
-  function pintarControlOffset(control: { raiz: HTMLElement; valor: HTMLElement }, ms: number): void {
+  /** Deja el offset local de la cancion enfocada en `nuevo` ms (recortado a +-300), lo guarda y refresca el control sin reconstruir el detalle. */
+  function fijarOffsetLocal(nuevo: number): void {
+    const cancion = cancionEnfocada();
+    if (!cancion || controlOffset === null) return;
+    pintarControlOffset(controlOffset, guardarOffsetLocal(cancion.id, nuevo));
+  }
+
+  /** Suma `delta` ms al offset local de la cancion enfocada. */
+  function ajustarOffsetLocal(delta: number): void {
+    const cancion = cancionEnfocada();
+    if (!cancion) return;
+    fijarOffsetLocal(leerOffsetLocal(cancion.id) + delta);
+  }
+
+  function pintarControlOffset(control: ControlDeOffsetLocal, ms: number): void {
     control.valor.textContent = formatearOffsetLocal(ms);
+    control.entrada.value = String(offsetABarra(ms));
     control.raiz.classList.toggle('tetra-ss-offset--activo', ms !== 0);
   }
 
   /**
+   * T-060: la misma barra que el offset de ajustes (barra.ts), compacta: de
+   * -150 a +150 ms con el cero marcado, `-` y `+` de 1 ms (Shift: 5), arrastre,
+   * rueda del mouse y flechas, doble clic a 0. Es el offset de ESTA cancion,
+   * un ajuste fino que se suma al global (el del equipo, que se corrige en
+   * ajustes o desde los resultados).
+   *
    * `sugerido`: la desviacion media del record es alta (T-057), asi que el
    * control queda a la vista aunque el offset sea 0.
    */
   function crearControlDeOffset(songId: SongId, sugerido: boolean): HTMLElement {
     const raiz = document.createElement('div');
     raiz.className = sugerido ? 'tetra-ss-offset tetra-ss-offset--sugerido' : 'tetra-ss-offset';
-    raiz.title = 'Offset de esta canción, se suma al global. Shift + clic: 5 ms. Teclas - y =: 1 ms';
+    raiz.title =
+      'Offset de esta canción: ajuste fino que se suma al global (de -150 a +150 ms). Arrastrá la barra, usá la rueda del mouse o las flechas (Shift: 5 ms); doble clic la vuelve a 0. Teclas - y =: 1 ms.';
 
     // El reloj es el unico siempre visible: enfocarlo (o pasar el mouse) abre el ajuste.
     const reloj = crearBotonIcono('reloj', 'Offset de esta canción', 'tetra-ss-offset-reloj');
@@ -877,18 +904,53 @@ export function mostrarSongSelect(contenedor: HTMLElement, opciones: OpcionesSon
     ajuste.className = 'tetra-ss-offset-ajuste';
 
     const menos = crearBotonIcono('menos', 'Offset de esta canción, 1 ms antes', 'tetra-ss-offset-paso');
-    const valor = document.createElement('span');
-    valor.className = 'tetra-ss-offset-valor';
     const mas = crearBotonIcono('mas', 'Offset de esta canción, 1 ms después', 'tetra-ss-offset-paso');
     menos.dataset.foco = 'offset-menos';
     mas.dataset.foco = 'offset-mas';
-    menos.addEventListener('click', (e) => ajustarOffsetLocal(e.shiftKey ? -5 : -1));
-    mas.addEventListener('click', (e) => ajustarOffsetLocal(e.shiftKey ? 5 : 1));
-    ajuste.append(menos, valor, mas);
+    const actual = leerOffsetLocal(songId);
+    const { entrada, dato, control } = crearBarra({
+      id: 'tetra-ss-offset-barra',
+      min: OFFSET_BARRA_MIN,
+      max: OFFSET_BARRA_MAX,
+      paso: 1,
+      valor: offsetABarra(actual),
+      texto: formatearOffsetLocal(actual),
+      marcaCentro: true,
+      menos,
+      mas,
+      compacta: true,
+    });
+    entrada.setAttribute('aria-label', 'Offset de esta canción, en ms');
+    dato.classList.add('tetra-ss-offset-valor');
+    menos.addEventListener('click', (e) => ajustarOffsetLocal(deltaDeOffset(-1, e.shiftKey)));
+    mas.addEventListener('click', (e) => ajustarOffsetLocal(deltaDeOffset(1, e.shiftKey)));
+    entrada.addEventListener('input', () => fijarOffsetLocal(Number(entrada.value)));
+    entrada.addEventListener('dblclick', () => fijarOffsetLocal(0));
+    // Shift+flecha mueve 5 ms; sin Shift el input nativo ya mueve 1 ms. (alTeclear
+    // ignora las teclas que nacen en un input, asi que las flechas no cambian la dificultad.)
+    entrada.addEventListener('keydown', (e) => {
+      if (!e.shiftKey) return;
+      const sentido = sentidoDeFlecha(e.key);
+      if (sentido === null) return;
+      e.preventDefault();
+      ajustarOffsetLocal(deltaDeOffset(sentido, true));
+    });
+    // Rueda del mouse sobre la barra: 1 ms por tope (Shift: 5), sin desplazar la lista.
+    control.addEventListener(
+      'wheel',
+      (e) => {
+        const sentido = sentidoDeRueda(e.deltaY, e.deltaX);
+        if (sentido === 0) return;
+        e.preventDefault();
+        ajustarOffsetLocal(deltaDeOffset(sentido, e.shiftKey));
+      },
+      { passive: false },
+    );
+    ajuste.appendChild(control);
 
     raiz.append(reloj, ajuste);
-    controlOffset = { raiz, valor };
-    pintarControlOffset(controlOffset, leerOffsetLocal(songId));
+    controlOffset = { raiz, valor: dato, entrada };
+    pintarControlOffset(controlOffset, actual);
     return raiz;
   }
 

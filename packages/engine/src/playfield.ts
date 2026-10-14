@@ -42,6 +42,7 @@ import {
   progresoAY,
   progresoEsVisible,
   receptorY,
+  tramoVisible,
   ventanaVacia,
   type GeometriaPista,
   type VentanaNotas,
@@ -829,7 +830,10 @@ export function createPlayfield(
           const colaVisible = progresoEsVisible(progresoCola);
           const yCabezaClipeada = Math.min(cabezaY, yReceptorActual);
 
-          if (colaVisible || cabezaVisible) {
+          // T-060: el cuerpo se dibuja si el tramo entero toca la pista, no solo
+          // si la cabeza o la cola caen adentro (una LN larga mantenida tiene
+          // los dos extremos afuera).
+          if (tramoVisible(progresoCabeza, progresoCola)) {
             const cuerpo = poolCuerpo.obtener();
             cuerpo.x = columnaX(columna);
             cuerpo.y = colaY;

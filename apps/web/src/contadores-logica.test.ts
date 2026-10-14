@@ -6,6 +6,7 @@ import {
   ANTICIPACION_DEL_SALTO_MS,
   DURACION_MARCA_MS,
   GOLPES_EN_MEDIA_MOVIL,
+  GOLPES_MINIMOS_MEDIA_VIVA,
   INTRO_SALTABLE_MS,
   PASOS_DE_ALPHA,
   REINTENTO_MS,
@@ -20,6 +21,7 @@ import {
   progresoDeReintento,
   reintentoCompleto,
   saltoDisponible,
+  textoDeMediaViva,
   tramosDeBarra,
   unstableRate,
 } from './contadores-logica.js';
@@ -157,13 +159,13 @@ describe('crearMediaMovil', () => {
     expect(m.cantidad()).toBe(3);
   });
 
-  it('el tamano de arranque es de unos 20 golpes', () => {
-    expect(GOLPES_EN_MEDIA_MOVIL).toBe(20);
+  it('el tamano de arranque es de 30 golpes (T-060)', () => {
+    expect(GOLPES_EN_MEDIA_MOVIL).toBe(30);
     const m = crearMediaMovil();
-    for (let i = 0; i < 20; i++) m.agregar(50);
+    for (let i = 0; i < 30; i++) m.agregar(50);
     m.agregar(-50);
-    expect(m.cantidad()).toBe(20);
-    expect(m.valor()).toBeCloseTo((19 * 50 - 50) / 20, 10);
+    expect(m.cantidad()).toBe(30);
+    expect(m.valor()).toBeCloseTo((29 * 50 - 50) / 30, 10);
   });
 
   it('respeta el signo: golpes tempranos dan una media negativa', () => {
@@ -276,5 +278,24 @@ describe('saltar intro', () => {
   it('en una partida desde mitad de mapa (empieza 1.5 s antes de la primera nota) no se ofrece', () => {
     // Primera nota a 40 s; la partida arranca en 38.5 s: ya pasaron el destino (38 s).
     expect(saltoDisponible(38500, 40000)).toBe(false);
+  });
+});
+
+describe('textoDeMediaViva (T-060)', () => {
+  it('no se muestra hasta tener 10 golpes', () => {
+    expect(GOLPES_MINIMOS_MEDIA_VIVA).toBe(10);
+    expect(textoDeMediaViva(61, 9)).toBeNull();
+    expect(textoDeMediaViva(61, 10)).toBe('+61 ms');
+  });
+
+  it('lleva el signo: tarde con +, temprano con -, y 0 sin signo', () => {
+    expect(textoDeMediaViva(61.4, 30)).toBe('+61 ms');
+    expect(textoDeMediaViva(-24.6, 30)).toBe('-25 ms');
+    expect(textoDeMediaViva(0.2, 30)).toBe('0 ms');
+    expect(textoDeMediaViva(-0.2, 30)).toBe('0 ms');
+  });
+
+  it('una media no valida no se muestra', () => {
+    expect(textoDeMediaViva(Number.NaN, 30)).toBeNull();
   });
 });
