@@ -259,10 +259,19 @@ test('saltar intro: Espacio lleva el reloj 2 s antes de la primera nota y el aud
   expect(tras).toBeLessThan(10_800);
 
   // Sin desfase: el reloj de juego sigue avanzando al mismo ritmo que el contexto de audio.
+  // T-063: clock.now() interpola y ctx.currentTime va a saltos de ~10 ms, asi que la
+  // diferencia se promedia durante ~100 ms de audio (ver sincronia.spec.ts).
   const diferencia = (): Promise<number> =>
     page.evaluate(() => {
       const g = window.__tetraDebug!;
-      return g.clock.now() - g.ctx.currentTime * 1000;
+      const inicio = g.ctx.currentTime;
+      let suma = 0;
+      let n = 0;
+      while (g.ctx.currentTime - inicio < 0.1) {
+        suma += g.clock.now() - g.ctx.currentTime * 1000;
+        n++;
+      }
+      return suma / n;
     });
   const d0 = await diferencia();
   await page.waitForTimeout(1500);

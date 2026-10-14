@@ -38,6 +38,8 @@ declare global {
 interface Muestra {
   clockNow: number;
   ctxTime: number;
+  /** Media de `clock.now() - ctx.currentTime * 1000` durante ~100 ms de audio. */
+  diferenciaMedia: number;
 }
 
 async function tomarMuestra(page: import('@playwright/test').Page): Promise<Muestra> {
@@ -46,7 +48,23 @@ async function tomarMuestra(page: import('@playwright/test').Page): Promise<Mues
     if (!gancho) {
       throw new Error('window.__tetraDebug no esta disponible: el juego ya termino o no arranco.');
     }
-    return { clockNow: gancho.clock.now(), ctxTime: gancho.ctx.currentTime };
+    // T-063: clock.now() interpola dentro del bloque de audio, y ctx.currentTime
+    // avanza a saltos de ~10 ms. Una sola resta entre los dos trae hasta un
+    // bloque de ruido (la fase en que se cayo), que no es deriva. Se promedia
+    // la diferencia durante ~50 ms de audio (unos 5 bloques, medidos con el
+    // propio currentTime, no con un temporizador): lo que queda es la deriva.
+    const inicio = gancho.ctx.currentTime;
+    let suma = 0;
+    let n = 0;
+    while (gancho.ctx.currentTime - inicio < 0.05) {
+      suma += gancho.clock.now() - gancho.ctx.currentTime * 1000;
+      n++;
+    }
+    return {
+      clockNow: gancho.clock.now(),
+      ctxTime: gancho.ctx.currentTime,
+      diferenciaMedia: suma / n,
+    };
   });
 }
 
@@ -67,7 +85,7 @@ test('el reloj de juego no se desincroniza del audio en 60s de reproduccion real
   );
 
   const muestraBase = await tomarMuestra(page);
-  const offsetBase = muestraBase.clockNow - muestraBase.ctxTime * 1000;
+  const offsetBase = muestraBase.diferenciaMedia;
 
   const derivasPorSegundo: number[] = [];
 
@@ -79,10 +97,12 @@ test('el reloj de juego no se desincroniza del audio en 60s de reproduccion real
   // ausencia de deriva igual de bien: la deriva es acumulativa, asi que
   // cualquier reloj mal hecho (rAF, performance.now) se despegaria de los 5ms
   // mucho antes de los 50s.
-  for (let segundo = 1; segundo <= 50; segundo++) {
+  // T-063: 45 y no 50, porque cada muestra ahora gira ~50 ms promediando (ver
+  // tomarMuestra) y con la maquina cargada el bucle se pasaba del cierre.
+  for (let segundo = 1; segundo <= 45; segundo++) {
     await page.waitForTimeout(1000);
     const muestra = await tomarMuestra(page);
-    const derivaActual = muestra.clockNow - muestra.ctxTime * 1000 - offsetBase;
+    const derivaActual = muestra.diferenciaMedia - offsetBase;
     derivasPorSegundo.push(derivaActual);
   }
 
@@ -92,7 +112,7 @@ test('el reloj de juego no se desincroniza del audio en 60s de reproduccion real
   // medido nada real. El contexto tiene que haber avanzado cerca de los 50
   // segundos reales que se dejaron correr.
   const muestraFinal = await tomarMuestra(page);
-  expect(muestraFinal.ctxTime - muestraBase.ctxTime).toBeGreaterThan(45);
+  expect(muestraFinal.ctxTime - muestraBase.ctxTime).toBeGreaterThan(40);
 
   const derivaMaxima = Math.max(...derivasPorSegundo.map((d) => Math.abs(d)));
   expect(derivaMaxima).toBeLessThan(5);

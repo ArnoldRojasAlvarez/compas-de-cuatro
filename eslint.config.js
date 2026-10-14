@@ -66,10 +66,12 @@ export default [
     // Regla 1: el reloj es el audio.
     // Aplica a todo el codigo de gameplay, no solo al reloj. apps/web/src
     // entra a partir de T-004: es donde vive el bucle de juego real
-    // (apps/web/src/game.ts) y la unica lectura de performance.now()
-    // permitida en el proyecto (ver docs/tickets/T-004-pista-y-entrada.md,
-    // "El punto critico: el tiempo de la pulsacion"), que necesita su
-    // propio eslint-disable-next-line para poder existir.
+    // (apps/web/src/game.ts). La unica lectura de performance.now()
+    // permitida en el proyecto esta desde T-063 en
+    // packages/audio/src/mapa-de-tiempo.ts (antes en game.ts, T-004): es la
+    // regla comun entre el `timeStamp` de los eventos y el ancla que da
+    // `ctx.getOutputTimestamp()`, y necesita su propio disable en linea
+    // para poder existir.
     files: [
       'packages/core/**/*.ts',
       'packages/audio/**/*.ts',

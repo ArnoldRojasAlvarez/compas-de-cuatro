@@ -623,17 +623,15 @@ export function runGame(
       contadores.golpe(resultado.error, resultado.judgement, t);
     }
 
-    // T-004, "El punto critico: el tiempo de la pulsacion":
-    // toGameTime(ts) = clock.now() - (performance.now() - ts)
-    // Es la unica lectura de performance.now() permitida en el proyecto:
-    // mide cuanto hace que ocurrio el evento de teclado, no el paso del
-    // tiempo de juego (eso sigue siendo responsabilidad exclusiva del
-    // reloj de audio).
-    const toGameTime = (eventTimeStamp: number): Ms => {
-      // eslint-disable-next-line no-restricted-properties -- unica lectura permitida de performance.now() en todo el proyecto: T-004, "El punto critico: el tiempo de la pulsacion". Mide la antiguedad del evento de teclado (event.timeStamp), no el paso del tiempo de juego.
-      const ahora = performance.now();
-      return clock.now() - (ahora - eventTimeStamp);
-    };
+    // T-004, "El punto critico: el tiempo de la pulsacion": el evento se fecha
+    // con su `event.timeStamp`, no con el momento en que corre el handler.
+    // T-063: la conversion vive en el reloj (`desdeTimeStamp`, ver
+    // packages/audio/src/mapa-de-tiempo.ts). Antes era
+    // `clock.now() - (performance.now() - ts)`, y como `clock.now()` leia
+    // `ctx.currentTime`, que avanza por bloques de ~10 ms, cada pulsacion
+    // arrastraba hasta un bloque de error al azar (12 ms de rango medidos):
+    // la media quedaba centrada pero los MAX casi no salian.
+    const toGameTime = (eventTimeStamp: number): Ms => clock.desdeTimeStamp(eventTimeStamp);
 
     const app = new Application();
     let detenido = false;

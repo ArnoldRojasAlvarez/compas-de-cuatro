@@ -7,8 +7,17 @@
 //
 // AudioContext y AudioBuffer llegan como parametros para poder inyectar un
 // doble de prueba en tests (vitest corre en entorno node, sin Web Audio).
+//
+// T-063: `ctx.currentTime` avanza por bloques (~10 ms en Chromium/Windows).
+// Leerlo "en este instante" arrastra hasta un bloque de error, que en una
+// pulsacion es jitter puro. Por eso `now()` y `desdeTimeStamp()` pasan por el
+// mapa de tiempo (mapa-de-tiempo.ts): la posicion que el contexto dice que se
+// oye, anclada a `getOutputTimestamp()` e interpolada con `performance.now()`.
+// El audio sigue siendo la fuente de verdad: el mapa se reancla al contexto
+// todo el tiempo y no acumula deriva.
 
 import type { Ms } from '@tetra/core';
+import { crearMapaDeTiempo, type MapaDeTiempo } from './mapa-de-tiempo.js';
 
 /** Reloj de reproduccion: unica fuente de verdad temporal del juego. */
 export interface AudioClock {
@@ -18,6 +27,14 @@ export interface AudioClock {
    * Devuelve valores negativos durante la cuenta regresiva previa.
    */
   now(): Ms;
+
+  /**
+   * T-063: tiempo de juego (ms) en que ocurrio un evento fechado en la base de
+   * `performance` (su `event.timeStamp`). Es la unica forma correcta de fechar
+   * una pulsacion: no depende de cuando corre el handler ni del bloque de
+   * audio en que cae. Con el reloj detenido devuelve `now()`.
+   */
+  desdeTimeStamp(perfMs: number): Ms;
 
   /** Arranca la reproduccion. `leadIn` ms de silencio antes del tiempo 0. */
   start(leadIn: Ms): void;
@@ -49,8 +66,16 @@ export interface AudioClock {
    * Derivada: `userOffset + outputLatency`. De solo lectura para que no se
    * pueda pisar por accidente y perder la latencia calculada: para cambiar
    * la parte que corresponde al usuario se escribe `userOffset`.
+   *
+   * T-063: con el mapa de tiempo anclado, la latencia que se descuenta de
+   * verdad es la que mide el contexto (`getOutputTimestamp`), no
+   * `outputLatency`; este valor sigue siendo el del camino crudo (sin ancla)
+   * y el que se usa con el reloj detenido.
    */
   readonly offset: Ms;
+
+  /** T-063: true mientras el mapa de tiempo esta anclado al contexto (interpolando). Solo diagnostico. */
+  readonly interpolando: boolean;
 }
 
 export interface ClockOptions {
@@ -67,6 +92,8 @@ export interface ClockOptions {
    * el reloj sepa nada de volumen: la posicion no depende de a donde suene.
    */
   destino?: AudioNode;
+  /** Solo para tests: reemplaza `performance.now()` en el mapa de tiempo. */
+  ahoraPerf?: () => number;
 }
 
 /**
@@ -79,6 +106,8 @@ class AudioContextClock implements AudioClock {
   private readonly ctx: AudioContext;
   private readonly buffer: AudioBuffer;
   private readonly destino: AudioNode;
+  /** T-063: posicion de salida interpolada (ver mapa-de-tiempo.ts). */
+  private readonly mapa: MapaDeTiempo;
 
   private source: AudioBufferSourceNode | null = null;
   /** Valor de ctx.currentTime (segundos) en el que la posicion vale 0. */
@@ -98,6 +127,10 @@ class AudioContextClock implements AudioClock {
     this.duration = buffer.duration * 1000;
     this.userOffset = options.userOffset ?? 0;
     this.outputLatency = this.calcularLatenciaSalida(options);
+    this.mapa = crearMapaDeTiempo(ctx, {
+      latenciaSalida: this.outputLatency / 1000,
+      ...(options.ahoraPerf !== undefined && { ahoraPerf: options.ahoraPerf }),
+    });
   }
 
   get offset(): Ms {
@@ -108,11 +141,24 @@ class AudioContextClock implements AudioClock {
     return this.running;
   }
 
+  get interpolando(): boolean {
+    return this.mapa.anclado;
+  }
+
+  // `mapa.ahora()` es la posicion que se OYE (ya trae la latencia de salida
+  // descontada: con ancla, la que mide el contexto; sin ancla, `outputLatency`),
+  // asi que aca solo se resta el offset del usuario. Sin ancla la cuenta es
+  // identica a la de antes de T-063: (currentTime - startedAt) * 1000 - offset.
   now(): Ms {
     if (!this.running) {
       return this.pausedPosition - this.offset;
     }
-    return (this.ctx.currentTime - this.startedAt) * 1000 - this.offset;
+    return (this.mapa.ahora() - this.startedAt) * 1000 - this.userOffset;
+  }
+
+  desdeTimeStamp(perfMs: number): Ms {
+    if (!this.running) return this.now();
+    return (this.mapa.aContexto(perfMs) - this.startedAt) * 1000 - this.userOffset;
   }
 
   start(leadIn: Ms): void {
@@ -129,8 +175,9 @@ class AudioContextClock implements AudioClock {
   stop(): void {
     if (this.running) {
       // Se congela la posicion actual antes de cortar el source: now()
-      // despues de stop() no debe seguir avanzando.
-      this.pausedPosition = (this.ctx.currentTime - this.startedAt) * 1000;
+      // despues de stop() no debe seguir avanzando. Se guarda sin offset,
+      // igual que la leeria now() detenido.
+      this.pausedPosition = this.now() + this.offset;
     }
     this.detenerSourceActual();
     this.running = false;
@@ -151,6 +198,8 @@ class AudioContextClock implements AudioClock {
     this.source = this.crearSource();
     this.source.start(this.ctx.currentTime, offsetSegundos);
     this.running = true;
+    // El mapa no cambia con el seek: la relacion entre el contexto y
+    // `performance` sigue igual, solo se movio `startedAt`.
   }
 
   private calcularLatenciaSalida(options: ClockOptions): Ms {

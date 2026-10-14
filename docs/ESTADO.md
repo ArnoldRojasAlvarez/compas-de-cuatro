@@ -1,6 +1,6 @@
 # Estado del proyecto
 
-Ultima actualizacion: 8 de octubre de 2026.
+Ultima actualizacion: 13 de octubre de 2026.
 
 Estado corto y siempre al dia. **Si sos una sesion NUEVA, empeza por
 `docs/HANDOFF.md`** (metodo de trabajo, reglas, lecciones), despues
@@ -66,6 +66,7 @@ Estado corto y siempre al dia. **Si sos una sesion NUEVA, empeza por
 | T-042 | Respaldo de la biblioteca en zip (canciones con audio, fondo y video, skins, records, ajustes), restaurar sin pisar ni duplicar, tarjeta "05 Biblioteca" en ajustes con uso de almacenamiento |
 | T-056 | Partida: cajitas con pulsaciones por tecla, contador de juicios en vivo, barra de error con media movil, reintento manteniendo ` 0,5 s, saltar intro con Espacio; resultados con pulsaciones y UR; el record guarda pulsaciones y desviacion media |
 | T-054 | Pulido: legibilidad sobre portadas, dificultades de facil a dificil, audio de cualquier dificultad, errores cerrables, fondo del menu inmediato |
+| T-063 | Reloj interpolado: `ctx.currentTime` avanza en rafagas de ~10 ms y cada pulsacion heredaba hasta un bloque de error (12 ms de rango medidos, std 2,9); ahora el reloj se ancla a `getOutputTimestamp()` e interpola con `performance.now()` (rango 0,2 ms, std 0,03), `clock.desdeTimeStamp(ts)` fecha la entrada, la pista se dibuja suave, y el interpolado nunca se aleja mas de 30 ms de la lectura cruda (el audio manda); `tools/medir-reloj.mjs` lo mide en Chromium real. Ojo: el e2e en paralelo (workers por defecto) falla por carga en la maquina de Arnold tambien en `main`; verificar con `--workers=1` |
 
 La prueba de feel de Arnold ya se hizo: en una cancion real sus golpes salieron
 centrados en cero. El motor esta bien sincronizado.
@@ -83,12 +84,20 @@ centrados en cero. El motor esta bien sincronizado.
 
 ## Lo que sigue despues
 
-- **Tirones en el Chrome/Opera de Arnold:** ve el "ms max" casi siempre >= 33 ms (43 fps) en tramos densos (Ghoul), incluso con fondo, skin y contadores reducidos y con baja latencia. Enchufado, plan Equilibrado, 60 Hz; hay un "Meta Virtual Monitor" (Quest Link) instalado, sospechoso. Pendiente de Arnold: probar https://www.testufo.com en el mismo navegador y pegar el JSON de "Copiar diagnóstico" tras jugar Ghoul. Arnold propuso cambiar de tecnologia si el problema es la web: no antes de esos datos.
-- **T-059, prueba de Arnold:** jugar el Difícil de la demo unos 40 s en su
-  Chrome con el contador nuevo y mirar el "ms max". El arnes solo corre headless
-  (sin vsync real ni contencion con otros programas). Si aparece el tiron de
-  ~38 s, probar `localStorage.setItem('tetra:dibujo-baja-latencia','true')` y
-  decidir si va como casilla en ajustes (ver docs/rendimiento/T-059-medicion.md).
+- **Tirones en el Opera de Arnold: resuelto.** El diagnostico de T-061 mostro
+  renderer "Microsoft Basic Render Driver" (sin GPU, 332 frames de 33 ms en
+  Xevel). Con la aceleracion por hardware activada en Opera: ANGLE Intel Iris
+  Xe, p50 16,6 y p99 17,1 ms, un solo tiron de 66 ms antes de empezar.
+- **Prueba de feel de T-063 (pendiente de Arnold):** jugar Xevel Expert con el
+  reloj nuevo. Antes: media +27 ms tarde, desvio 32 ms, 429 MAX. Se espera que
+  el desvio baje mucho y la media quede parecida (la cuantizacion solo
+  explicaba ~4 ms del sesgo; el resto es la cadena visual de vsync, unos 20 a
+  30 ms a 60 Hz, mas el teclado: lo que corrige el offset global). Despues,
+  recalibrar el offset global con dos o tres partidas.
+- **Idea para probar (feel):** dibujar la pista un vsync adelante (`t + 16,7
+  ms`) para que la nota se vea donde corresponde al presentarse el frame; el
+  juicio no cambia. Reduciria el sesgo visual sin tocar el offset. Ver T-063,
+  "Fuera de alcance".
 
 - **Pendiente chico de T-048:** el titulo de la demo sigue "Primer Compas" (es un
   dato guardado y la clave para no duplicarla). Para "Primer Compás" en

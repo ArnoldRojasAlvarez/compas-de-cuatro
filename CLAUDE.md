@@ -25,6 +25,16 @@ desincronizarse de si mismo.
 Para la entrada de teclado se usa `event.timeStamp` del evento, que marca
 cuando ocurrio la pulsacion, **no** el momento en que corre el handler.
 
+**La unica excepcion (T-063):** `audioContext.currentTime` avanza por bloques
+(~10 ms en Chromium/Windows), y leerlo "ahora" arrastra hasta un bloque de
+error. Por eso `packages/audio/src/mapa-de-tiempo.ts` lee `performance.now()`
+en un solo lugar: como regla comun entre el `timeStamp` de los eventos y el
+ancla `{contextTime, performanceTime}` que da `ctx.getOutputTimestamp()`. El
+reloj sigue anclado al audio (se reancla a cada muestra del contexto y no
+acumula deriva); `performance.now()` solo interpola dentro del bloque. Es lo
+mismo que hace el reloj interpolado de osu!. Ningun otro archivo puede
+leerlo; el linter lo impide.
+
 ### 2. `packages/core` no toca el navegador
 
 `core` no puede importar ni referenciar `window`, `document`, `AudioContext`,
