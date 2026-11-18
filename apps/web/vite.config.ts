@@ -47,6 +47,9 @@ const silenciadorDeDesarrollo: Plugin = {
 };
 
 export default defineConfig({
+  // Base relativa: el build funciona en la raiz de un dominio y en un
+  // subdirectorio (GitHub Pages) sin cambiar nada. El router es por hash.
+  base: './',
   plugins: [silenciadorDeDesarrollo],
   resolve: {
     alias: {
