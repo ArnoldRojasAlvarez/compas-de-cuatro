@@ -8,12 +8,15 @@
 
 import type { Chart } from '@tetra/core';
 
-const RUTA_MAPA_CLICK = '/fixtures/click-120.json';
+// Rutas relativas (sin barra inicial): asi resuelven contra la pagina y no contra
+// la raiz del dominio, y el juego funciona tambien publicado en un subdirectorio
+// (GitHub Pages: usuario.github.io/repositorio/).
+const RUTA_MAPA_CLICK = 'fixtures/click-120.json';
 // Tambien la usa musica-menu.ts cuando la biblioteca esta vacia (el mismo
 // click track, en bucle, para que el logo tenga senal). Es el mismo archivo, una
 // sola constante: evita que las dos rutas se puedan ir desincronizando con
 // el tiempo.
-export const RUTA_AUDIO_CLICK = '/fixtures/click-120.wav';
+export const RUTA_AUDIO_CLICK = 'fixtures/click-120.wav';
 
 export async function cargarChartDelClickTrack(): Promise<Chart> {
   const respuesta = await fetch(RUTA_MAPA_CLICK);
